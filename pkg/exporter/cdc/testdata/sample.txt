@@ -1,0 +1,52 @@
+# TYPE polardbx_cdc_dumper_m_youngCollectionTime gauge
+# HELP polardbx_cdc_dumper_m_youngCollectionTime polardbx_cdc_dumper_m_youngCollectionTime
+polardbx_cdc_dumper_m_youngCollectionTime 1073.0
+# TYPE polardbx_cdc_dumper_m_oldMax gauge
+# HELP polardbx_cdc_dumper_m_oldMax polardbx_cdc_dumper_m_oldMax
+polardbx_cdc_dumper_m_oldMax 3.006267392E9
+# TYPE polardbx_cdc_dumper_m_heapUsage gauge
+# HELP polardbx_cdc_dumper_m_heapUsage polardbx_cdc_dumper_m_heapUsage
+polardbx_cdc_dumper_m_heapUsage 0.0
+# TYPE polardbx_cdc_dumper_m_youngMax gauge
+# HELP polardbx_cdc_dumper_m_youngMax polardbx_cdc_dumper_m_youngMax
+polardbx_cdc_dumper_m_youngMax 2.254962688E9
+# TYPE polardbx_cdc_dumper_m_oldUsed gauge
+# HELP polardbx_cdc_dumper_m_oldUsed polardbx_cdc_dumper_m_oldUsed
+polardbx_cdc_dumper_m_oldUsed 2.1921716E8
+# TYPE polardbx_cdc_dumper_m_currentThreadCount gauge
+# HELP polardbx_cdc_dumper_m_currentThreadCount polardbx_cdc_dumper_m_currentThreadCount
+polardbx_cdc_dumper_m_currentThreadCount 25.0
+# TYPE polardbx_cdc_dumper_m_txn_rt gauge
+# HELP polardbx_cdc_dumper_m_txn_rt dumper master每个事务的处理时间
+polardbx_cdc_dumper_m_txn_rt 0.0
+# TYPE polardbx_cdc_dumper_m_delay gauge
+# HELP polardbx_cdc_dumper_m_delay dumper master延迟时间
+polardbx_cdc_dumper_m_delay 0.0
+# TYPE polardbx_cdc_dumper_m_tps gauge
+# HELP polardbx_cdc_dumper_m_tps dumper master每秒处理事务的个数
+polardbx_cdc_dumper_m_tps 0.0
+# TYPE polardbx_cdc_dumper_m_dml_eps gauge
+# HELP polardbx_cdc_dumper_m_dml_eps dumper master每秒处理Event的个数(不包含Begin和Commit)
+polardbx_cdc_dumper_m_dml_eps 0.0
+# TYPE polardbx_cdc_dumper_m_oldCollectionTime gauge
+# HELP polardbx_cdc_dumper_m_oldCollectionTime polardbx_cdc_dumper_m_oldCollectionTime
+polardbx_cdc_dumper_m_oldCollectionTime 105.0
+# TYPE polardbx_cdc_dumper_m_oldCollectionCount gauge
+# HELP polardbx_cdc_dumper_m_oldCollectionCount polardbx_cdc_dumper_m_oldCollectionCount
+polardbx_cdc_dumper_m_oldCollectionCount 2.0
+# TYPE polardbx_cdc_dumper_m_event_rt gauge
+# HELP polardbx_cdc_dumper_m_event_rt dumper master每条事件的处理时间
+polardbx_cdc_dumper_m_event_rt 0.0
+# TYPE polardbx_cdc_dumper_m_eps gauge
+# HELP polardbx_cdc_dumper_m_eps dumper master每秒处理Event的个数(含Begin和Commit)
+polardbx_cdc_dumper_m_eps 0.0
+# TYPE polardbx_cdc_dumper_m_youngUsed gauge
+# HELP polardbx_cdc_dumper_m_youngUsed polardbx_cdc_dumper_m_youngUsed
+polardbx_cdc_dumper_m_youngUsed 1.411204856E9
+# TYPE polardbx_cdc_dumper_m_bps gauge
+# HELP polardbx_cdc_dumper_m_bps dumper master每秒处理的数据量
+polardbx_cdc_dumper_m_bps 0.0
+# TYPE polardbx_cdc_dumper_m_youngCollectionCount gauge
+# HELP polardbx_cdc_dumper_m_youngCollectionCount polardbx_cdc_dumper_m_youngCollectionCount
+polardbx_cdc_dumper_m_youngCollectionCount 170.0
+# EOF

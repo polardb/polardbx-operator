@@ -1,0 +1,92 @@
+# Repo of operator and cluster default images. Default is polardbx.
+imageRepo: polardbx
+
+# Image names of operator components. By default, operator uses the
+# images tagged with { .Chart.AppVersion }. One can overwrite it by
+# manually specify the tag.
+images:
+  polardbxOperator: polardbx-operator
+  hpfs: polardbx-hpfs
+  toolsUpdater: xstore-tools
+  probeProxy: probe-proxy
+  polardbxExporter: polardbx-exporter
+  polardbxInit: polardbx-init
+
+# Uses the latest images for operator components.
+useLatestImage: false
+
+# Image pull policy of operator pods.
+imagePullPolicy: IfNotPresent
+
+# Image pull secrets of operator pods.
+imagePullSecrets:
+
+# Default settings for PolarDB-X Cluster.
+clusterDefaults:
+  version: latest
+  images:
+    galaxysql: galaxysql
+    galaxyengine: galaxyengine
+    galaxycdc: galaxycdc
+
+# Configuration of Kubernetes hosts.
+node:
+  # Paths on nodes to be used by the operator.
+  volumes:
+    # Data volume, used for storing data of DN, caches and tools
+    # used by the operator.
+    data: /data
+
+# Service account of operator pods.
+serviceAccount: polardbx-operator
+
+# Configuration of controller manager.
+controllerManager:
+  name: polardbx-controller-manager
+  replicas: 1
+
+  # Feature gates of controller manager.
+  #   + EnforceQoSGuaranteed, enforces the pod to be Guaranteed QoS by setting resources on
+  #     containers like exporter and prober. Disabled by default.
+  featureGates: [ ]
+
+  config:
+    scheduler:
+      # Allow schedule PolarDB-X pod to master node.
+      # Default is true.
+      allowScheduleOnMaster: true
+      # Enable resource controller of ACK container service.
+      # Default is true.
+      enableAliyunAckResourceController: true
+
+    # Create an exporter sidecar in each PolarDB-X pod if enabled.
+    # Default is true.
+    enableExporters: true
+
+    # Container settings of PolarDB-X pods.
+    container:
+      privileged: false
+
+  nodeSelector: { }
+  affinity: { }
+  tolerations: { }
+
+  # Resource usage of controller manager pod.
+  resources:
+    requests:
+      cpu: 100m
+      memory: 50Mi
+
+# Settings for host path file service.
+hostPathFileService:
+  name: polardbx-hpfs
+  port: 6543
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 50Mi
+
+# Settings for xstore tools updater.
+toolsUpdater:
+  name: polardbx-tools-updater

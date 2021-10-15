@@ -1,0 +1,16 @@
+polardbx-operator is installed. Please check the status of components:
+
+    kubectl get pods --namespace {{ .Release.Namespace }}
+
+Now have fun with your first PolarDB-X cluster.
+
+Here's the manifest for quick start:
+
+```yaml
+apiVersion: polardbx.aliyun.com/v1
+kind: PolarDBXCluster
+metadata:
+  name: quick-start
+  annotations:
+    polardbx/topology-mode-guide: quick-start
+```

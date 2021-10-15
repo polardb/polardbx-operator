@@ -1,0 +1,16 @@
+vendor
+target
+tools/xstore/venv
+hack
+helm
+CHANGELOG
+*.md
+Makefile
+config
+LICENSES
+test
+.exportignore
+.gitignore
+LICENSE
+.git
+docs

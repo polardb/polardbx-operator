@@ -1,0 +1,87 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ .Values.hostPathFileService.name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Chart.Name }}
+    app.kubernets.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: polardbx-hpfs
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Chart.Name }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: polardbx-hpfs
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ .Chart.Name }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: polardbx-hpfs
+    spec:
+      volumes:
+      - name: xdata
+        hostPath:
+          path: {{ .Values.node.volumes.data }}/xstore
+          type: DirectoryOrCreate
+      - name: hpfs-data
+        hostPath:
+          path: {{ .Values.node.volumes.data }}/hpfs
+          type: DirectoryOrCreate
+      - name: cgroups-blkio
+        hostPath:
+          path: /sys/fs/cgroup/blkio
+          type: Directory
+      {{- if .Values.imagePullSecrets }}
+      imagePullSecrets:
+{{ toYaml .Values.imagePullSecrets | indent 6}}
+      {{- end }}
+      {{- if .Values.serviceAccount }}
+      serviceAccount: {{ .Values.serviceAccount }}
+      {{- end }}
+      containers:
+      - name: hpfs
+        {{- if .Values.useLatestImage }}
+        image: {{ .Values.imageRepo }}{{ "/" }}{{ .Values.images.hpfs}}:latest
+        {{- else }}
+        image: {{ .Values.imageRepo }}{{ "/" }}{{ .Values.images.hpfs}}:{{ .Chart.AppVersion }}
+        {{- end }}
+        imagePullPolicy: {{ .Values.imagePullPolicy }}
+        resources:
+{{ toYaml .Values.hostPathFileService.resources | indent 10 }}
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        volumeMounts:
+        - mountPath: /data/xstore
+          name: xdata
+        - mountPath: /data/hpfs
+          name: hpfs-data
+        - mountPath: /sys/fs/cgroup/blkio
+          name: cgroups-blkio
+        ports:
+        - containerPort: {{ .Values.hostPathFileService.port }}
+          name: hpfs
+        - containerPort: 22
+          name: ssh
+        args:
+        - --port={{ .Values.hostPathFileService.port }}
+        - --host-name=$(NODE_NAME)
+        - --limited-paths=/data
+        - --task-db=/data/hpfs/task.db
+        - --k8s-namespace=$(NAMESPACE)
+        - --k8s-selector=app.kubernetes.io/component=polardbx-hpfs
+        - --lock-file=/data/hpfs/hpfs.lock
+        securityContext:
+          privileged: true
+        livenessProbe:
+          tcpSocket:
+            port: hpfs

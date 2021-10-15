@@ -1,0 +1,43 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.controllerManager.name}}-config
+  namespace: {{ .Release.Namespace }}
+data:
+  config.yaml: |-
+    images:
+      repo: {{ .Values.imageRepo }}
+      common:
+        {{- if .Values.useLatestImage }}
+        prober: {{ .Values.images.probeProxy }}:latest
+        exporter: {{ .Values.images.polardbxExporter }}:latest
+        {{- else }}
+        prober: {{ .Values.images.probeProxy }}:{{ .Chart.AppVersion }}
+        exporter: {{ .Values.images.polardbxExporter }}:{{ .Chart.AppVersion }}
+        {{- end }}
+      compute:
+        {{- if .Values.useLatestImage }}
+        init: {{ .Values.images.polardbxInit}}:latest
+        {{- else }}
+        init: {{ .Values.images.polardbxInit}}:{{ .Chart.AppVersion }}
+        {{- end }}
+        engine: {{ .Values.clusterDefaults.images.galaxysql }}:{{ .Values.clusterDefaults.version }}
+      cdc:
+        engine: {{ .Values.clusterDefaults.images.galaxycdc}}:{{ .Values.clusterDefaults.version }}
+      store:
+        galaxy:
+          engine: {{ .Values.clusterDefaults.images.galaxyengine }}:{{ .Values.clusterDefaults.version }}
+          exporter: prom/mysqld-exporter:master
+    scheduler:
+      enable_master: {{ .Values.controllerManager.config.scheduler.allowScheduleOnMaster }}
+    cluster:
+      enable_exporters: {{ .Values.controllerManager.config.enableExporters }}
+      enable_aliyun_ack_resource_controller: {{ .Values.controllerManager.config.scheduler.enableAliyunAckResourceController }}
+      enable_debug_mode_for_compute_nodes: false
+      enable_privileged_container: {{ .Values.controllerManager.config.container.privileged }}
+    store:
+      enable_privileged_container: {{ .Values.controllerManager.config.container.privileged }}
+      host_paths:
+        tools: {{ .Values.node.volumes.data }}/cache/tools/xstore
+        volume_data: {{ .Values.node.volumes.data }}/xstore
+      hpfs_endpoint: {{.Values.hostPathFileService.name}}:{{ .Values.hostPathFileService.port }}

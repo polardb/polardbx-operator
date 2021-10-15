@@ -1,0 +1,53 @@
+# Copyright 2021 Alibaba Group Holding Limited.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+FROM centos:7 AS builder
+
+# Install python3.
+RUN rpm --rebuilddb && yum install -y python3 && yum clean all
+
+# Copy files.
+WORKDIR /tools/xstore/current
+COPY requirements.txt requirements.txt
+
+# Download dependencies.
+RUN mkdir -p deps && python3 -m pip download -r requirements.txt -d deps
+
+# Build the virtualenv.
+RUN python3 -m venv --copies ./venv
+RUN ./venv/bin/pip install -r requirements.txt -f deps && ./venv/bin/pip uninstall -y pip setuptools
+COPY . .
+
+# Precompile scripts and imported libs.
+RUN ./venv/bin/python3 -m compileall . && LC_LANG=en_US.utf8 LC_ALL=en_US.utf8 ENGINE=mock ./venv/bin/python3 cli.py
+
+# Build the image with scripts
+FROM busybox:latest
+
+ARG VERSION=test
+
+# Copy dependencies
+WORKDIR /tools/xstore/current
+
+# Copy source before
+COPY . .
+COPY --from=builder /tools/xstore/current/venv venv
+COPY --from=builder /tools/xstore/current/__pycache__ __pycache__
+
+# Copy all scripts
+RUN ln -s cli.py xsl && chmod +x xsl
+RUN echo "$VERSION" > version
+
+# Set entrypoint to ash
+ENTRYPOINT ash

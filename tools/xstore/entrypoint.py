@@ -1,0 +1,96 @@
+#!/usr/bin/env python3
+
+
+# Copyright 2021 Alibaba Group Holding Limited.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import logging
+import os
+
+import click
+import jsons
+
+from core import Context, Manager
+
+logging.basicConfig()
+logging.root.setLevel(logging.NOTSET)
+logging.basicConfig(level=logging.NOTSET, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+
+def _current_path():
+    # Return the symlink.
+    return os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'current'))
+
+
+def _write_convenient_access_script(context: Context):
+    # Write myc command
+    if not os.path.exists('/usr/bin/myc'):
+        with open('/usr/bin/myc', 'w') as f:
+            f.write('''#!/usr/bin/env bash
+        mysql -h127.1 -P%d -uroot -Ac "$@"''' % context.port_access())
+        os.chmod('/usr/bin/myc', 0o755)
+
+    # Write xsl profile.d
+    if not os.path.exists('/etc/profile.d/xsl.sh'):
+        current_path = _current_path()
+        with open('/etc/profile.d/xsl.sh', 'w') as f:
+            f.write('''export PATH=%s:%s:$PATH            
+if command -v xsl &> /dev/null; then
+    if [ ! -f /etc/profile.d/xsl.comp ]; then
+        _XSL_COMPLETE=source_bash xsl > /etc/profile.d/xsl.comp
+    fi
+
+    source /etc/profile.d/xsl.comp
+fi''' % (current_path + '/venv/bin', current_path))
+
+
+@click.command()
+@click.option('--initialize', is_flag=True)
+@click.option('--debug', is_flag=True)
+@click.option('--ignore-indicates', is_flag=True)
+def _start(initialize, debug, ignore_indicates):
+    # Construct a new context.
+    context = Context()
+    mgr = Manager(context)
+
+    if debug:
+        logging.info('Context: %s' % jsons.dumps(context))
+
+    if debug:
+        logging.info('Indicates: %s' % jsons.dumps(context.get_controller_indicates()))
+
+    mgr.wait_for_unblock()
+
+    # Handle indicates including pod block.
+    if not ignore_indicates:
+        mgr.handle_indicates()
+
+    # Go bootstrap or just initialize.
+    engine = mgr.engine()
+
+    _write_convenient_access_script(context)
+
+    if not engine.is_initialized():
+        logging.info('Begin to initialize...')
+        engine.initialize()
+        logging.info('Initialized!')
+
+    # Bootstrap when not only initialize.
+    if not initialize:
+        logging.info('Bootstrapping engine %s ...' % context.engine_name())
+        engine.bootstrap()
+
+
+if __name__ == '__main__':
+    _start()

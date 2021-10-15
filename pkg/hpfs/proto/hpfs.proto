@@ -1,0 +1,582 @@
+/*
+Copyright 2021 Alibaba Group Holding Limited.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+syntax = "proto3";
+
+import "google/protobuf/timestamp.proto";
+
+package proto;
+
+option go_package = "github.com/alibaba/polardbx-operator/pkg/hpfs/proto";
+
+//@formatter:off
+service HpfsService {
+    rpc CreateDirectory(CreateDirectoryRequest) returns (CreateDirectoryResponse) {}
+    rpc CreateFile(CreateFileRequest) returns (CreateFileResponse) {}
+    rpc CreateSymbolicLink(CreateSymbolicLinkRequest) returns (CreateSymbolicLinkResponse) {}
+    rpc ListDirectory(ListDirectoryRequest) returns (ListDirectoryResponse) {}
+    rpc RemoveDirectory(RemoveDirectoryRequest) returns (RemoveDirectoryResponse) {}
+    rpc RemoveFile(RemoveFileRequest) returns (RemoveFileResponse) {}
+    rpc TruncateFile(TruncateFileRequest) returns (TruncateFileResponse) {}
+    rpc DownloadFiles(DownloadRequest) returns (DownloadResponse) {}
+    rpc UploadFiles(UploadRequest) returns (UploadResponse) {}
+    rpc DeleteRemoteFile(DeleteRemoteFileRequest) returns (DeleteRemoteFileResponse) {}
+    rpc ShowAsyncTaskStatus(ShowAsyncTaskStatusRequest) returns (ShowAsyncTaskStatusResponse) {}
+    rpc CancelAsyncTask(CancelAsyncTaskRequest) returns (CancelAsyncTaskResponse) {}
+    rpc TransferFiles(TransferRequest) returns (TransferResponse) {}
+    rpc ShowDiskUsage(ShowDiskUsageRequest) returns (ShowDiskUsageResponse) {}
+    rpc ShowDiskInfo(ShowDiskInfoRequest) returns (ShowDiskInfoResponse) {}
+    // Control blkio cgroups for kubernetes pods.
+    rpc ControlCgroupsBlkio(ControlCgroupsBlkioRequest) returns (ControlCgroupsBlkioResponse) {}
+}
+//@formatter:on
+
+message Host {
+  string node_name = 1;
+}
+
+message FileInfo {
+  // Base name of the file.
+  string name = 1;
+
+  // Size of file, in bytes.
+  uint64 size = 2;
+
+  // File mode.
+  uint32 mode = 3;
+
+  // Modification time.
+  google.protobuf.Timestamp mod_time = 4;
+
+  // Is dir.
+  bool is_dir = 5;
+}
+
+message FileStats {
+  // File mode, e.g. 0664
+  uint32 mode = 1;
+
+  // File owner, either uid or user.
+  oneof owner {
+    uint32 uid = 2;
+    string user = 3;
+  }
+
+  // File group, either gid or name.
+  oneof group {
+    uint32 gid = 4;
+    string group_name = 5;
+  }
+
+  uint64 size = 6;
+}
+
+// File represents a file.
+message File {
+  // File path.
+  string path = 1;
+
+  // Flag for directory.
+  bool is_directory = 2;
+
+  // File stats.
+  FileStats stats = 3;
+}
+
+message Status {
+  // Enum for error codes.
+  enum StatusCode {
+    // Operation is successful.
+    OK = 0;
+
+    // Indicates an invalid argument.
+    INVALID = 1;
+
+    // Permission denied.
+    PERMISSION_DENIED = 2;
+
+    // File already exists.
+    EXISTS = 3;
+
+    // File does not exist.
+    NOT_EXIST = 4;
+
+    // Network error, like rpc or network failure.
+    NETWORK = 5;
+
+    // Unknown error.
+    UNKNOWN = 6;
+  }
+
+  // Status code.
+  StatusCode code = 1;
+
+  // Error message.
+  string message = 2;
+}
+
+message FileRequest {
+  // Absolute path of file to be created.
+  string path = 1;
+
+  // File mode.
+  uint32 mode = 2;
+
+  // File owner, either uid or user.
+  oneof owner {
+    uint32 uid = 3;
+    string user = 4;
+  }
+
+  // File group, either gid or name.
+  oneof group {
+    uint32 gid = 5;
+    string group_name = 6;
+  }
+}
+
+message CreateFileOptions {
+  // Ignore the create if exists. If not true, an error will be returned.
+  bool ignore_if_exists = 1;
+
+  // Overwrite the file if exists. If not true, leave the file not touched.
+  bool overwrite_if_exists = 2;
+}
+
+message CreateFileRequest {
+  // Target host.
+  Host host = 1;
+
+  // Create options.
+  CreateFileOptions options = 2;
+
+  // File to create.
+  FileRequest file = 3;
+
+  // Initial file content if not empty. If options.ignore_if_exists and
+  // options.overwrite_if_exists are true, the file content will be overwritten.
+  bytes content = 4;
+}
+
+message CreateFileResponse {
+  // Operation status.
+  Status status = 1;
+}
+
+message CreateDirectoryOptions {
+  // Ignore the create if exists. If not true, an error will be returned.
+  bool ignore_if_exists = 1;
+
+  // Create all parent directories if necessary.
+  bool create_parent_directories = 2;
+}
+
+message CreateDirectoryRequest {
+  // Target host.
+  Host host = 1;
+
+  // Create options.
+  CreateDirectoryOptions options = 2;
+
+  // Directory to create.
+  FileRequest directory = 3;
+}
+
+message CreateDirectoryResponse {
+  // Operation status.
+  Status status = 1;
+}
+
+message CreateSymbolicLinkOptions {
+  // Ignore if dest symbolic file/directory exists.
+  bool ignore_if_exists = 1;
+}
+
+message CreateSymbolicLinkRequest {
+  // Target host.
+  Host host = 1;
+
+  // Create options.
+  CreateSymbolicLinkOptions options = 2;
+
+  // Source file/directory path.
+  string dest_path = 3;
+
+  // Destination file/directory path.
+  FileRequest link_path = 4;
+}
+
+message CreateSymbolicLinkResponse {
+  // Operation status.
+  Status status = 1;
+}
+
+message RemoveOptions {
+  // Ignore if file/directory not exists.
+  bool ignore_if_not_exists = 1;
+
+  // Recursively
+  bool recursive = 2;
+}
+
+message ListDirectoryRequest {
+  // Target host.
+  Host host = 1;
+
+  // Directory path to list.
+  string path = 2;
+}
+
+message ListDirectoryResponse {
+  // Operation status.
+  Status status = 1;
+
+  // Files under requested directory.
+  repeated FileInfo files = 2;
+}
+
+message RemoveDirectoryRequest {
+  // Target host.
+  Host host = 1;
+
+  // Remove options.
+  RemoveOptions options = 2;
+
+  // Directory path to remove.
+  string path = 3;
+}
+
+message RemoveDirectoryResponse {
+  // Operation status.
+  Status status = 1;
+}
+
+message RemoveFileRequest {
+  // Target host.
+  Host host = 1;
+
+  // Remove options.
+  RemoveOptions options = 2;
+
+  // File path to remove.
+  string path = 3;
+}
+
+message RemoveFileResponse {
+  // Operation status.
+  Status status = 1;
+}
+
+message TruncateFileOptions {
+  // Ignore truncate if file not exists.
+  bool ignore_if_not_exists = 1;
+}
+
+message TruncateFileRequest {
+  // Target host.
+  Host host = 1;
+
+  // Truncate file options.
+  TruncateFileOptions options = 2;
+
+  // File path to truncate.
+  string path = 3;
+}
+
+message TruncateFileResponse {
+  // Operation status.
+  Status status = 1;
+}
+
+enum TaskStatus {
+  // Task is pending.
+  PENDING = 0;
+
+  // Task is running.
+  RUNNING = 1;
+
+  // Task has been completed successfully.
+  SUCCESS = 2;
+
+  // Task was failed.
+  FAILED = 3;
+
+  // Task is canceling.
+  CANCELING = 4;
+
+  // Tasks was canceled.
+  CANCELED = 5;
+
+  // Status unknown.
+  UNKNOWN = 9;
+}
+
+message RemoteFsEndpoint {
+  // File service protocol. Extension point for each different sources.
+  // Currently supported protocols are:
+  //     1. ftp, File Transfer Protocol.
+  //     2. sftp, SSH File Transfer Protocol.
+  //     3. http(s), Hypertext Transfer Protocol.
+  //     4. oss (aliyun), Object Storage Service of Aliyun.
+  //     5. hdfs, Hadoop Distributed File System.
+  string protocol = 1;
+
+  // Path in protocol specified format.
+  string path = 2;
+
+  // Parameters for authenticate.
+  map<string, string> auth = 3;
+
+  // Other parameters.
+  map<string, string> other = 4;
+}
+
+message AsyncTask {
+  // Trace id for task.
+  string trace_id = 1;
+}
+
+message AsyncTaskRequest {
+  // Trace id for task.
+  string trace_id = 1;
+}
+
+message DownloadSource {
+  RemoteFsEndpoint endpoint = 1;
+}
+
+message DownloadTask {
+  // Download sources.
+  DownloadSource source = 2;
+
+  // Target path.
+  string path = 3;
+}
+
+message DownloadRequest {
+  // Target host.
+  Host host = 1;
+
+  // Async task request.
+  AsyncTaskRequest async_task = 2;
+
+  // Download tasks.
+  repeated DownloadTask tasks = 3;
+}
+
+message DownloadResponse {
+  // Operation status.
+  Status status = 1;
+
+  // Async task.
+  AsyncTask task = 2;
+}
+
+message TransferRequest {
+  // Source host.
+  Host src_host = 1;
+
+  // Destination host.
+  Host dest_host = 2;
+
+  // Async task request.
+  AsyncTaskRequest async_task = 3;
+
+  // Source path.
+  string src_path = 4;
+
+  // Destination path.
+  string dest_path = 5;
+}
+
+message TransferResponse {
+  // Operation status
+  Status status = 1;
+
+  // Async task.
+  AsyncTask task = 2;
+}
+
+message ShowDiskUsageRequest {
+  // Target host.
+  Host host = 1;
+
+  // Path of file/directory.
+  string path = 2;
+}
+
+message ShowDiskUsageResponse {
+  // Operation status
+  Status status = 1;
+
+  // Size in bytes.
+  uint64 size = 2;
+}
+
+message ShowAsyncTaskStatusRequest {
+  // Destination host.
+  Host host = 1;
+
+  // Async task.
+  AsyncTask task = 2;
+}
+
+message ShowAsyncTaskStatusResponse {
+  // Operation status
+  Status status = 1;
+
+  // Task status.
+  TaskStatus task_status = 2;
+
+  // Progress of transfer.
+  double progress = 3;
+
+  // Error message.
+  string message = 4;
+}
+
+message CancelAsyncTaskRequest {
+  // Destination host.
+  Host host = 1;
+
+  // Async task.
+  AsyncTask task = 2;
+}
+
+message CancelAsyncTaskResponse {
+  // Operation status
+  Status status = 1;
+}
+
+message UploadTarget {
+  RemoteFsEndpoint endpoint = 1;
+}
+
+message UploadRequest {
+  // Target host.
+  Host host = 1;
+
+  // Async task request.
+  AsyncTaskRequest async_task = 2;
+
+  // Target file path.
+  string path = 3;
+
+  // Upload target.
+  UploadTarget target = 4;
+}
+
+message UploadResponse {
+  // Operation status
+  Status status = 1;
+
+  // Async task.
+  AsyncTask task = 2;
+}
+
+message DeleteRemoteFileRequest {
+  // Target.
+  RemoteFsEndpoint target = 1;
+}
+
+message DeleteRemoteFileResponse {
+  // Operation status.
+  Status status = 1;
+}
+
+message DiskInfo {
+  // Total size of the volume / disk.
+  uint64 total = 1;
+
+  // Free size of the volume / disk.
+  uint64 free = 2;
+
+  // Used size of the volume / disk.
+  uint64 Used = 3;
+
+  // Total inodes available.
+  uint64 files = 4;
+
+  // Free inodes available.
+  uint64 f_free = 5;
+
+  // File system type.
+  string fs_type = 6;
+}
+
+message ShowDiskInfoRequest {
+  // Target host.
+  Host host = 1;
+
+  // Target path.
+  string path = 2;
+}
+
+message ShowDiskInfoResponse {
+  // Operation status.
+  Status status = 1;
+
+  // Disk info.
+  DiskInfo info = 2;
+}
+
+enum BlkioKey {
+  // IOPS (IO per second) read.
+  IOPS_READ = 0;
+
+  // IOPS (IO per second) write.
+  IOPS_WRITE = 1;
+
+  // BPS (bytes per second) read.
+  BPS_READ = 2;
+
+  // BPS (bytes per second) write.
+  BPS_WRITE = 3;
+}
+
+message BlkioCtrl {
+  // Control key.
+  BlkioKey key = 1;
+
+  // Control value.
+  int64 value = 2;
+
+  // Target device.
+  oneof device {
+    // Mounted path of the device (sub-path supported)
+    string path = 3;
+    // Device name.
+    string device_name = 4;
+    // Device's "major-minor" number of Linux.
+    string major_minor = 5;
+  }
+}
+
+message ControlCgroupsBlkioRequest {
+  // Target host.
+  Host host = 1;
+
+  // Pod UID, use
+  string pod_uid = 2;
+
+  // Blkio controls.
+  repeated BlkioCtrl controls = 3;
+}
+
+message ControlCgroupsBlkioResponse {
+  // Operation status.
+  Status status = 1;
+}

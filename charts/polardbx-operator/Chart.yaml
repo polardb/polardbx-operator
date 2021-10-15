@@ -1,0 +1,12 @@
+apiVersion: v2
+name: polardbx-operator
+description: Helm chart of polardbx-operator
+type: application
+version: 1.0.0
+appVersion: v1.0.0
+keywords:
+- polardb-x
+- operator
+home: https://www.aliyun.com/product/drds
+sources:
+- https://github.com/ApsaraDB/galaxykube

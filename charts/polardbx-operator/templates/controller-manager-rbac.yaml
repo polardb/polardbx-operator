@@ -1,0 +1,141 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Values.serviceAccount }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Chart.Name }}
+    app.kubernets.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: controller-manager
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: polardbx-controller-manager
+  labels:
+    app.kubernetes.io/name: {{ .Chart.Name }}
+    app.kubernets.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: controller-manager
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - services
+  - configmaps
+  - secrets
+  - pods
+  - pods/exec
+  verbs:
+  - "*"
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - batch
+  resources:
+  - jobs
+  - cronjobs
+  verbs:
+  - "*"
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  - statefulsets
+  - controllerrevisions
+  verbs:
+  - "*"
+- apiGroups:
+  - polardbx.aliyun.com
+  resources:
+  - "*"
+  verbs:
+  - "*"
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: polardbx-controller-manager
+subjects:
+- kind: ServiceAccount
+  name: {{ .Values.serviceAccount }}
+  namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: polardbx-controller-manager
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: polardbx-controller-manager
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Chart.Name }}
+    app.kubernets.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: controller-manager
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - services
+  - configmaps
+  - secrets
+  - pods
+  - pods/exec
+  verbs:
+  - "*"
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - batch
+  resources:
+  - jobs
+  - cronjobs
+  verbs:
+  - "*"
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  - statefulsets
+  - controllerrevisions
+  verbs:
+  - "*"
+- apiGroups:
+  - polardbx.aliyun.com
+  resources:
+  - "*"
+  verbs:
+  - "*"
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: polardbx-controller-manager
+  namespace: {{ .Release.Namespace }}
+subjects:
+- kind: ServiceAccount
+  name: {{ .Values.serviceAccount }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  name: polardbx-controller-manager
+  kind: Role

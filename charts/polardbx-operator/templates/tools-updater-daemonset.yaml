@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ .Values.toolsUpdater.name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Chart.Name }}
+    app.kubernets.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: tools-updater
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Chart.Name }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: tools-updater
+  updateStrategy:
+    rollingUpdate:
+      maxUnavailable: 100%
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ .Chart.Name }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: tools-updater
+    spec:
+      {{- if .Values.imagePullSecrets }}
+      imagePullSecrets:
+{{ toYaml .Values.imagePullSecrets | indent 6}}
+      {{- end }}
+      volumes:
+      - name: tools-vol
+        hostPath:
+          path: {{ .Values.node.volumes.data }}/cache/tools/xstore
+          type: DirectoryOrCreate
+      terminationGracePeriodSeconds: 1
+      containers:
+      - name: updater
+        {{- if .Values.useLatestImage }}
+        image: {{ .Values.imageRepo }}{{"/"}}{{ .Values.images.toolsUpdater}}:latest
+        {{- else }}
+        image: {{ .Values.imageRepo }}{{"/"}}{{ .Values.images.toolsUpdater}}:{{ .Chart.AppVersion }}
+        {{- end }}
+        volumeMounts:
+        - mountPath: /target
+          name: tools-vol
+        command:
+        - /bin/ash
+        args:
+        - -c
+        - ./hack/update.sh /target && while true; do sleep 3600; done
