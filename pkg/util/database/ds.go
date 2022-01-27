@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-sql-driver/mysql"
@@ -35,6 +36,18 @@ type MySQLDataSource struct {
 	Password string
 	Database string
 	Timeout  time.Duration
+	SSL      string
+}
+
+func formatParams(params map[string]string) string {
+	if len(params) == 0 {
+		return ""
+	}
+	p := make([]string, 0, len(params))
+	for k, v := range params {
+		p = append(p, k+"="+v)
+	}
+	return "?" + strings.Join(p, "&")
 }
 
 func (ds *MySQLDataSource) datasource() string {
@@ -46,13 +59,18 @@ func (ds *MySQLDataSource) datasource() string {
 		datasource = fmt.Sprintf("%s:%s@tcp(%s:%d)/%s",
 			ds.Username, ds.Password, ds.Host, ds.Port, ds.Database)
 	}
+	params := make(map[string]string)
 	if ds.Timeout > 0 {
 		second := int(ds.Timeout / time.Second)
 		if second > 0 {
-			datasource += "?timeout=" + strconv.Itoa(second) + "s"
+			params["timeout"] = strconv.Itoa(second) + "s"
 		}
 	}
-	return datasource
+	if len(ds.SSL) > 0 {
+		params["tls"] = ds.SSL
+	}
+
+	return datasource + formatParams(params)
 }
 
 func OpenMySQLDB(ds *MySQLDataSource) (*sql.DB, error) {

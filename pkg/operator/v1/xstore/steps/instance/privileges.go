@@ -36,7 +36,7 @@ var CreateAccounts = xstorev1reconcile.NewStepBinder("CreateAccounts",
 
 		// Branch leader not found, just wait for 5 seconds and retry again.
 		if leaderPod == nil {
-			return flow.RequeueAfter(5*time.Second, "Leader not found, wait 5 seconds and retry...")
+			return flow.RetryAfter(5*time.Second, "Leader not found, wait 5 seconds and retry...")
 		}
 
 		secret, err := rc.GetXStoreSecret()

@@ -52,7 +52,7 @@ var PersistentXStore = xstorev1reconcile.NewStepBinder("PersistentXStore",
 		return flow.Continue("Object not changed.")
 	})
 
-func UpdatePhaseTemplate(phase polardbxv1xstore.Phase) control.BindFunc {
+func UpdatePhaseTemplate(phase polardbxv1xstore.Phase, requeue ...bool) control.BindFunc {
 	return xstorev1reconcile.NewStepBinder("UpdatePhaseTo"+string(phase),
 		func(rc *xstorev1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
 			xstore, err := rc.GetXStore()
@@ -60,11 +60,15 @@ func UpdatePhaseTemplate(phase polardbxv1xstore.Phase) control.BindFunc {
 				return flow.Error(err, "Unable to get xstore.")
 			}
 			xstore.Status.Phase = phase
-			return flow.Continue("Phase updated!", "target-phase", phase)
+			if len(requeue) == 0 || !requeue[0] {
+				return flow.Continue("Phase updated!", "target-phase", phase)
+			} else {
+				return flow.Retry("Phase updated!", "target-phase", phase)
+			}
 		})
 }
 
-func UpdateStageTemplate(stage polardbxv1xstore.Stage) control.BindFunc {
+func UpdateStageTemplate(stage polardbxv1xstore.Stage, requeue ...bool) control.BindFunc {
 	return xstorev1reconcile.NewStepBinder("UpdateStageTo"+string(stage),
 		func(rc *xstorev1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
 			xstore, err := rc.GetXStore()
@@ -72,7 +76,12 @@ func UpdateStageTemplate(stage polardbxv1xstore.Stage) control.BindFunc {
 				return flow.Error(err, "Unable to get xstore.")
 			}
 			xstore.Status.Stage = stage
-			return flow.Continue("Stage updated!", "target-stage", stage)
+			if len(requeue) == 0 || !requeue[0] {
+				return flow.Continue("Stage updated!", "target-stage", stage)
+			} else {
+				return flow.Retry(
+					"Stage changed!", "target-stage", stage)
+			}
 		})
 }
 
@@ -94,7 +103,7 @@ var MoveToPhaseDeletingIfDeleted = xstorev1reconcile.NewStepBinder("MoveToPhaseD
 					controllerutil.ContainsFinalizer(xstore, xstoremeta.Finalizer)) {
 				xstore.Status.Phase = polardbxv1xstore.PhaseDeleting
 				xstore.Status.Stage = polardbxv1xstore.StageEmpty
-				return flow.Requeue("Move phase to deleting. Requeue immediately!")
+				return flow.Retry("Move phase to deleting. Retry immediately!")
 			} else {
 				return flow.Wait("Other finalizers found, wait until removed...")
 			}

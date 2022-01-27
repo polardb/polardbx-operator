@@ -79,14 +79,9 @@ func newConfigRefreshDriver(opts *loaderConfig) configutil.WatchDriver {
 	return configutil.NewConfigWatchDriver(
 		opts.loader,
 		func(b bundle.Bundle) (interface{}, error) {
-			r, err := b.Get("config.yaml")
+			r, err := bundle.GetOneFromBundle(b, "config.yaml", "config.json")
 			if err != nil {
-				if err == bundle.ErrNotFound {
-					r, err = b.Get("config.json")
-				}
-				if err != nil {
-					return nil, err
-				}
+				return nil, err
 			}
 
 			var c config

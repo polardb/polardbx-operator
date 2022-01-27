@@ -38,6 +38,7 @@ const (
 	ServiceTypeReadWrite ServiceType = "readwrite"
 	ServiceTypeReadOnly  ServiceType = "readonly"
 	ServiceTypeMetrics   ServiceType = "metrics"
+	ServiceTypeHeadless  ServiceType = "headless"
 )
 
 func GetXStoreServiceName(xstore *polardbxv1.XStore) string {
@@ -46,6 +47,10 @@ func GetXStoreServiceName(xstore *polardbxv1.XStore) string {
 	} else {
 		return xstore.Spec.ServiceName
 	}
+}
+
+func NewHeadlessServiceName(podName string) string {
+	return podName
 }
 
 func NewServiceName(xstore *polardbxv1.XStore, serviceType ServiceType) string {

@@ -4,6 +4,14 @@ metadata:
   name: {{ .Values.controllerManager.name}}-config
   namespace: {{ .Release.Namespace }}
 data:
+  webhook.yaml: |-
+    validator:
+
+    default:
+      protocol_version: {{ .Values.webhook.defaults.protocolVersion }}
+      storage_engine: {{ .Values.webhook.defaults.storageEngine }}
+      service_type: {{ .Values.webhook.defaults.serviceType }}
+      upgrade_strategy: {{ .Values.webhook.defaults.upgradeStrategy }}
   config.yaml: |-
     images:
       repo: {{ .Values.imageRepo }}
@@ -12,14 +20,14 @@ data:
         prober: {{ .Values.images.probeProxy }}:latest
         exporter: {{ .Values.images.polardbxExporter }}:latest
         {{- else }}
-        prober: {{ .Values.images.probeProxy }}:{{ .Chart.AppVersion }}
-        exporter: {{ .Values.images.polardbxExporter }}:{{ .Chart.AppVersion }}
+        prober: {{ .Values.images.probeProxy }}:{{ .Values.imageTag | default .Chart.AppVersion }}
+        exporter: {{ .Values.images.polardbxExporter }}:{{ .Values.imageTag | default .Chart.AppVersion }}
         {{- end }}
       compute:
         {{- if .Values.useLatestImage }}
         init: {{ .Values.images.polardbxInit}}:latest
         {{- else }}
-        init: {{ .Values.images.polardbxInit}}:{{ .Chart.AppVersion }}
+        init: {{ .Values.images.polardbxInit}}:{{ .Values.imageTag | default .Chart.AppVersion }}
         {{- end }}
         engine: {{ .Values.clusterDefaults.images.galaxysql }}:{{ .Values.clusterDefaults.version }}
       cdc:
@@ -28,6 +36,9 @@ data:
         galaxy:
           engine: {{ .Values.clusterDefaults.images.galaxyengine }}:{{ .Values.clusterDefaults.version }}
           exporter: prom/mysqld-exporter:master
+{{- if .Values.extension.config.images.store }}
+{{ toYaml .Values.extension.config.images.store | indent 8 }}
+{{- end}}
     scheduler:
       enable_master: {{ .Values.controllerManager.config.scheduler.allowScheduleOnMaster }}
     cluster:
@@ -41,3 +52,7 @@ data:
         tools: {{ .Values.node.volumes.data }}/cache/tools/xstore
         volume_data: {{ .Values.node.volumes.data }}/xstore
       hpfs_endpoint: {{.Values.hostPathFileService.name}}:{{ .Values.hostPathFileService.port }}
+{{- if .Values.extension.config.security }}
+    security:
+{{ toYaml .Values.extension.config.security | indent 6 }}
+{{- end}}

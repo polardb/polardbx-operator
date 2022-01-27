@@ -27,6 +27,7 @@ import (
 	"github.com/alibaba/polardbx-operator/pkg/meta/core/gms"
 	"github.com/alibaba/polardbx-operator/pkg/meta/core/gms/security"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/featuregate"
+	"github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/helper"
 	polardbxv1reconcile "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/reconcile"
 	dictutil "github.com/alibaba/polardbx-operator/pkg/util/dict"
 )
@@ -235,6 +236,27 @@ func (e *envFactory) newJvmInjectionEnvVarForCNEngine(debugPort int) corev1.EnvV
 	return corev1.EnvVar{Name: "TDDL_OPTS", Value: strings.Join(tddlOpts, " ")}
 }
 
+func (e *envFactory) newSslEnvVarForCNEngine() []corev1.EnvVar {
+	return []corev1.EnvVar{
+		{
+			Name:  "sslEnable",
+			Value: "true",
+		},
+		{
+			Name:  "sslRootCertPath",
+			Value: "/home/admin/drds-server/security/root.crt",
+		},
+		{
+			Name:  "sslKeyPath",
+			Value: "/home/admin/drds-server/security/server.key",
+		},
+		{
+			Name:  "sslCertPath",
+			Value: "/home/admin/drds-server/security/server.crt",
+		},
+	}
+}
+
 func (e *envFactory) NewEnvVarsForCNEngine(gmsConn StorageConnection, ports CNPorts) []corev1.EnvVar {
 	topology := e.polardbx.Status.SpecSnapshot.Topology
 	template := topology.Nodes.CN.Template
@@ -252,11 +274,24 @@ func (e *envFactory) NewEnvVarsForCNEngine(gmsConn StorageConnection, ports CNPo
 	for _, e := range systemEnvs {
 		systemAndBasicEnvKeys[e.Name] = struct{}{}
 	}
+	for _, e := range basicEnvs {
+		systemAndBasicEnvKeys[e.Name] = struct{}{}
+	}
+
+	sslEnvs := make([]corev1.EnvVar, 0)
+	if helper.IsTLSEnabled(e.polardbx) {
+		sslEnvs = e.newSslEnvVarForCNEngine()
+		for _, e := range sslEnvs {
+			systemAndBasicEnvKeys[e.Name] = struct{}{}
+		}
+	}
+
 	serverPropertyEnvs := e.newServerPropertyEnvVarsForCNEngine(cpuLimit, systemAndBasicEnvKeys)
 	tddlOptsEnv := e.newJvmInjectionEnvVarForCNEngine(ports.DebugPort)
 
 	envVars := systemEnvs
 	envVars = append(envVars, basicEnvs...)
+	envVars = append(envVars, sslEnvs...)
 	envVars = append(envVars, serverPropertyEnvs...)
 	envVars = append(envVars, tddlOptsEnv)
 	return envVars

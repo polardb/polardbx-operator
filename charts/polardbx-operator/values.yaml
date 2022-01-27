@@ -2,8 +2,8 @@
 imageRepo: polardbx
 
 # Image names of operator components. By default, operator uses the
-# images tagged with { .Chart.AppVersion }. One can overwrite it by
-# manually specify the tag.
+# images tagged with { .Chart.AppVersion }. Overwrite the tags with
+# imageTag.
 images:
   polardbxOperator: polardbx-operator
   hpfs: polardbx-hpfs
@@ -11,6 +11,9 @@ images:
   probeProxy: probe-proxy
   polardbxExporter: polardbx-exporter
   polardbxInit: polardbx-init
+
+# Default image tag. Use app version if not specified or 'latest' if useLatestImage is true.
+imageTag:
 
 # Uses the latest images for operator components.
 useLatestImage: false
@@ -90,3 +93,23 @@ hostPathFileService:
 # Settings for xstore tools updater.
 toolsUpdater:
   name: polardbx-tools-updater
+
+
+kubectlImage: "bitnami/kubectl:latest"
+
+# Settings for webhooks.
+webhook:
+  serviceName: polardbx-admission-webhook
+  defaults:
+    protocolVersion: 8.0
+    storageEngine: galaxy
+    serviceType: ClusterIP
+    upgradeStrategy: RollingUpgrade
+
+# Extensions.
+extension:
+  # Ext configs.
+  config:
+    images:
+      store:
+    security:

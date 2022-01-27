@@ -33,6 +33,7 @@ import (
 
 	polardbxv1 "github.com/alibaba/polardbx-operator/api/v1"
 	"github.com/alibaba/polardbx-operator/pkg/k8s/control"
+	"github.com/alibaba/polardbx-operator/pkg/operator/hint"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/config"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/plugin"
 	xstorev1reconcile "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/reconcile"
@@ -50,6 +51,11 @@ type XStoreReconciler struct {
 
 func (r *XStoreReconciler) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	log := r.Logger.WithValues("namespace", request.Namespace, "xstore", request.Name)
+
+	if hint.IsNamespacePaused(request.Namespace) {
+		log.Info("Reconciling is paused, skip")
+		return reconcile.Result{}, nil
+	}
 
 	rc := xstorev1reconcile.NewContext(
 		control.NewBaseReconcileContextFrom(r.BaseRc, ctx, request),

@@ -1,0 +1,14 @@
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  name: v1.admission.polardbx.aliyun.com
+  namespace: {{ .Release.Namespace }}
+spec:
+  insecureSkipTLSVerify: true
+  group: admission.polardbx.aliyun.com
+  groupPriorityMinimum: 1000
+  versionPriority: 15
+  service:
+    name: {{ .Values.webhook.serviceName }}
+    namespace: {{ .Release.Namespace }}
+  version: v1

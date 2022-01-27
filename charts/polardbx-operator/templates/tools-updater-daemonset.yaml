@@ -5,7 +5,7 @@ metadata:
   namespace: {{ .Release.Namespace }}
   labels:
     app.kubernetes.io/name: {{ .Chart.Name }}
-    app.kubernets.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
     app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/component: tools-updater
 spec:
@@ -24,6 +24,9 @@ spec:
         app.kubernetes.io/instance: {{ .Release.Name }}
         app.kubernetes.io/component: tools-updater
     spec:
+      {{- if .Values.serviceAccount }}
+      serviceAccount: {{ .Values.serviceAccount }}
+      {{- end }}
       {{- if .Values.imagePullSecrets }}
       imagePullSecrets:
 {{ toYaml .Values.imagePullSecrets | indent 6}}
@@ -39,7 +42,7 @@ spec:
         {{- if .Values.useLatestImage }}
         image: {{ .Values.imageRepo }}{{"/"}}{{ .Values.images.toolsUpdater}}:latest
         {{- else }}
-        image: {{ .Values.imageRepo }}{{"/"}}{{ .Values.images.toolsUpdater}}:{{ .Chart.AppVersion }}
+        image: {{ .Values.imageRepo }}{{"/"}}{{ .Values.images.toolsUpdater}}:{{ .Values.imageTag | default .Chart.AppVersion }}
         {{- end }}
         volumeMounts:
         - mountPath: /target

@@ -28,9 +28,13 @@ import (
 	"sync/atomic"
 	"time"
 
-	"k8s.io/utils/pointer"
+	"github.com/go-sql-driver/mysql"
 
 	dbutil "github.com/alibaba/polardbx-operator/pkg/util/database"
+)
+
+var (
+	ErrAlreadyInRebalance = errors.New("already in rebalance")
 )
 
 type Group struct {
@@ -42,16 +46,30 @@ type Group struct {
 	Movable    bool   `json:"movable"`
 }
 
-type MoveStatus struct {
-	Schema           string  `json:"schema"`
-	LastUpdateTime   string  `json:"last_update_time"`
-	SourceDBGroupKey string  `json:"source_db_group_key"`
-	TempDBGroupKey   string  `json:"temp_db_group_key"`
-	SourceStorageId  string  `json:"source_storage_id"`
-	TargetStorageId  string  `json:"target_storage_id"`
-	Progress         float64 `json:"progress"`
-	JobStatus        string  `json:"job_status"`
-	Remark           string  `json:"remark"`
+type RebalanceAction struct {
+	JobId  string `json:"job_id,omitempty"` // JOB_ID
+	Schema string `json:"schema,omitempty"` // SCHEMA
+	Name   string `json:"name,omitempty"`   // NAME
+	Action string `json:"action,omitempty"` // ACTION
+}
+
+type DDLStatus struct {
+	JobId     string    `json:"job_id,omitempty"`     // JOB_ID
+	Schema    string    `json:"schema,omitempty"`     // OBJECT_SCHEMA
+	Object    string    `json:"object,omitempty"`     // OBJECT_NAME
+	Type      string    `json:"type,omitempty"`       // DDL_TYPE
+	State     string    `json:"status,omitempty"`     // STATE
+	Progress  int       `json:"progress,omitempty"`   // PROGRESS
+	StartTime time.Time `json:"start_time,omitempty"` // START_TIME
+}
+
+type DDLResult struct {
+	JobId   string `json:"job_id,omitempty"`  // JOB_ID
+	Schema  string `json:"schema,omitempty"`  // SCHEMA_NAME
+	Object  string `json:"object,omitempty"`  // OBJECT_NAME
+	Type    string `json:"type,omitempty"`    // DDL_TYPE
+	Result  string `json:"result,omitempty"`  // RESULT_TYPE
+	Content string `json:"content,omitempty"` // RESULT_CONTENT
 }
 
 type GroupManager interface {
@@ -59,14 +77,14 @@ type GroupManager interface {
 	CreateSchema(schema string, createTables ...string) error
 	ListAllGroups() (map[string][]Group, error)
 	ListGroups(schema string) ([]Group, error)
+	CountStorages() (int, error)
 	GetGroupsOn(schema, storageId string) ([]Group, error)
-	MoveGroupsTo(schema, storageId string, groups ...string) error
-	BatchMoveGroups(schema string, storageGroups map[string][]string) error
 	PreloadSchema(schema string, addrs ...string) error
-	ShowMoveStatus(schema string, lastN int) ([]MoveStatus, error)
 	RebalanceCluster(storageExpected int) ([]RebalanceAction, error)
 	DrainStorageNodes(storageNodes ...string) ([]RebalanceAction, error)
 	GetClusterVersion() (string, error)
+	ShowDDL(jobId string) (*DDLStatus, error)
+	ShowDDLResult(jobId string) (*DDLResult, error)
 	Close() error
 }
 
@@ -77,6 +95,93 @@ type groupManager struct {
 	db         *sql.DB
 
 	caseInsensitive bool
+}
+
+func (m *groupManager) CountStorages() (int, error) {
+	conn, err := m.getConn("")
+	if err != nil {
+		return 0, err
+	}
+	defer dbutil.DeferClose(conn)
+
+	ctx, cancel := context.WithTimeout(m.ctx, 5*time.Second)
+	defer cancel()
+
+	return m.countStorages(conn, ctx)
+}
+
+func (m *groupManager) ShowDDL(jobId string) (*DDLStatus, error) {
+	conn, err := m.getConn("")
+	if err != nil {
+		return nil, err
+	}
+	defer dbutil.DeferClose(conn)
+
+	rs, err := conn.QueryContext(m.ctx, fmt.Sprintf("SHOW DDL %s", jobId))
+	if err != nil {
+		return nil, err
+	}
+	defer dbutil.DeferClose(rs)
+
+	if !rs.Next() {
+		return nil, nil
+	}
+
+	status := &DDLStatus{}
+	var progress sql.NullString
+	dest := map[string]interface{}{
+		"JOB_ID":        &status.JobId,
+		"OBJECT_SCHEMA": &status.Schema,
+		"OBJECT_NAME":   &status.Object,
+		"DDL_TYPE":      &status.Type,
+		"STATE":         &status.State,
+		"PROGRESS":      &progress,
+	}
+	err = dbutil.Scan(rs, dest, dbutil.ScanOpt{CaseInsensitive: true})
+	if err != nil {
+		return nil, err
+	}
+
+	if strings.HasSuffix(progress.String, "%") {
+		s := progress.String
+		progressVal, _ := strconv.Atoi(s[:len(s)-1])
+		status.Progress = progressVal
+	}
+
+	return status, nil
+}
+
+func (m *groupManager) ShowDDLResult(jobId string) (*DDLResult, error) {
+	conn, err := m.getConn("")
+	if err != nil {
+		return nil, err
+	}
+	defer dbutil.DeferClose(conn)
+
+	rs, err := conn.QueryContext(m.ctx, fmt.Sprintf("SHOW DDL RESULT %s", jobId))
+	if err != nil {
+		return nil, err
+	}
+	defer dbutil.DeferClose(rs)
+
+	if !rs.Next() {
+		return nil, nil
+	}
+
+	result := &DDLResult{}
+	dest := map[string]interface{}{
+		"JOB_ID":         &result.JobId,
+		"SCHEMA_NAME":    &result.Schema,
+		"OBJECT_NAME":    &result.Object,
+		"DDL_TYPE":       &result.Type,
+		"RESULT_TYPE":    &result.Result,
+		"RESULT_CONTENT": &result.Content,
+	}
+	err = dbutil.Scan(rs, dest, dbutil.ScanOpt{CaseInsensitive: true})
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 func (m *groupManager) getDB() (*sql.DB, error) {
@@ -322,158 +427,25 @@ func (m *groupManager) GetGroupsOn(schema, storageId string) ([]Group, error) {
 	return filteredGroups, nil
 }
 
-func (m *groupManager) MoveGroupsTo(schema, storageId string, groups ...string) error {
-	if len(groups) == 0 {
-		return nil
-	}
-
-	// Case insensitive for database name
-	if m.caseInsensitive {
-		schema = strings.ToLower(schema)
-	}
-
-	conn, err := m.getConn(schema)
-	if err != nil {
-		return err
-	}
-	defer dbutil.DeferClose(conn)
-
-	_, err = conn.ExecContext(m.ctx, fmt.Sprintf(
-		"MOVE DATABASE /*+TDDL:cmd_extra(PURE_ASYNC_DDL_MODE=TRUE)*/ %s TO '%s'",
-		strings.Join(groups, ", "), storageId))
-	if err != nil {
-		return err
-	}
-
-	// Current PolarDB-X versions have the problem that async data migration will not start
-	// automatically. "RECOVER DDL ALL" will help recover this.
-	time.Sleep(time.Second)
-	_, err = conn.ExecContext(m.ctx, fmt.Sprint("RECOVER DDL ALL"))
-
-	return err
-}
-
-func (m *groupManager) BatchMoveGroups(schema string, storageGroups map[string][]string) error {
-	if len(storageGroups) == 0 {
-		return nil
-	}
-
-	// Case insensitive for database name
-	if m.caseInsensitive {
-		schema = strings.ToLower(schema)
-	}
-
-	conn, err := m.getConn(schema)
-	if err != nil {
-		return nil
-	}
-	defer dbutil.DeferClose(conn)
-
-	moveParams := make([]string, 0, len(storageGroups))
-	for storageId, groups := range storageGroups {
-		moveParams = append(moveParams, fmt.Sprintf("(%s) to '%s'", strings.Join(groups, ", "), storageId))
-	}
-
-	_, err = conn.ExecContext(m.ctx, fmt.Sprintf(
-		"MOVE DATABASE /*+TDDL:cmd_extra(PURE_ASYNC_DDL_MODE=TRUE)*/ %s",
-		strings.Join(moveParams, ", ")))
-
-	if err != nil {
-		return err
-	}
-
-	// Deprecated
-	// Current PolarDB-X versions have the problem that async data migration will not start
-	// automatically. "RECOVER DDL ALL" will help recover this.
-	//
-	// time.Sleep(time.Second)
-	// _, err = conn.ExecContext(m.ctx, fmt.Sprint("RECOVER DDL ALL"))
-
-	return err
-}
-
-func (m *groupManager) ShowMoveStatus(schema string, baseIdx int) ([]MoveStatus, error) {
-	// Case-insensitive for database name
-	if m.caseInsensitive {
-		schema = strings.ToLower(schema)
-	}
-
-	conn, err := m.getConn(schema)
-	if err != nil {
-		return nil, err
-	}
-	defer dbutil.DeferClose(conn)
-
-	ctx, cancel := context.WithTimeout(m.ctx, 5*time.Second)
-	defer cancel()
-
-	rs, err := conn.QueryContext(ctx, fmt.Sprintf("SHOW MOVE DATABASE ORDER BY GMT_CREATE DESC"))
-	if err != nil {
-		return nil, err
-	}
-	defer dbutil.DeferClose(rs)
-
-	columnNames, err := rs.Columns()
-	if err != nil {
-		return nil, err
-	}
-
-	moveStatusList := make([]MoveStatus, 0, 8)
-	var progressStr string
-	var remark sql.NullString
-	for rs.Next() {
-		status := MoveStatus{}
-
-		// Prepare column references.
-		columnRefs := []interface{}{
-			&status.Schema, &status.LastUpdateTime, &status.SourceDBGroupKey, &status.TempDBGroupKey,
-			&status.SourceStorageId, &status.TargetStorageId, &progressStr, &status.JobStatus, &remark,
-		}
-		for i := 9; i < len(columnNames); i++ {
-			columnRefs = append(columnRefs, pointer.String(""))
-		}
-
-		err = rs.Scan(columnRefs...)
-		if err != nil {
-			return nil, err
-		}
-		if strings.HasSuffix(progressStr, "%") {
-			status.Progress, err = strconv.ParseFloat(progressStr[0:len(progressStr)-1], 64)
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			return nil, errors.New("invalid progress: " + progressStr)
-		}
-		if remark.Valid {
-			status.Remark = remark.String
-		}
-		moveStatusList = append(moveStatusList, status)
-	}
-
-	if len(moveStatusList) > baseIdx {
-		return moveStatusList[:len(moveStatusList)-baseIdx], nil
-	} else {
-		return []MoveStatus{}, nil
-	}
-}
-
-type RebalanceAction struct {
-	Schema string `json:"schema,omitempty"`
-	Action string `json:"action,omitempty"`
-}
-
-func readRebalanceAction(rs *sql.Rows) ([]RebalanceAction, error) {
+func scanRebalanceActions(rs *sql.Rows) ([]RebalanceAction, error) {
 	rebalanceActions := make([]RebalanceAction, 0)
 
-	var schema, name, action sql.NullString
+	var jobId, schema, name, action sql.NullString
+	m := map[string]interface{}{
+		"JOB_ID": &jobId,
+		"SCHEMA": &schema,
+		"NAME":   &name,
+		"ACTION": &action,
+	}
 	for rs.Next() {
-		err := rs.Scan(&schema, &name, &action)
+		err := dbutil.Scan(rs, m, dbutil.ScanOpt{CaseInsensitive: true})
 		if err != nil {
 			return nil, err
 		}
 		rebalanceActions = append(rebalanceActions, RebalanceAction{
+			JobId:  jobId.String,
 			Schema: schema.String,
+			Name:   name.String,
 			Action: action.String,
 		})
 	}
@@ -514,6 +486,15 @@ func (m *groupManager) countStorages(conn *sql.Conn, ctx context.Context) (int, 
 	return cnt, nil
 }
 
+func (m *groupManager) convertRebalanceError(err error) error {
+	if merr, ok := err.(*mysql.MySQLError); ok {
+		if strings.Contains(merr.Message, "already in rebalance") {
+			return ErrAlreadyInRebalance
+		}
+	}
+	return err
+}
+
 //goland:noinspection SqlNoDataSourceInspection,SqlDialectInspection
 func (m *groupManager) RebalanceCluster(storageExpected int) ([]RebalanceAction, error) {
 	conn, err := m.getConn("")
@@ -534,9 +515,12 @@ func (m *groupManager) RebalanceCluster(storageExpected int) ([]RebalanceAction,
 	}
 
 	rs, err := conn.QueryContext(ctx, `rebalance cluster`)
+	if err != nil {
+		return nil, m.convertRebalanceError(err)
+	}
 	defer dbutil.DeferClose(rs)
 
-	return readRebalanceAction(rs)
+	return scanRebalanceActions(rs)
 }
 
 //goland:noinspection SqlNoDataSourceInspection
@@ -552,9 +536,12 @@ func (m *groupManager) DrainStorageNodes(storageNodes ...string) ([]RebalanceAct
 
 	rs, err := conn.QueryContext(ctx, fmt.Sprintf(`rebalance cluster drain_node='%s'`,
 		strings.Join(storageNodes, ",")))
+	if err != nil {
+		return nil, m.convertRebalanceError(err)
+	}
 	defer dbutil.DeferClose(rs)
 
-	return readRebalanceAction(rs)
+	return scanRebalanceActions(rs)
 }
 
 func (m *groupManager) Close() error {
@@ -623,6 +610,20 @@ func (m *groupManager) GetClusterVersion() (string, error) {
 	}
 
 	return fmt.Sprintf("%s/%s", cnVer, dnVer), nil
+}
+
+func NewGroupManagerWithDB(ctx context.Context, db *sql.DB, caseInsensitive bool) GroupManager {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if db == nil {
+		panic("db must be non-nil")
+	}
+	return &groupManager{
+		ctx:             ctx,
+		db:              db,
+		caseInsensitive: caseInsensitive,
+	}
 }
 
 func NewGroupManager(ctx context.Context, ds dbutil.MySQLDataSource, caseInsensitive bool) GroupManager {

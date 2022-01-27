@@ -17,6 +17,7 @@ limitations under the License.
 package helper
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 
 	polardbxv1 "github.com/alibaba/polardbx-operator/api/v1"
@@ -37,4 +38,18 @@ func IsTopologyOrStaticConfigChanges(polardbx *polardbxv1.PolarDBXCluster) bool 
 	topologyChanged := !equality.Semantic.DeepEqual(&spec.Topology, &snapshot.Topology)
 
 	return topologyChanged || staticConfigChanged
+}
+
+func GetEncodeKeySecretKeySelector(polardbx *polardbxv1.PolarDBXCluster) *corev1.SecretKeySelector {
+	if polardbx.Spec.Security != nil {
+		return polardbx.Spec.Security.EncodeKey
+	}
+	return nil
+}
+
+func IsTLSEnabled(polardbx *polardbxv1.PolarDBXCluster) bool {
+	return polardbx.Spec.Security != nil &&
+		polardbx.Spec.Security.TLS != nil &&
+		(len(polardbx.Spec.Security.TLS.SecretName) > 0 ||
+			polardbx.Spec.Security.TLS.GenerateSelfSigned)
 }

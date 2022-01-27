@@ -5,7 +5,7 @@ metadata:
   namespace: {{ .Release.Namespace }}
   labels:
     app.kubernetes.io/name: {{ .Chart.Name }}
-    app.kubernets.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
     app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/component: controller-manager
 spec:
@@ -29,6 +29,13 @@ spec:
       - name: config
         configMap:
           name: {{ .Values.controllerManager.name }}-config
+      - name: hints
+        downwardAPI:
+          defaultMode: 420
+          items:
+          - path: pause
+            fieldRef:
+              fieldPath: metadata.annotations['pause']
       {{- if .Values.imagePullSecrets }}
       imagePullSecrets:
 {{ toYaml .Values.imagePullSecrets | indent 6}}
@@ -50,14 +57,19 @@ spec:
         {{- if .Values.useLatestImage }}
         image: {{ .Values.imageRepo }}{{ "/" }}{{ .Values.images.polardbxOperator }}:latest
         {{- else }}
-        image: {{ .Values.imageRepo }}{{ "/" }}{{ .Values.images.polardbxOperator }}:{{ .Chart.AppVersion }}
+        image: {{ .Values.imageRepo }}{{ "/" }}{{ .Values.images.polardbxOperator }}:{{ .Values.imageTag | default .Chart.AppVersion }}
         {{- end }}
         imagePullPolicy: {{ .Values.imagePullPolicy | default "IfNotPresent" }}
+        ports:
+          - containerPort: 9443
+            name: "webhook"
         resources:
 {{ toYaml .Values.controllerManager.resources | indent 10 }}
         volumeMounts:
         - mountPath: /etc/operator/polardbx
           name: config
+        - mountPath: /etc/operator/hints
+          name: hints
         command:
         - /polardbx-operator
         args:

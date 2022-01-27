@@ -21,6 +21,11 @@ type Config interface {
 	Cluster() ClusterConfig
 	Store() StoreConfig
 	Scheduler() SchedulerConfig
+	Security() SecurityConfig
+}
+
+type SecurityConfig interface {
+	DefaultEncodeKey() string
 }
 
 type SchedulerConfig interface {

@@ -47,3 +47,15 @@ func GetClusterAddrFromService(svc *corev1.Service, port string) (string, error)
 	}
 	return fmt.Sprintf("%s:%d", svc.Spec.ClusterIP, svcPort.Port), nil
 }
+
+func GetServiceDNSRecord(svcName, namespace string, withinNamespace bool) string {
+	if withinNamespace {
+		return svcName
+	} else {
+		return svcName + "." + namespace
+	}
+}
+
+func GetServiceDNSRecordWithSvc(svc *corev1.Service, withinNamespace bool) string {
+	return GetServiceDNSRecord(svc.Name, svc.Namespace, withinNamespace)
+}

@@ -151,6 +151,15 @@ class AbstractConsensusManager(AbstractContextManager):
             return target.addr
         return target
 
+    def _get_server_id(self, target: Union[str, ConsensusNode]) -> int:
+        if isinstance(target, ConsensusNode):
+            return target.server_id
+
+        node = self.get_consensus_node(target)  # ConsensusNode
+        if not node:
+            raise ValueError('node not found: ' + target)
+        return node.server_id
+
     # get current node with cache.
     def _get_current_node(self):
         if not self._current_node:

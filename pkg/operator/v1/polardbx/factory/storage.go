@@ -370,6 +370,7 @@ func (f *objectFactory) newXStore(
 				template.Image,
 				f.rc.Config().Images().DefaultImageForStore(engine, xstoreconvention.ContainerEngine, topology.Version),
 			),
+			ImagePullPolicy:  template.ImagePullPolicy,
 			ImagePullSecrets: template.ImagePullSecrets,
 			HostNetwork:      template.HostNetwork,
 			Affinity:         affinity,
@@ -490,7 +491,7 @@ func (f *objectFactory) NewXStoreGMS() (*polardbxv1.XStore, error) {
 		rule,
 		template,
 		mycnfOverlay,
-		convention.ConstLabels(polardbx, polardbxmeta.RoleGMS),
+		convention.ConstLabelsWithRole(polardbx, polardbxmeta.RoleGMS),
 		f.newPodAnnotations(polardbx),
 		0,
 	)

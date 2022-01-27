@@ -29,6 +29,11 @@ type config struct {
 	SchedulerConfig schedulerConfig `json:"scheduler,omitempty"`
 	ClusterConfig   clusterConfig   `json:"cluster,omitempty"`
 	StoreConfig     storeConfig     `json:"store,omitempty"`
+	SecurityConfig  securityConfig  `json:"security,omitempty"`
+}
+
+func (c *config) Security() SecurityConfig {
+	return &c.SecurityConfig
 }
 
 func (c *config) Images() ImagesConfig {
@@ -182,4 +187,12 @@ func (c *storeConfig) HostPathDataVolumeRoot() string {
 
 func (c *storeConfig) HostPathFileServiceEndpoint() string {
 	return c.HpfsEndpoint
+}
+
+type securityConfig struct {
+	EncodeKey string `json:"encode_key,omitempty"`
+}
+
+func (c *securityConfig) DefaultEncodeKey() string {
+	return c.EncodeKey
 }

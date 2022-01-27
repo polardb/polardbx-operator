@@ -22,6 +22,6 @@ import (
 	xstoreinssteps "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/steps/instance"
 )
 
-var CreatePods = xstoreinssteps.CreatePodsWithExtraFactory(&galaxyfactory.ExtraPodFactoryGalaxy{
+var CreatePodsAndHeadlessServices = xstoreinssteps.CreatePodsAndHeadlessServicesWithExtraFactory(&galaxyfactory.ExtraPodFactoryGalaxy{
 	Delegate: &factory.DefaultExtraPodFactory{},
 })

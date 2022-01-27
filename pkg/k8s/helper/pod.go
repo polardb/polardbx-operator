@@ -44,17 +44,24 @@ func IsPodReady(pod *corev1.Pod) bool {
 	return true
 }
 
-func GetContainerFromPod(pod *corev1.Pod, name string) *corev1.Container {
-	if pod == nil && pod.Spec.Containers == nil {
+func GetContainerFromPodSpec(podSpec *corev1.PodSpec, name string) *corev1.Container {
+	if podSpec == nil || podSpec.Containers == nil {
 		return nil
 	}
-	for i := range pod.Spec.Containers {
-		c := &pod.Spec.Containers[i]
+	for i := range podSpec.Containers {
+		c := &podSpec.Containers[i]
 		if c.Name == name {
 			return c
 		}
 	}
 	return nil
+}
+
+func GetContainerFromPod(pod *corev1.Pod, name string) *corev1.Container {
+	if pod == nil {
+		return nil
+	}
+	return GetContainerFromPodSpec(&pod.Spec, name)
 }
 
 func MustGetContainerFromPod(pod *corev1.Pod, name string) *corev1.Container {

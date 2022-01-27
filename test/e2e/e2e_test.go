@@ -15,3 +15,31 @@ limitations under the License.
 */
 
 package e2e
+
+import (
+	"os"
+	"testing"
+
+	"github.com/onsi/ginkgo"
+	"github.com/onsi/gomega"
+	// test sources
+	_ "github.com/alibaba/polardbx-operator/test/e2e/polardbxcluster"
+	_ "github.com/alibaba/polardbx-operator/test/e2e/xstore"
+	"github.com/alibaba/polardbx-operator/test/framework"
+)
+
+func TestMain(m *testing.M) {
+	framework.RegisterFlagsAndParse()
+
+	os.Exit(m.Run())
+}
+
+func TestE2E(t *testing.T) {
+	RunE2ETests(t)
+}
+
+func RunE2ETests(t *testing.T) {
+	gomega.RegisterFailHandler(framework.Fail)
+
+	ginkgo.RunSpecs(t, "PolarDB-X operator e2e suite")
+}

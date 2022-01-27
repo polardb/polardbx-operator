@@ -25,3 +25,7 @@ func EnableDebug() {
 func IsDebugEnabled() bool {
 	return debug
 }
+
+func Namespace() string {
+	return "development"
+}

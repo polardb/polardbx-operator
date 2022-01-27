@@ -18,12 +18,13 @@ package selector
 
 import (
 	"fmt"
-	"reflect"
 	"testing"
 
 	"github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/alibaba/polardbx-operator/pkg/util/json"
 )
 
 var node = &corev1.Node{
@@ -48,7 +49,7 @@ var node = &corev1.Node{
 
 func BenchmarkGetStringValueOfField(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		_, _ = stringValueOfField(reflect.ValueOf(node), "metadata.name")
+		_, _ = json.GetStringValueOfFieldByJsonKey(node, "metadata.name")
 	}
 }
 
@@ -162,7 +163,7 @@ func TestGetStringValueOfField(t *testing.T) {
 		"empty-node": {
 			node:        nil,
 			labelKey:    "metadata.name",
-			expectedErr: errNil,
+			expectedErr: json.ErrNilOrNotExists,
 		},
 		"inline-kind": {
 			node:     node,
@@ -179,7 +180,7 @@ func TestGetStringValueOfField(t *testing.T) {
 		},
 		"metadata.labels.b": {
 			node:        node,
-			expectedErr: errNil,
+			expectedErr: json.ErrNilOrNotExists,
 		},
 		"metadata.namespace": {
 			node:     node,
@@ -195,7 +196,7 @@ func TestGetStringValueOfField(t *testing.T) {
 		},
 		"status.config": {
 			node:        node,
-			expectedErr: errNil,
+			expectedErr: json.ErrNilOrNotExists,
 		},
 	}
 
@@ -206,11 +207,11 @@ func TestGetStringValueOfField(t *testing.T) {
 			if len(labelKey) == 0 {
 				labelKey = name
 			}
-			val, err := stringValueOfField(reflect.ValueOf(tc.node), labelKey)
+			val, err := json.GetStringValueOfFieldByJsonKey(tc.node, labelKey)
 			if err != nil {
-				if err == errInvalidField {
+				if err == json.ErrInvalidField {
 					fmt.Println("not a valid field: " + labelKey)
-				} else if err == errNil {
+				} else if err == json.ErrNilOrNotExists {
 					fmt.Println("field not found: " + labelKey)
 				} else {
 					fmt.Println("unexpected error: " + err.Error())
@@ -293,6 +294,210 @@ func TestIsNodeMatches(t *testing.T) {
 			matches, err := IsNodeMatches(node, tc.nodeSelector)
 			g.Expect(err).Should(gomega.BeNil())
 			g.Expect(matches).To(gomega.Equal(tc.expected))
+		})
+	}
+}
+
+func TestDoesNodeSelectorCoversAnother(t *testing.T) {
+	testcases := map[string]struct {
+		a      *corev1.NodeSelector
+		b      *corev1.NodeSelector
+		expect bool
+	}{
+		"single-term-covers": {
+			a: &corev1.NodeSelector{
+				NodeSelectorTerms: []corev1.NodeSelectorTerm{
+					{
+						MatchFields: []corev1.NodeSelectorRequirement{
+							{
+								Key:      "host",
+								Operator: corev1.NodeSelectorOpExists,
+							},
+						},
+					},
+				},
+			},
+			b: &corev1.NodeSelector{
+				NodeSelectorTerms: []corev1.NodeSelectorTerm{
+					{
+						MatchFields: []corev1.NodeSelectorRequirement{
+							{
+								Key:      "host",
+								Operator: corev1.NodeSelectorOpExists,
+							},
+							{
+								Key:      "domain",
+								Operator: corev1.NodeSelectorOpExists,
+							},
+						},
+					},
+				},
+			},
+			expect: true,
+		},
+		"single-term-not-covers": {
+			a: &corev1.NodeSelector{
+				NodeSelectorTerms: []corev1.NodeSelectorTerm{
+					{
+						MatchFields: []corev1.NodeSelectorRequirement{
+							{
+								Key:      "host",
+								Operator: corev1.NodeSelectorOpExists,
+							},
+							{
+								Key:      "domain",
+								Operator: corev1.NodeSelectorOpExists,
+							},
+						},
+					},
+				},
+			},
+			b: &corev1.NodeSelector{
+				NodeSelectorTerms: []corev1.NodeSelectorTerm{
+					{
+						MatchFields: []corev1.NodeSelectorRequirement{
+							{
+								Key:      "host",
+								Operator: corev1.NodeSelectorOpExists,
+							},
+						},
+					},
+				},
+			},
+			expect: false,
+		},
+		"left-nil-right-nil": {
+			expect: true,
+		},
+		"left-nil-right-non-nil": {
+			a: nil,
+			b: &corev1.NodeSelector{
+				NodeSelectorTerms: []corev1.NodeSelectorTerm{
+					{
+						MatchFields: []corev1.NodeSelectorRequirement{
+							{
+								Key:      "host",
+								Operator: corev1.NodeSelectorOpExists,
+							},
+							{
+								Key:      "domain",
+								Operator: corev1.NodeSelectorOpExists,
+							},
+						},
+					},
+				},
+			},
+			expect: true,
+		},
+		"multi-terms-covers": {
+			a: &corev1.NodeSelector{
+				NodeSelectorTerms: []corev1.NodeSelectorTerm{
+					{
+						MatchFields: []corev1.NodeSelectorRequirement{
+							{
+								Key:      "host",
+								Operator: corev1.NodeSelectorOpExists,
+							},
+						},
+					},
+					{
+						MatchFields: []corev1.NodeSelectorRequirement{
+							{
+								Key:      "domain",
+								Operator: corev1.NodeSelectorOpExists,
+							},
+						},
+					},
+				},
+			},
+			b: &corev1.NodeSelector{
+				NodeSelectorTerms: []corev1.NodeSelectorTerm{
+					{
+						MatchFields: []corev1.NodeSelectorRequirement{
+							{
+								Key:      "host",
+								Operator: corev1.NodeSelectorOpExists,
+							},
+							{
+								Key:      "zone",
+								Operator: corev1.NodeSelectorOpExists,
+							},
+						},
+					},
+					{
+						MatchFields: []corev1.NodeSelectorRequirement{
+							{
+								Key:      "domain",
+								Operator: corev1.NodeSelectorOpExists,
+							},
+							{
+								Key:      "zone",
+								Operator: corev1.NodeSelectorOpExists,
+							},
+						},
+					},
+				},
+			},
+			expect: true,
+		},
+		"multi-terms-not-covers": {
+			a: &corev1.NodeSelector{
+				NodeSelectorTerms: []corev1.NodeSelectorTerm{
+					{
+						MatchFields: []corev1.NodeSelectorRequirement{
+							{
+								Key:      "host",
+								Operator: corev1.NodeSelectorOpExists,
+							},
+							{
+								Key:      "zone",
+								Operator: corev1.NodeSelectorOpExists,
+							},
+						},
+					},
+					{
+						MatchFields: []corev1.NodeSelectorRequirement{
+							{
+								Key:      "domain",
+								Operator: corev1.NodeSelectorOpExists,
+							},
+						},
+					},
+				},
+			},
+			b: &corev1.NodeSelector{
+				NodeSelectorTerms: []corev1.NodeSelectorTerm{
+					{
+						MatchFields: []corev1.NodeSelectorRequirement{
+							{
+								Key:      "host",
+								Operator: corev1.NodeSelectorOpExists,
+							},
+						},
+					},
+					{
+						MatchFields: []corev1.NodeSelectorRequirement{
+							{
+								Key:      "domain",
+								Operator: corev1.NodeSelectorOpExists,
+							},
+							{
+								Key:      "zone",
+								Operator: corev1.NodeSelectorOpExists,
+							},
+						},
+					},
+				},
+			},
+			expect: false,
+		},
+	}
+
+	for name, tc := range testcases {
+		t.Run(name, func(t *testing.T) {
+			if tc.expect != DoesNodeSelectorCoversAnother(tc.a, tc.b) {
+				t.Fatal("not match: " + name)
+			}
 		})
 	}
 }

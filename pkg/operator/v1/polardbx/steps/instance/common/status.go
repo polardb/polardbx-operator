@@ -43,7 +43,7 @@ func TransferPhaseTo(phase polardbxv1polardbx.Phase, requeue bool) control.BindF
 			polardbx.Status.Stage = polardbxv1polardbx.StageEmpty
 			polardbx.Status.Phase = phase
 			if requeue {
-				return flow.Requeue("Requeue immediately.")
+				return flow.Retry("Retry immediately.")
 			}
 			return flow.Pass()
 		},
@@ -56,7 +56,7 @@ func TransferStageTo(stage polardbxv1polardbx.Stage, requeue bool) control.BindF
 			polardbx := rc.MustGetPolarDBX()
 			polardbx.Status.Stage = stage
 			if requeue {
-				return flow.Requeue("Requeue immediately.")
+				return flow.Retry("Retry immediately.")
 			}
 			return flow.Pass()
 		},

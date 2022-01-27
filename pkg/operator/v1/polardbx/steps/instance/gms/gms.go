@@ -166,7 +166,7 @@ func SyncDynamicConfigs(force bool) control.BindFunc {
 
 		// Dynamic part always uses the spec.
 		configs := polardbx.Spec.Config.CN.Dynamic
-		targetDynamicConfigs := gms.GenerateDynamicConfigMap1(configs)
+		targetDynamicConfigs := gms.ConvertIntOrStringMapToStringMap(configs)
 
 		toUpdateDynamicConfigs := dictutil.DiffStringMap(targetDynamicConfigs, observedConfigs)
 		if len(toUpdateDynamicConfigs) > 0 {
@@ -213,7 +213,7 @@ func transformIntoStorageInfos(rc *polardbxreconcile.Context, xstores []*polardb
 
 		storageInfos = append(storageInfos, gms.StorageNodeInfo{
 			Id:            xstore.Name,
-			Host:          rwService.Spec.ClusterIP,
+			Host:          k8shelper.GetServiceDNSRecordWithSvc(rwService, true),
 			Port:          accessPort,
 			XProtocolPort: xProtocolPort,
 			User:          xstoreconvention.SuperAccount,

@@ -241,3 +241,20 @@ func (b *commandLogBuilder) Purge(local, force bool) *CommandBuilder {
 	}
 	return b.end()
 }
+
+type commandEngineBuilder struct {
+	*commandBuilder
+}
+
+func (b *nullCommandBuilder) Engine() *commandEngineBuilder {
+	b.script = path.Join(b.root, "cli.py")
+	b.args = append(b.args, "engine")
+	return &commandEngineBuilder{
+		commandBuilder: (*commandBuilder)(b),
+	}
+}
+
+func (b *commandEngineBuilder) Version() *CommandBuilder {
+	b.args = append(b.args, "version")
+	return b.end()
+}

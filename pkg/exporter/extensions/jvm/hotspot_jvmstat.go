@@ -270,11 +270,14 @@ func (c *JvmStatsCi) Parse(m map[string]interface{}) error {
 		return err
 	}
 
-	c.CompilerThreads = make([]JvmStatsCiCompilerThread, c.Threads)
-	for i := 0; i < c.Threads; i++ {
-		err := c.CompilerThreads[i].Parse(filter(m, fmt.Sprintf("compilerThread.%d", i)))
-		if err != nil {
-			return err
+	// JDK 11 doesn't report the details of compiler threads.
+	if len(filter(m, "compilerThread.0")) > 0 {
+		c.CompilerThreads = make([]JvmStatsCiCompilerThread, c.Threads)
+		for i := 0; i < c.Threads; i++ {
+			err := c.CompilerThreads[i].Parse(filter(m, fmt.Sprintf("compilerThread.%d", i)))
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -407,7 +410,19 @@ type JvmStats struct {
 }
 
 func (s *JvmStats) Parse(perf map[string]interface{}) error {
-	err := s.JavaThreads.Parse(filter(perf, hotspotHsPerfDataJavaThreadsPrefix))
+	var err error
+
+	err = s.Rt.Parse(filter(perf, "sun.rt"))
+	if err != nil {
+		return err
+	}
+
+	err = s.Os.Parse(filter(perf, "sun.os"))
+	if err != nil {
+		return err
+	}
+
+	err = s.JavaThreads.Parse(filter(perf, hotspotHsPerfDataJavaThreadsPrefix))
 	if err != nil {
 		return err
 	}
@@ -437,16 +452,6 @@ func (s *JvmStats) Parse(perf map[string]interface{}) error {
 		return err
 	}
 	err = s.ClsLoader.Parse(filter(perf, "sun.classloader"))
-	if err != nil {
-		return err
-	}
-
-	err = s.Rt.Parse(filter(perf, "sun.rt"))
-	if err != nil {
-		return err
-	}
-
-	err = s.Os.Parse(filter(perf, "sun.os"))
 	if err != nil {
 		return err
 	}

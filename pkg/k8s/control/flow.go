@@ -30,11 +30,11 @@ type Flow interface {
 	// Logger returns the logger
 	Logger() logr.Logger
 
-	// RequeueAfter requeue the reconcile request after given duration and log the message and key-values.
-	RequeueAfter(duration time.Duration, msg string, kvs ...interface{}) (reconcile.Result, error)
+	// RetryAfter requeue the reconcile request after given duration and log the message and key-values.
+	RetryAfter(duration time.Duration, msg string, kvs ...interface{}) (reconcile.Result, error)
 
-	// Requeue the reconcile request immediately and log the message and key-values.
-	Requeue(msg string, kvs ...interface{}) (reconcile.Result, error)
+	// Retry the reconcile request immediately and log the message and key-values.
+	Retry(msg string, kvs ...interface{}) (reconcile.Result, error)
 
 	// Continue the steps and log the message and key-values.
 	Continue(msg string, kvs ...interface{}) (reconcile.Result, error)
@@ -51,9 +51,9 @@ type Flow interface {
 	// Error breaks the current reconcile with error and log the message and key-values.
 	Error(err error, msg string, kvs ...interface{}) (reconcile.Result, error)
 
-	// Retry is like Error but without returning error to the controller framework, but
+	// RetryErr is like Error but without returning error to the controller framework, but
 	// give it a chance to retry later. Default retry period is 1s.
-	Retry(err error, msg string, kvs ...interface{}) (reconcile.Result, error)
+	RetryErr(err error, msg string, kvs ...interface{}) (reconcile.Result, error)
 
 	// WithLogger return a flow binding to the old but with a new logger.
 	WithLogger(log logr.Logger) Flow
@@ -91,7 +91,7 @@ func (f *flow) WithLoggerValues(keyAndValues ...interface{}) Flow {
 	return &flow{
 		breakLoop: f.breakLoop,
 		loggerF: func() logr.Logger {
-			return f.logger().WithValues(keyAndValues...)
+			return f.loggerF().WithValues(keyAndValues...)
 		},
 	}
 }
@@ -112,14 +112,14 @@ func (f *flow) BreakLoop() bool {
 	return *f.breakLoop
 }
 
-func (f *flow) RequeueAfter(duration time.Duration, msg string, kvs ...interface{}) (reconcile.Result, error) {
+func (f *flow) RetryAfter(duration time.Duration, msg string, kvs ...interface{}) (reconcile.Result, error) {
 	defer f.markBreak()
 
 	f.logger().Info(msg, kvs...)
 	return reconcile.Result{RequeueAfter: duration}, nil
 }
 
-func (f *flow) Requeue(msg string, kvs ...interface{}) (reconcile.Result, error) {
+func (f *flow) Retry(msg string, kvs ...interface{}) (reconcile.Result, error) {
 	defer f.markBreak()
 
 	f.logger().Info(msg, kvs...)
@@ -156,7 +156,7 @@ func (f *flow) Error(err error, msg string, kvs ...interface{}) (reconcile.Resul
 	return reconcile.Result{}, err
 }
 
-func (f *flow) Retry(err error, msg string, kvs ...interface{}) (reconcile.Result, error) {
+func (f *flow) RetryErr(err error, msg string, kvs ...interface{}) (reconcile.Result, error) {
 	defer f.markBreak()
 
 	f.logger().Error(err, msg, kvs...)

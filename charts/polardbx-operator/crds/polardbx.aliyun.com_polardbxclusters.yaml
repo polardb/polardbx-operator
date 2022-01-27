@@ -166,13 +166,14 @@ spec:
                 anyOf:
                 - type: integer
                 - type: string
-                default: "5.7"
                 description: ProtocolVersion represents the supported MySQL protocols
                   provided by the cluster. Must be either 5 (5.7) or 8 (8.0). Default
-                  is 5.7.
+                  is operator dependent.
                 enum:
                 - 5
                 - 8
+                - "5"
+                - "8"
                 - "5.7"
                 - "8.0"
                 x-kubernetes-int-or-string: true
@@ -207,6 +208,10 @@ spec:
                   tls:
                     description: TLS defines the TLS config of the access port.
                     properties:
+                      generateSelfSigned:
+                        description: GenerateSelfSigned represents if let the operator
+                          generate and use a self-signed cert.
+                        type: boolean
                       secretName:
                         description: SecretName of the TLS config's secret.
                         type: string
@@ -271,6 +276,11 @@ spec:
                               image:
                                 description: Image for CDC. Should be replaced by
                                   default value if not present.
+                                type: string
+                              imagePullPolicy:
+                                description: ImagePullPolicy describes a policy for
+                                  if/when to pull a container image (especially for
+                                  the engine container).
                                 type: string
                               imagePullSecrets:
                                 description: ImagePullSecrets represents the secrets
@@ -350,6 +360,11 @@ spec:
                               image:
                                 description: Image for CN. Should be replaced by default
                                   value if not present.
+                                type: string
+                              imagePullPolicy:
+                                description: ImagePullPolicy describes a policy for
+                                  if/when to pull a container image (especially for
+                                  the engine container).
                                 type: string
                               imagePullSecrets:
                                 description: ImagePullSecrets represents the secrets
@@ -433,8 +448,8 @@ spec:
                                 pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                 x-kubernetes-int-or-string: true
                               engine:
-                                default: galaxy
-                                description: Engine of xstore. Default is galaxy.
+                                description: Engine of xstore. Default is operator
+                                  dependent.
                                 type: string
                               hostNetwork:
                                 default: true
@@ -443,6 +458,11 @@ spec:
                               image:
                                 description: Image for xstore. Should be replaced
                                   by default value if not present.
+                                type: string
+                              imagePullPolicy:
+                                description: ImagePullPolicy describes a policy for
+                                  if/when to pull a container image (especially for
+                                  the engine container).
                                 type: string
                               imagePullSecrets:
                                 description: ImagePullSecrets represents the secrets
@@ -506,7 +526,7 @@ spec:
                               serviceType:
                                 default: ClusterIP
                                 description: Service type for xstore's service. Useful
-                                  when needs a external IP. Default is ClusterIP.
+                                  when needs an external IP. Default is ClusterIP.
                                 type: string
                             type: object
                         type: object
@@ -525,8 +545,8 @@ spec:
                                 pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                 x-kubernetes-int-or-string: true
                               engine:
-                                default: galaxy
-                                description: Engine of xstore. Default is galaxy.
+                                description: Engine of xstore. Default is operator
+                                  dependent.
                                 type: string
                               hostNetwork:
                                 default: true
@@ -535,6 +555,11 @@ spec:
                               image:
                                 description: Image for xstore. Should be replaced
                                   by default value if not present.
+                                type: string
+                              imagePullPolicy:
+                                description: ImagePullPolicy describes a policy for
+                                  if/when to pull a container image (especially for
+                                  the engine container).
                                 type: string
                               imagePullSecrets:
                                 description: ImagePullSecrets represents the secrets
@@ -598,7 +623,7 @@ spec:
                               serviceType:
                                 default: ClusterIP
                                 description: Service type for xstore's service. Useful
-                                  when needs a external IP. Default is ClusterIP.
+                                  when needs an external IP. Default is ClusterIP.
                                 type: string
                             type: object
                         type: object
@@ -1678,6 +1703,11 @@ spec:
                                     description: Image for CDC. Should be replaced
                                       by default value if not present.
                                     type: string
+                                  imagePullPolicy:
+                                    description: ImagePullPolicy describes a policy
+                                      for if/when to pull a container image (especially
+                                      for the engine container).
+                                    type: string
                                   imagePullSecrets:
                                     description: ImagePullSecrets represents the secrets
                                       for pulling private images.
@@ -1757,6 +1787,11 @@ spec:
                                   image:
                                     description: Image for CN. Should be replaced
                                       by default value if not present.
+                                    type: string
+                                  imagePullPolicy:
+                                    description: ImagePullPolicy describes a policy
+                                      for if/when to pull a container image (especially
+                                      for the engine container).
                                     type: string
                                   imagePullSecrets:
                                     description: ImagePullSecrets represents the secrets
@@ -1841,8 +1876,8 @@ spec:
                                     pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                     x-kubernetes-int-or-string: true
                                   engine:
-                                    default: galaxy
-                                    description: Engine of xstore. Default is galaxy.
+                                    description: Engine of xstore. Default is operator
+                                      dependent.
                                     type: string
                                   hostNetwork:
                                     default: true
@@ -1851,6 +1886,11 @@ spec:
                                   image:
                                     description: Image for xstore. Should be replaced
                                       by default value if not present.
+                                    type: string
+                                  imagePullPolicy:
+                                    description: ImagePullPolicy describes a policy
+                                      for if/when to pull a container image (especially
+                                      for the engine container).
                                     type: string
                                   imagePullSecrets:
                                     description: ImagePullSecrets represents the secrets
@@ -1915,7 +1955,7 @@ spec:
                                   serviceType:
                                     default: ClusterIP
                                     description: Service type for xstore's service.
-                                      Useful when needs a external IP. Default is
+                                      Useful when needs an external IP. Default is
                                       ClusterIP.
                                     type: string
                                 type: object
@@ -1935,8 +1975,8 @@ spec:
                                     pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                     x-kubernetes-int-or-string: true
                                   engine:
-                                    default: galaxy
-                                    description: Engine of xstore. Default is galaxy.
+                                    description: Engine of xstore. Default is operator
+                                      dependent.
                                     type: string
                                   hostNetwork:
                                     default: true
@@ -1945,6 +1985,11 @@ spec:
                                   image:
                                     description: Image for xstore. Should be replaced
                                       by default value if not present.
+                                    type: string
+                                  imagePullPolicy:
+                                    description: ImagePullPolicy describes a policy
+                                      for if/when to pull a container image (especially
+                                      for the engine container).
                                     type: string
                                   imagePullSecrets:
                                     description: ImagePullSecrets represents the secrets
@@ -2009,7 +2054,7 @@ spec:
                                   serviceType:
                                     default: ClusterIP
                                     description: Service type for xstore's service.
-                                      Useful when needs a external IP. Default is
+                                      Useful when needs an external IP. Default is
                                       ClusterIP.
                                     type: string
                                 type: object

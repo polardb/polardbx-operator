@@ -22,6 +22,8 @@ import (
 	"strings"
 
 	"google.golang.org/grpc"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -46,13 +48,14 @@ type Context struct {
 	*control.BaseReconcileContext
 
 	// Caches
-	xstoreKey     types.NamespacedName
-	xstoreChanged bool
-	xstore        *polardbxv1.XStore
-	xstoreStatus  *polardbxv1.XStoreStatus
-	pods          []corev1.Pod
-	nodes         []corev1.Node
-	objectCache   cache.ObjectLoadingCache
+	xstoreKey        types.NamespacedName
+	xstoreChanged    bool
+	xstore           *polardbxv1.XStore
+	xstoreStatus     *polardbxv1.XStoreStatus
+	pods             []corev1.Pod
+	headlessServices map[string]corev1.Service
+	nodes            []corev1.Node
+	objectCache      cache.ObjectLoadingCache
 
 	// Hint cache
 	controllerHints []string
@@ -323,6 +326,52 @@ func (rc *Context) GetXStorePods() ([]corev1.Pod, error) {
 	}
 
 	return rc.pods, nil
+}
+
+func (rc *Context) GetXStoreHeadlessServiceForPod(pod string) (*corev1.Service, error) {
+	svcList, err := rc.GetXStoreHeadlessServices()
+	if err != nil {
+		return nil, err
+	}
+	svc, ok := svcList[convention.NewHeadlessServiceName(pod)]
+	if !ok {
+		return nil, apierrors.NewNotFound(schema.GroupResource{}, "")
+	}
+	return &svc, nil
+}
+
+func (rc *Context) GetXStoreHeadlessServices() (map[string]corev1.Service, error) {
+	if rc.headlessServices == nil {
+		svcLabels := convention.ConstLabels(rc.MustGetXStore())
+		svcLabels = k8shelper.PatchLabels(svcLabels, map[string]string{
+			xstoremeta.LabelServiceType: string(convention.ServiceTypeHeadless),
+		})
+
+		var svcList corev1.ServiceList
+		err := rc.Client().List(rc.Context(), &svcList,
+			client.InNamespace(rc.Namespace()),
+			client.MatchingLabels(svcLabels))
+		if err != nil {
+			return nil, err
+		}
+
+		headlessServices := make(map[string]corev1.Service)
+		for _, svc := range svcList.Items {
+			// Ignore not owned
+			if err := k8shelper.CheckControllerReference(&svc, rc.MustGetXStore()); err != nil {
+				continue
+			}
+
+			pod, ok := svc.Labels[xstoremeta.LabelPod]
+			// Ignore without labels.
+			if !ok {
+				continue
+			}
+			headlessServices[pod] = svc
+		}
+		rc.headlessServices = headlessServices
+	}
+	return rc.headlessServices, nil
 }
 
 func (rc *Context) TryGetXStoreLeaderPod() (*corev1.Pod, error) {

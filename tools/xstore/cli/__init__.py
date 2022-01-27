@@ -15,12 +15,14 @@
 from . import account, consensus, process, variables, log
 from .common import global_mgr
 from .root import root_group
+from .engine import engine_group
 
 root_group.add_command(account.account_group)
 root_group.add_command(consensus.consensus_group)
 root_group.add_command(process.process_group)
 root_group.add_command(variables.variables_group)
 root_group.add_command(log.log_group)
+root_group.add_command(engine_group)
 
 
 def run():

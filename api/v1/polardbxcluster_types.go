@@ -31,11 +31,10 @@ type PolarDBXClusterSpec struct {
 	// Default is false.
 	ShareGMS bool `json:"shareGMS,omitempty"`
 
-	// +kubebuilder:validation:Enum=5;8;"5.7";"8.0"
-	// +kubebuilder:default="5.7"
+	// +kubebuilder:validation:Enum=5;8;"5";"8";"5.7";"8.0"
 
 	// ProtocolVersion represents the supported MySQL protocols provided by the cluster.
-	// Must be either 5 (5.7) or 8 (8.0). Default is 5.7.
+	// Must be either 5 (5.7) or 8 (8.0). Default is operator dependent.
 	ProtocolVersion intstr.IntOrString `json:"protocolVersion,omitempty"`
 
 	// ServiceName represents the name of main (access) service of the cluster.

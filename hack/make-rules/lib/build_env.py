@@ -49,6 +49,17 @@ class BuildEnv:
             return self.targets
         return [t for t in self.targets if t.target in selected]
 
+    def is_git_repository_dirty(self) -> bool or None:
+        try:
+            output = subprocess.check_output('git diff HEAD --quiet || echo dirty',
+                                             shell=True, cwd=self.root_dir).decode('utf-8').strip()
+            if 'dirty' == output:
+                return True
+            else:
+                return False
+        except subprocess.CalledProcessError as e:
+            return None
+
     def current_git_revision_or_tag(self) -> str or None:
         if not os.path.exists(os.path.join(self.root_dir, '.git')):
             return None
@@ -56,6 +67,20 @@ class BuildEnv:
         cmd = 'git describe --exact-match --tags 2> /dev/null || git rev-parse --short HEAD'
         try:
             return subprocess.check_output(cmd, shell=True, cwd=self.root_dir).decode('utf-8').strip(' \t\r\n')
+        except subprocess.CalledProcessError as e:
+            return None
+
+    def current_git_tags(self, pattern: str or None) -> [str] or None:
+        if not os.path.exists(os.path.join(self.root_dir, '.git')):
+            return None
+
+        cmd = ['git', 'tag', '--list']
+        if pattern:
+            cmd.extend(pattern)
+
+        try:
+            output = subprocess.check_output(cmd, cwd=self.root_dir).decode('utf-8')
+            return [s.strip() for s in output.splitlines()]
         except subprocess.CalledProcessError as e:
             return None
 

@@ -28,6 +28,7 @@ func (f *objectFactory) NewConfigMap(cmType convention.ConfigMapType) (*corev1.C
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      convention.NewConfigMapName(f.rc.MustGetPolarDBX(), cmType),
 			Namespace: f.rc.Namespace(),
+			Labels:    convention.ConstLabels(f.rc.MustGetPolarDBX()),
 		},
 		Data: nil,
 	}, nil

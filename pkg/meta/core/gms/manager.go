@@ -132,8 +132,8 @@ const (
 
 var (
 	mysqlVersionPattern      = regexp.MustCompile("((\\d+)\\.(\\d+)\\.(\\d+))")
-	xcluster57VersionPattern = regexp.MustCompile("5\\.7\\.\\s+-X-Cluster-\\s+")
-	xcluster80VersionPattern = regexp.MustCompile("8\\.0\\.\\s+-X-Cluster-\\s+")
+	xcluster57VersionPattern = regexp.MustCompile("5\\.7\\.\\S+-X-Cluster-\\S+")
+	xcluster80VersionPattern = regexp.MustCompile("8\\.0\\.\\S+-X-Cluster-\\S+")
 )
 
 func GetStorageType(engine string, version string) (StorageType, error) {

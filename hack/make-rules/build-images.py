@@ -36,18 +36,28 @@ def build_image_name(repo, name, tag) -> str:
 
     return r
 
+def retag_image(src, dest):
+    return subprocess.check_call([
+        'docker', 'tag', src, dest,
+    ])
 
 def build_image_for(build_env: lib.BuildEnv, target: lib.BuildTarget, repo, tag) -> str:
     dockerfile = os.path.join(build_env.get_dockerfile_parent_path(target.image), 'Dockerfile')
 
     current_revision = build_env.current_git_revision_or_tag()
-    version = current_revision + "-" + str(time.time()) if current_revision else str(time.time())
+    version = current_revision
+
+    # If not dirty, just use the revision.
+    is_repo_dirty = build_env.is_git_repository_dirty()
+    if is_repo_dirty is None or is_repo_dirty:
+        version += "-" + str(time.time()) if current_revision else str(time.time())
+
     if not tag or tag == '':
         tag = version
 
     image_name = build_image_name(repo, target.image, tag)
-    if build_env.arch != 'amd64':
-        image_name += '-' + build_env.arch
+    # if build_env.arch != 'amd64':
+    #     image_name += '-' + build_env.arch
 
     image_build_path = os.path.join(build_env.root_dir, target.image_build_path) \
         if target.image_build_path else build_env.root_dir
@@ -55,7 +65,7 @@ def build_image_for(build_env: lib.BuildEnv, target: lib.BuildTarget, repo, tag)
     print('[%s] Building image %s...' % (target.target, image_name))
 
     subprocess.check_call([
-        'docker', 'build',
+        'docker', 'build', '--network', 'host',
         '--build-arg', 'VERSION=' + version,
         '--platform', build_env.docker_build_platform(),
         '-t', image_name,
@@ -65,7 +75,7 @@ def build_image_for(build_env: lib.BuildEnv, target: lib.BuildTarget, repo, tag)
     return image_name
 
 
-def build_images(build_env: lib.BuildEnv, targets: [str] or None, repo, tag) -> [str]:
+def build_images(build_env: lib.BuildEnv, targets: [str] or None, repo, tag, *, also_latest=False) -> [str]:
     # Select targets to build
     targets = [t for t in build_env.select_targets(targets) if t.image]
 
@@ -79,6 +89,13 @@ def build_images(build_env: lib.BuildEnv, targets: [str] or None, repo, tag) -> 
         print('[%s] Start build...' % t.target)
         image = build_image_for(build_env, t, repo, tag)
         print('[%s] Built: %s' % (t.target, image))
+
+        if tag != 'latest' and also_latest:
+            name = image.split(':')[0]
+            latest_img = name + ':latest'
+            retag_image(image, latest_img)
+            print('[%s] Tag to latest: %s' % (t.target, latest_img))
+            images.append(latest_img)
 
         images.append(image)
 
@@ -99,9 +116,16 @@ if __name__ == '__main__':
     parser.add_argument('--tag', dest='tag', default='', type=str, help='tag of images.')
     parser.add_argument('targets', metavar='target', type=str, nargs='*', help='targets to build.')
     parser.add_argument('--push', dest='push', action='store_true', help='push to registry.')
+    parser.add_argument('--also-latest', dest='also_latest', action='store_true', help='also tag to latest')
     args = parser.parse_args()
 
-    images = build_images(lib.BASIC_BUILD_ENV, args.targets, args.repo, args.tag)
+    images = build_images(
+        lib.BASIC_BUILD_ENV,
+        args.targets,
+        args.repo,
+        args.tag,
+        also_latest=args.also_latest,
+    )
 
     if args.push:
         for image in images:

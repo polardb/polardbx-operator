@@ -81,7 +81,7 @@ var CheckDNs = polardbxv1reconcile.NewStepBinder("CheckDNs",
 		}
 		if lastIndex != replicas && lastIndex != len(dnStores) {
 			helper.TransferPhase(polardbx, polardbxv1polardbx.PhaseFailed)
-			return flow.Requeue("Found broken DN, transfer into failed.")
+			return flow.Retry("Found broken DN, transfer into failed.")
 		}
 
 		return flow.Pass()

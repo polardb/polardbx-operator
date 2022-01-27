@@ -17,9 +17,11 @@ limitations under the License.
 package instance
 
 import (
+	"bytes"
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -32,6 +34,7 @@ import (
 	polardbxv1 "github.com/alibaba/polardbx-operator/api/v1"
 	polardbxv1xstore "github.com/alibaba/polardbx-operator/api/v1/xstore"
 	"github.com/alibaba/polardbx-operator/pkg/k8s/control"
+	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/command"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/convention"
 	xstoremeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/meta"
 	xstorev1reconcile "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/reconcile"
@@ -116,6 +119,40 @@ var UpdateObservedGeneration = xstorev1reconcile.NewStepBinder("UpdateObservedGe
 	},
 )
 
+var QueryAndUpdateEngineVersion = xstorev1reconcile.NewStepBinder("QueryAndUpdateEngineVersion",
+	func(rc *xstorev1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+		leaderPod, err := rc.TryGetXStoreLeaderPod()
+		if err != nil {
+			return flow.Error(err, "Unable to get leader pod.")
+		}
+		if leaderPod == nil {
+			return flow.Wait("Leader pod not found, wait.")
+		}
+
+		cmd := command.NewCanonicalCommandBuilder().Engine().Version().Build()
+		buf := &bytes.Buffer{}
+		err = rc.ExecuteCommandOn(leaderPod, convention.ContainerEngine, cmd, control.ExecOptions{
+			Logger:  flow.Logger(),
+			Stdout:  buf,
+			Timeout: 2 * time.Second,
+		})
+		if err != nil {
+			return flow.Error(err, "Failed to query version on leader pod.", "pod", leaderPod.Name)
+		}
+
+		engineVersion := strings.TrimSpace(buf.String())
+		if engineVersion == "" {
+			return flow.Error(errors.New("empty engine version"), "Engine version is empty.")
+		}
+
+		// Update the engine version in status.
+		xstore := rc.MustGetXStore()
+		xstore.Status.EngineVersion = engineVersion
+
+		return flow.Pass()
+	},
+)
+
 var CheckConnectivityAndSetEngineVersion = xstorev1reconcile.NewStepBinder("CheckConnectivityFromController",
 	func(rc *xstorev1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
 		passwd, err := rc.GetXStoreAccountPassword(convention.SuperAccount)
@@ -138,7 +175,7 @@ var CheckConnectivityAndSetEngineVersion = xstorev1reconcile.NewStepBinder("Chec
 		if err := db.PingContext(rc.Context()); err != nil {
 			// Wait 10 seconds for any error.
 			flow.Logger().Error(err, "Ping failed.")
-			return flow.RequeueAfter(10*time.Second, "Failed to ping, wait for 10 seconds and retry...")
+			return flow.RetryAfter(10*time.Second, "Failed to ping, wait for 10 seconds and retry...")
 		}
 
 		// Get version via SQL and update status.

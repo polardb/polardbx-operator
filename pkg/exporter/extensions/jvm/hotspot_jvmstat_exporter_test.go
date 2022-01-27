@@ -17,16 +17,14 @@ limitations under the License.
 package jvm
 
 import (
+	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/alibaba/polardbx-operator/third-party/hsperfdata"
 )
 
 func TestJvmStats_Parse(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skip test in short mode.")
-	}
-
 	perf, err := hsperfdata.ReadPerfData("./testdata/181", true)
 	if err != nil {
 		t.Fatal(err)
@@ -37,13 +35,27 @@ func TestJvmStats_Parse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	js, _ := json.MarshalIndent(jvmStats, "", "  ")
+	fmt.Printf("%s\n", string(js))
+}
+
+func TestJvmStats_Parse_Java11(t *testing.T) {
+	perf, err := hsperfdata.ReadPerfData("./testdata/11/211", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	jvmStats := JvmStats{}
+	err = jvmStats.Parse(perf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	js, _ := json.MarshalIndent(jvmStats, "", "  ")
+	fmt.Printf("%s\n", string(js))
 }
 
 func TestJvmStats_ParseAll(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skip test in short mode.")
-	}
-
 	perfFiles := []string{
 		"./testdata/181",
 		"../hsperfdata/test-data/2036",

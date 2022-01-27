@@ -17,220 +17,16 @@ limitations under the License.
 package selector
 
 import (
+	"bytes"
 	"errors"
-	"reflect"
+	"sort"
 	"strconv"
 	"strings"
-	"sync"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
+
+	"github.com/alibaba/polardbx-operator/pkg/util/json"
 )
-
-var (
-	errInvalidField = errors.New("invalid field")
-	errNil          = errors.New("nil")
-)
-
-type fieldValueGetter func(value reflect.Value) (reflect.Value, error)
-type compileResult struct {
-	fieldValueGetter
-	error
-}
-
-var (
-	cachedFieldValueGetter = map[reflect.Type]map[string]compileResult{}
-	mu                     sync.RWMutex
-)
-
-func getFieldValueGetter(valueType reflect.Type, fieldKey string) (fieldValueGetter, error) {
-	fieldKey = strings.TrimSpace(fieldKey)
-
-	mu.RLock()
-
-	if getters, ok := cachedFieldValueGetter[valueType]; ok {
-		if g, ok := getters[fieldKey]; ok {
-			defer mu.RUnlock()
-			return g.fieldValueGetter, g.error
-		}
-	}
-
-	// Unlock read
-	mu.RUnlock()
-
-	// Lock write
-	mu.Lock()
-	defer mu.Unlock()
-
-	getters, ok := cachedFieldValueGetter[valueType]
-	if !ok {
-		getters = make(map[string]compileResult)
-		cachedFieldValueGetter[valueType] = getters
-	}
-
-	if g, ok := getters[fieldKey]; ok {
-		return g.fieldValueGetter, g.error
-	}
-
-	getter, err := newFieldValueGetter(valueType, fieldKey)
-	getters[fieldKey] = compileResult{fieldValueGetter: getter, error: err}
-	return getter, err
-}
-
-func newFieldPath(valueType reflect.Type, partKeys []string) ([]intstr.IntOrString, error) {
-	// Search field by JSON tag.
-	fieldPath := make([]intstr.IntOrString, 0)
-	if valueType.Kind() == reflect.Ptr {
-		valueType = valueType.Elem()
-	}
-
-	for partKeyIndex, partKey := range partKeys {
-		switch valueType.Kind() {
-		case reflect.Map:
-			keyType := valueType.Key()
-			if keyType.Kind() != reflect.String {
-				return nil, errInvalidField
-			}
-
-			fieldPath = append(fieldPath, intstr.FromString(partKey))
-
-			valueType = valueType.Elem()
-			if valueType.Kind() == reflect.Ptr {
-				valueType = valueType.Elem()
-			}
-		case reflect.Struct:
-			found := false
-			for i := 0; i < valueType.NumField(); i++ {
-				field := valueType.Field(i)
-				tag := field.Tag.Get("json")
-				tagParts := strings.Split(tag, ",")
-				nameTag := tagParts[0]
-				if len(nameTag) > 0 {
-					if nameTag == partKey {
-						fieldPath = append(fieldPath, intstr.FromInt(i))
-
-						// update next type.
-						valueType = field.Type
-						if valueType.Kind() == reflect.Ptr {
-							valueType = valueType.Elem()
-						}
-						found = true
-						break
-					}
-				} else {
-					// Handle if inline.
-					inlineValueType := field.Type
-
-					if len(tagParts) == 2 && tagParts[1] == "inline" {
-						subFieldPath, err := newFieldPath(inlineValueType, partKeys[partKeyIndex:])
-						if err == nil {
-							fieldPath = append(fieldPath, intstr.FromInt(i))
-							fieldPath = append(fieldPath, subFieldPath...)
-							return fieldPath, nil
-						} else {
-							if err == errInvalidField {
-								continue
-							}
-							return nil, err
-						}
-					}
-
-					// Ignore if not inline.
-				}
-			}
-
-			if !found {
-				// Such field not found.
-				return nil, errInvalidField
-			}
-		default:
-			return nil, errInvalidField
-		}
-	}
-
-	return fieldPath, nil
-}
-
-func newFieldValueGetter(valueType reflect.Type, fieldKey string) (fieldValueGetter, error) {
-	if len(fieldKey) == 0 {
-		return nil, errors.New("invalid field key")
-	}
-
-	partKeys := strings.Split(fieldKey, ".")
-	if len(partKeys) == 0 {
-		return nil, errors.New("invalid field key")
-	}
-
-	for _, partKey := range partKeys {
-		if len(partKey) == 0 {
-			return nil, errors.New("invalid field key")
-		}
-	}
-
-	fieldPath, err := newFieldPath(valueType, partKeys)
-	if err != nil {
-		return nil, err
-	}
-
-	// Get the value following the path.
-	getter := func(value reflect.Value) (reflect.Value, error) {
-		for _, i := range fieldPath {
-			if value.Kind() == reflect.Ptr {
-				if value.IsNil() {
-					return reflect.Value{}, errNil
-				}
-				value = value.Elem()
-			}
-			switch i.Type {
-			case intstr.Int:
-				value = value.Field(i.IntValue())
-			case intstr.String:
-				value = value.MapIndex(reflect.ValueOf(i.String()))
-				if !value.IsValid() {
-					return reflect.Value{}, errNil
-				}
-			}
-		}
-		if value.Kind() == reflect.Ptr {
-			if value.IsNil() {
-				return reflect.Value{}, errNil
-			}
-		}
-		return value, nil
-	}
-
-	return getter, nil
-}
-
-func stringValueOfField(value reflect.Value, fieldKey string) (string, error) {
-	fieldGetter, err := getFieldValueGetter(value.Type(), fieldKey)
-	if err != nil {
-		return "", err
-	}
-
-	value, err = fieldGetter(value)
-	if err != nil {
-		return "", err
-	}
-
-	if value.Kind() == reflect.Ptr {
-		// Must not be nil
-		value = value.Elem()
-	}
-
-	// Found filed, try extract value.
-	switch value.Kind() {
-	case reflect.String:
-		return value.String(), nil
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		return strconv.FormatInt(value.Int(), 10), nil
-	case reflect.Bool:
-		return strconv.FormatBool(value.Bool()), nil
-	default:
-		return "", errInvalidField
-	}
-}
 
 func isCompareRequirementMatches(val string, req *corev1.NodeSelectorRequirement, compare func(a, b int64) bool) (bool, error) {
 	if len(req.Values) != 1 {
@@ -250,10 +46,9 @@ func isCompareRequirementMatches(val string, req *corev1.NodeSelectorRequirement
 }
 
 func IsFieldsMatchesRequirement(obj interface{}, req *corev1.NodeSelectorRequirement) (bool, error) {
-	value := reflect.ValueOf(obj)
-	strVal, err := stringValueOfField(value, req.Key)
+	strVal, err := json.GetStringValueOfFieldByJsonKey(obj, req.Key)
 	if err != nil {
-		if err == errNil {
+		if err == json.ErrNilOrNotExists {
 			if req.Operator == corev1.NodeSelectorOpDoesNotExist {
 				return true, nil
 			}
@@ -369,4 +164,120 @@ func IsNodeMatches(node *corev1.Node, nodeSelector *corev1.NodeSelector) (bool, 
 		}
 	}
 	return false, nil
+}
+
+func isNodeSelectorTermEmpty(t *corev1.NodeSelectorTerm) bool {
+	if t == nil || (len(t.MatchExpressions) == 0 && len(t.MatchFields) == 0) {
+		return true
+	}
+	return false
+}
+
+func isNodeSelectorEmpty(s *corev1.NodeSelector) bool {
+	if s == nil || len(s.NodeSelectorTerms) == 0 {
+		return true
+	}
+
+	for _, term := range s.NodeSelectorTerms {
+		if !isNodeSelectorTermEmpty(&term) {
+			return false
+		}
+	}
+	return true
+}
+
+func stableRequirementStr(r *corev1.NodeSelectorRequirement) string {
+	buf := &bytes.Buffer{}
+
+	buf.WriteString(r.Key)
+	buf.WriteString(",")
+	buf.WriteString(string(r.Operator))
+
+	if r.Values != nil {
+		buf.WriteString(",")
+		valuesC := make([]string, len(r.Values))
+		copy(valuesC, r.Values)
+		sort.Strings(valuesC)
+		for i := range valuesC {
+			valuesC[i] = strings.ReplaceAll(valuesC[i], "|", "\\|")
+		}
+		buf.WriteString(strings.Join(valuesC, "|"))
+	}
+
+	return buf.String()
+}
+
+type nodeSelectorRequirementSet map[string]*corev1.NodeSelectorRequirement
+
+func (s nodeSelectorRequirementSet) covers(o nodeSelectorRequirementSet) bool {
+	for k := range s {
+		_, ok := o[k]
+		if !ok {
+			return false
+		}
+	}
+	return true
+}
+
+func buildStableRequirementSet(a []corev1.NodeSelectorRequirement) nodeSelectorRequirementSet {
+	m := make(nodeSelectorRequirementSet)
+	for i := range a {
+		r := &a[i]
+		m[stableRequirementStr(r)] = r
+	}
+	return m
+}
+
+func doesRequirementsCovers(a, b []corev1.NodeSelectorRequirement) bool {
+	as := buildStableRequirementSet(a)
+	bs := buildStableRequirementSet(b)
+	return as.covers(bs)
+}
+
+// DoesNodeSelectorTermCoversAnother determines if the first node selector term covers (or equals to)
+// the second in pure logic.
+func DoesNodeSelectorTermCoversAnother(a, b *corev1.NodeSelectorTerm) bool {
+	// a covers b means that any requirement in b's stricter than that in a's.
+	// This method simplifies the comparison by only determining if any requirement in
+	// a exists in b for both fields and labels.
+
+	if isNodeSelectorTermEmpty(a) {
+		return true
+	}
+
+	if isNodeSelectorTermEmpty(b) {
+		return false
+	}
+
+	return doesRequirementsCovers(a.MatchFields, b.MatchFields) && doesRequirementsCovers(a.MatchExpressions, b.MatchExpressions)
+}
+
+// DoesNodeSelectorCoversAnother determines if the first node selector covers (or equals to)
+// the second in pure logic. Important for testing when generating pod's affinity.
+func DoesNodeSelectorCoversAnother(s, t *corev1.NodeSelector) bool {
+	// Empty s only covers any.
+	if isNodeSelectorEmpty(s) {
+		return true
+	}
+
+	// Non-empty s never covers empty.
+	if isNodeSelectorEmpty(t) {
+		return false
+	}
+
+	// Stricter than logical. But simpler.
+	// Any term in t is in some term in s.
+	for _, tt := range t.NodeSelectorTerms {
+		r := false
+		for _, ts := range s.NodeSelectorTerms {
+			if DoesNodeSelectorTermCoversAnother(&ts, &tt) {
+				r = true
+				break
+			}
+		}
+		if !r {
+			return false
+		}
+	}
+	return true
 }

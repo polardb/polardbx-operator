@@ -82,14 +82,15 @@ func strOrDefault(s, defaultVal string) string {
 	return s
 }
 
-func GenerateDynamicConfigMap1(config map[string]intstr.IntOrString) map[string]string {
+func ConvertIntOrStringMapToStringMap(config map[string]intstr.IntOrString) map[string]string {
 	strConfig := make(map[string]string)
 	for k, v := range config {
 		strConfig[k] = v.String()
 	}
-	return GenerateDynamicConfigMap(strConfig)
+	return strConfig
 }
 
+// GenerateDynamicConfigMap Deprecated.
 func GenerateDynamicConfigMap(config map[string]string) map[string]string {
 	configMap := map[string]string{
 		ConfigKeyEnableLocalMode:                     "true",

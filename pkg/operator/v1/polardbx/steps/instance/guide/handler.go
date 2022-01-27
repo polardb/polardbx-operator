@@ -33,7 +33,7 @@ var ManipulateSpecAccordingToGuides = polardbxv1reconcile.NewStepBinder("Manipul
 		}
 		if ok {
 			rc.MarkPolarDBXChanged()
-			return flow.Requeue("Guides detected.")
+			return flow.Retry("Guides detected.")
 		}
 		return flow.Pass()
 	},

@@ -92,9 +92,16 @@ type ReconcileOptions interface {
 	Debug() bool
 }
 
+type ReconcileControl interface {
+	ForceRequeueAfter() time.Duration
+	ResetForceRequeueAfter(d time.Duration)
+}
+
 // ReconcileContext declares the context for reconciliation.
 type ReconcileContext interface {
 	ReconcileOptions
+
+	ReconcileControl
 
 	ReconcileRemoteCommandHelper
 	ReconcileRequestHelper
@@ -126,6 +133,8 @@ type BaseReconcileContext struct {
 
 	context context.Context
 	request reconcile.Request
+
+	forceRequeueAfter time.Duration
 
 	customResourceDefinitions *apiextensionsv1.CustomResourceDefinitionList
 }
@@ -259,13 +268,23 @@ func (rc *BaseReconcileContext) Close() error {
 	return nil
 }
 
-func (rc *BaseReconcileContext) ShallowCopy() *BaseReconcileContext {
+func (rc *BaseReconcileContext) ForceRequeueAfter() time.Duration {
+	return rc.forceRequeueAfter
+}
+
+func (rc *BaseReconcileContext) ResetForceRequeueAfter(d time.Duration) {
+	rc.forceRequeueAfter = d
+}
+
+func (rc *BaseReconcileContext) shallowCopy() *BaseReconcileContext {
 	shallowCopy := *rc
 	return &shallowCopy
 }
 
 func NewBaseReconcileContextFrom(base *BaseReconcileContext, context context.Context, request reconcile.Request) *BaseReconcileContext {
-	rc := *base.ShallowCopy()
+	rc := *base.shallowCopy()
+	rc.forceRequeueAfter = 0
+
 	rc.request = request
 	rc.context = context
 	rc.customResourceDefinitions = nil

@@ -326,6 +326,30 @@ func (rc *Context) GetPolarDBXEncodeKey() (string, error) {
 	return string(encodeKey), nil
 }
 
+func (rc *Context) GetPolarDBXTlsCerts() (map[string]string, error) {
+	secret, err := rc.GetPolarDBXSecret(convention.SecretTypeSecurity)
+	if err != nil {
+		return nil, err
+	}
+	rootCrt, ok := secret.Data[convention.SecretKeyRootCrt]
+	if !ok {
+		return nil, errors.New("root.crt not found")
+	}
+	serverKey, ok := secret.Data[convention.SecretKeyServerKey]
+	if !ok {
+		return nil, errors.New("server.key not found")
+	}
+	serverCrt, ok := secret.Data[convention.SecretKeyServerCrt]
+	if !ok {
+		return nil, errors.New("server.crt not found")
+	}
+	return map[string]string{
+		"root.crt":   string(rootCrt),
+		"server.key": string(serverKey),
+		"server.crt": string(serverCrt),
+	}, nil
+}
+
 func (rc *Context) GetPolarDBXPasswordCipher() (security.PasswordCipher, error) {
 	key, err := rc.GetPolarDBXEncodeKey()
 	if err != nil {
@@ -397,7 +421,7 @@ func (rc *Context) GetDNMap() (map[int]*polardbxv1.XStore, error) {
 		var xstoreList polardbxv1.XStoreList
 		err = rc.Client().List(rc.Context(), &xstoreList,
 			client.InNamespace(rc.polardbxKey.Namespace),
-			client.MatchingLabels(convention.ConstLabels(polardbx, polardbxmeta.RoleDN)),
+			client.MatchingLabels(convention.ConstLabelsWithRole(polardbx, polardbxmeta.RoleDN)),
 		)
 		if err != nil {
 			return nil, err
@@ -489,7 +513,7 @@ func (rc *Context) GetDeploymentMap(role string) (map[string]*appsv1.Deployment,
 		var deploymentList appsv1.DeploymentList
 		err = rc.Client().List(rc.Context(), &deploymentList,
 			client.InNamespace(rc.polardbxKey.Namespace),
-			client.MatchingLabels(convention.ConstLabels(polardbx, role)),
+			client.MatchingLabels(convention.ConstLabelsWithRole(polardbx, role)),
 		)
 		if err != nil {
 			return nil, err
@@ -533,7 +557,7 @@ func (rc *Context) GetPods(role string) ([]corev1.Pod, error) {
 			rc.Context(),
 			&podList,
 			client.InNamespace(rc.polardbxKey.Namespace),
-			client.MatchingLabels(convention.ConstLabels(polardbx, role)),
+			client.MatchingLabels(convention.ConstLabelsWithRole(polardbx, role)),
 		)
 		if err != nil {
 			return nil, err
@@ -644,13 +668,16 @@ func (rc *Context) GetPolarDBXGMSManager() (gms.Manager, error) {
 			rc.Context(),
 			polardbx.Name,
 			&gms.MetaDB{
-				Id:     convention.NewGMSName(polardbx),
-				Host:   gmsService.Spec.ClusterIP,
-				Port:   int(k8shelper.MustGetPortFromService(gmsService, xstoreconvention.PortAccess).Port),
-				XPort:  xPort,
-				User:   xstoreconvention.SuperAccount,
-				Passwd: string(gmsSecret.Data[xstoreconvention.SuperAccount]),
-				Type:   storageType,
+				Id: convention.NewGMSName(polardbx),
+				// Host used to create metadata in GMS.
+				Host: k8shelper.GetServiceDNSRecordWithSvc(gmsService, true),
+				// Host used to create connections from operator.
+				Host4Conn: k8shelper.GetServiceDNSRecordWithSvc(gmsService, false),
+				Port:      int(k8shelper.MustGetPortFromService(gmsService, xstoreconvention.PortAccess).Port),
+				XPort:     xPort,
+				User:      xstoreconvention.SuperAccount,
+				Passwd:    string(gmsSecret.Data[xstoreconvention.SuperAccount]),
+				Type:      storageType,
 			},
 			passwordCipher,
 		)
@@ -680,7 +707,7 @@ func (rc *Context) GetPolarDBXGroupManager() (group.GroupManager, error) {
 		rc.groupManager = group.NewGroupManager(
 			rc.Context(),
 			dbutil.MySQLDataSource{
-				Host:     service.Spec.ClusterIP,
+				Host:     k8shelper.GetServiceDNSRecordWithSvc(service, false),
 				Port:     int(k8shelper.MustGetPortFromService(service, convention.PortAccess).Port),
 				Username: convention.RootAccount,
 				Password: string(secret.Data[convention.RootAccount]),

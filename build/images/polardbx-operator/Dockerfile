@@ -43,5 +43,7 @@ USER root
 ARG VERSION=test
 RUN echo "$VERSION" > version
 
+ADD build/images/polardbx-operator/certs /etc/operator/certs
+
 ENV GOMAXPROCS=1
 ENTRYPOINT ["/polardbx-operator"]

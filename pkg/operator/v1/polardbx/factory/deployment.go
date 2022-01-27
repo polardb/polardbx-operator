@@ -153,7 +153,13 @@ func (f *objectFactory) getStatelessMatchingRules(replicas int, hostNetwork bool
 			rule:     rule.DeepCopy(),
 		}
 	}
-	ruleReplicas[""] = matchingRule{
+
+	// Set up default rule.
+	defaultRuleName := ""
+	if defaultRule != nil {
+		defaultRuleName = defaultRule.Name
+	}
+	ruleReplicas[defaultRuleName] = matchingRule{
 		replicas: replicas - ruleDeclaredReplicas,
 		rule:     defaultRule,
 	}
@@ -229,7 +235,7 @@ func (f *objectFactory) getGmsConn(polardb *polardbxv1.PolarDBXCluster) (Storage
 		return StorageConnection{}, err
 	}
 	return StorageConnection{
-		Host:     gmsSrv.Spec.ClusterIP,
+		Host:     k8shelper.GetServiceDNSRecordWithSvc(gmsSrv, true),
 		Port:     int(k8shelper.MustGetPortFromService(gmsSrv, "mysql").Port),
 		User:     "admin",
 		Passwd:   string(gmsSecret.Data["admin"]),
@@ -314,7 +320,7 @@ func (f *objectFactory) newDeployment4CN(group string, mr *matchingRule) (*appsv
 		}
 	}
 	affinity := f.tryScatterAffinityForStatelessDeployment(
-		convention.ConstLabels(polardbx, polardbxmeta.RoleCN),
+		convention.ConstLabelsWithRole(polardbx, polardbxmeta.RoleCN),
 		nodeSelector,
 	)
 
@@ -352,7 +358,7 @@ func (f *objectFactory) newDeployment4CN(group string, mr *matchingRule) (*appsv
 			template.Image,
 			imageConfig.DefaultImageForCluster(polardbxmeta.RoleCN, convention.ContainerEngine, topology.Version),
 		),
-		ImagePullPolicy: corev1.PullIfNotPresent,
+		ImagePullPolicy: template.ImagePullPolicy,
 		Env:             envVars,
 		Resources:       *template.Resources.DeepCopy(),
 		Ports: []corev1.ContainerPort{
@@ -386,9 +392,8 @@ func (f *objectFactory) newDeployment4CN(group string, mr *matchingRule) (*appsv
 
 	probeConfigure.ConfigureForCNEngine(&engineContainer, ports)
 	proberContainer := corev1.Container{
-		Name:            convention.ContainerProber,
-		Image:           imageConfig.DefaultImageForCluster(polardbxmeta.RoleCN, convention.ContainerProber, topology.Version),
-		ImagePullPolicy: corev1.PullIfNotPresent,
+		Name:  convention.ContainerProber,
+		Image: imageConfig.DefaultImageForCluster(polardbxmeta.RoleCN, convention.ContainerProber, topology.Version),
 		Env: []corev1.EnvVar{
 			{Name: "GOMAXPROCS", Value: "1"},
 		},
@@ -426,9 +431,8 @@ func (f *objectFactory) newDeployment4CN(group string, mr *matchingRule) (*appsv
 	// Container exporter if enabled
 	if config.Cluster().EnableExporters() {
 		exporterContainer := corev1.Container{
-			Name:            convention.ContainerExporter,
-			Image:           imageConfig.DefaultImageForCluster(polardbxmeta.RoleCN, convention.ContainerExporter, topology.Version),
-			ImagePullPolicy: corev1.PullIfNotPresent,
+			Name:  convention.ContainerExporter,
+			Image: imageConfig.DefaultImageForCluster(polardbxmeta.RoleCN, convention.ContainerExporter, topology.Version),
 			Env: []corev1.EnvVar{
 				{Name: "GOMAXPROCS", Value: "1"},
 			},
@@ -461,10 +465,9 @@ func (f *objectFactory) newDeployment4CN(group string, mr *matchingRule) (*appsv
 
 	// Container init
 	initContainer := corev1.Container{
-		Name:            convention.ContainerInit,
-		Image:           imageConfig.DefaultImageForCluster(polardbxmeta.RoleCN, convention.ContainerInit, topology.Version),
-		ImagePullPolicy: corev1.PullIfNotPresent,
-		Env:             envVars,
+		Name:  convention.ContainerInit,
+		Image: imageConfig.DefaultImageForCluster(polardbxmeta.RoleCN, convention.ContainerInit, topology.Version),
+		Env:   envVars,
 	}
 	if k8shelper.IsContainerQoSGuaranteed(&engineContainer) {
 		if featuregate.EnforceQoSGuaranteed.Enabled() {
@@ -569,14 +572,14 @@ func (f *objectFactory) newDeployment4CDC(group string, mr *matchingRule) (*apps
 		}
 	}
 	affinity := f.tryScatterAffinityForStatelessDeployment(
-		convention.ConstLabels(polardbx, polardbxmeta.RoleCDC),
+		convention.ConstLabelsWithRole(polardbx, polardbxmeta.RoleCDC),
 		nodeSelector,
 	)
 
 	// Name & Labels
 	deployName := convention.NewDeploymentName(polardbx, polardbxmeta.RoleCDC, group)
 
-	labels := convention.ConstLabels(polardbx, polardbxmeta.RoleCDC)
+	labels := convention.ConstLabelsWithRole(polardbx, polardbxmeta.RoleCDC)
 	labels[polardbxmeta.LabelGroup] = group
 
 	annotations := f.newPodAnnotations(polardbx)
@@ -591,7 +594,7 @@ func (f *objectFactory) newDeployment4CDC(group string, mr *matchingRule) (*apps
 			template.Image,
 			config.Images().DefaultImageForCluster(polardbxmeta.RoleCDC, convention.ContainerEngine, topology.Version),
 		),
-		ImagePullPolicy: corev1.PullIfNotPresent,
+		ImagePullPolicy: template.ImagePullPolicy,
 		Env:             envVars,
 		Resources:       *template.Resources.DeepCopy(),
 		Ports: []corev1.ContainerPort{
@@ -613,9 +616,8 @@ func (f *objectFactory) newDeployment4CDC(group string, mr *matchingRule) (*apps
 	// Container exporter if enabled
 	if config.Cluster().EnableExporters() {
 		exporterContainer := corev1.Container{
-			Name:            convention.ContainerExporter,
-			Image:           config.Images().DefaultImageForCluster(polardbxmeta.RoleCDC, convention.ContainerExporter, topology.Version),
-			ImagePullPolicy: corev1.PullIfNotPresent,
+			Name:  convention.ContainerExporter,
+			Image: config.Images().DefaultImageForCluster(polardbxmeta.RoleCDC, convention.ContainerExporter, topology.Version),
 			Env: []corev1.EnvVar{
 				{Name: "GOMAXPROCS", Value: "1"},
 			},

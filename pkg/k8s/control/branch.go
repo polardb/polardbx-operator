@@ -51,9 +51,10 @@ func (s *stepIf) executeIf(rc ReconcileContext, flow Flow, cond Condition) (reco
 	}
 
 	if condVal {
+		flow.Logger().Info("Condition matches.", "step-if", s.step.Name())
 		return s.step.Execute(rc, flow.WithLoggerValues("step-if", s.step.Name()))
 	} else {
-		return flow.Continue("Condition indicates to ignore step.", "step-if", s.step.Name())
+		return flow.Pass()
 	}
 }
 

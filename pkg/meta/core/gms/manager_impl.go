@@ -238,12 +238,13 @@ func (meta *manager) getMetaDB() *MetaDB {
 		// metadb.Port = 3306
 		// metadb.XPort = 31306
 		return &MetaDB{
-			Id:     meta.metadb.Id,
-			Host:   "127.1",
-			Port:   3306,
-			XPort:  31306,
-			User:   meta.metadb.User,
-			Passwd: meta.metadb.Passwd,
+			Id:        meta.metadb.Id,
+			Host:      meta.metadb.Host,
+			Host4Conn: "127.1",
+			Port:      3306,
+			XPort:     31306,
+			User:      meta.metadb.User,
+			Passwd:    meta.metadb.Passwd,
 		}
 	} else {
 		return &meta.metadb
@@ -253,7 +254,7 @@ func (meta *manager) getMetaDB() *MetaDB {
 func (meta *manager) createMetaDBDatabaseIfNotExist(ctx context.Context) error {
 	metadb := meta.getMetaDB()
 	db, err := dbutil.OpenMySQLDB(&dbutil.MySQLDataSource{
-		Host:     metadb.Host,
+		Host:     metadb.Host4Conn,
 		Port:     metadb.Port,
 		Username: metadb.User,
 		Password: metadb.Passwd,
@@ -275,7 +276,7 @@ func (meta *manager) createMetaDBDatabaseIfNotExist(ctx context.Context) error {
 func (meta *manager) checkMetaDBIfDatabaseExist(ctx context.Context) (bool, error) {
 	metadb := meta.getMetaDB()
 	db, err := dbutil.OpenMySQLDB(&dbutil.MySQLDataSource{
-		Host:     metadb.Host,
+		Host:     metadb.Host4Conn,
 		Port:     metadb.Port,
 		Username: metadb.User,
 		Password: metadb.Passwd,
@@ -300,7 +301,7 @@ func (meta *manager) getConnectionForMetaDB(ctx context.Context) (*sql.Conn, err
 		var err error
 		metadb := meta.getMetaDB()
 		if meta.db, err = dbutil.OpenMySQLDB(&dbutil.MySQLDataSource{
-			Host:     metadb.Host,
+			Host:     metadb.Host4Conn,
 			Port:     metadb.Port,
 			Username: metadb.User,
 			Password: metadb.Passwd,
@@ -318,6 +319,17 @@ func (meta *manager) Close() error {
 		return meta.db.Close()
 	}
 	return nil
+}
+
+func (meta *manager) ExecuteStatementsAndNotify(statements ...string) error {
+	if len(statements) == 0 {
+		return nil
+	}
+	notifyStmt := meta.newNotifyStmt(clInstanceInfoDataId)
+	if statements[len(statements)-1] != notifyStmt {
+		statements = append(statements, notifyStmt)
+	}
+	return meta.ExecuteStatementsOnMetaDBInTransaction(statements...)
 }
 
 func (meta *manager) ExecuteStatementsOnMetaDBInTransaction(statements ...string) error {
@@ -377,6 +389,8 @@ func (meta *manager) IsMetaDBInitialized() (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	// k8s_topology should be the last table created in initialization.
+	initialized := rows.Next()
 	if err = rows.Close(); err != nil {
 		return false, err
 	}
@@ -386,13 +400,16 @@ func (meta *manager) IsMetaDBInitialized() (bool, error) {
 	row := conn.QueryRowContext(ctx, `SELECT count(1) FROM storage_info WHERE storage_inst_id = ?`, meta.metadb.Id)
 	cnt := 0
 	if err = row.Scan(&cnt); err != nil {
+		if dbutil.IsMySQLErrTableNotExists(err) {
+			return false, nil
+		}
 		return false, err
 	}
 	if cnt != 1 {
 		return false, nil
 	}
 
-	return rows.Next(), nil
+	return initialized, nil
 }
 
 func (meta *manager) newStorageNodeInfoForMetaDB() StorageNodeInfo {
@@ -619,7 +636,7 @@ func (meta *manager) EnableComputeNodes(computeNodes ...ComputeNodeInfo) error {
 	notifyStmt := meta.newNotifyStmt(fmt.Sprintf(clServerInfoDataIdFormat, meta.getClusterID()))
 
 	// Execute the statement
-	return meta.ExecuteStatementsOnMetaDBInTransaction(stmt, notifyStmt)
+	return meta.ExecuteStatementsAndNotify(stmt, notifyStmt)
 }
 
 func (c *ComputeNodeInfo) toSelectCriteria() string {
@@ -642,7 +659,7 @@ func (meta *manager) DisableComputeNodes(computeNodes ...ComputeNodeInfo) error 
 	notifyStmt := meta.newNotifyStmt(fmt.Sprintf(clServerInfoDataIdFormat, meta.getClusterID()))
 
 	// Execute the statement
-	return meta.ExecuteStatementsOnMetaDBInTransaction(stmt, notifyStmt)
+	return meta.ExecuteStatementsAndNotify(stmt, notifyStmt)
 }
 
 func (meta *manager) DeleteComputeNodes(computeNodes ...ComputeNodeInfo) error {
@@ -661,7 +678,7 @@ func (meta *manager) DeleteComputeNodes(computeNodes ...ComputeNodeInfo) error {
 	notifyStmt := meta.newNotifyStmt(fmt.Sprintf(clServerInfoDataIdFormat, meta.getClusterID()))
 
 	// Execute the statement
-	return meta.ExecuteStatementsOnMetaDBInTransaction(stmt, notifyStmt)
+	return meta.ExecuteStatementsAndNotify(stmt, notifyStmt)
 }
 
 func (meta *manager) ListComputeNodes() ([]ComputeNodeInfo, error) {
@@ -726,7 +743,7 @@ func (meta *manager) SyncComputeNodes(computeNodes ...ComputeNodeInfo) error {
 	notifyStmt := meta.newNotifyStmt(fmt.Sprintf(clServerInfoDataIdFormat, meta.getClusterID()))
 
 	// Execute statements
-	return meta.ExecuteStatementsOnMetaDBInTransaction(deleteStmt, insertStmt, notifyStmt)
+	return meta.ExecuteStatementsAndNotify(deleteStmt, insertStmt, notifyStmt)
 }
 
 func (s *StorageNodeInfo) toInsertValues(clusterId string, cipher security.PasswordCipher) string {
@@ -768,7 +785,7 @@ func (meta *manager) SyncStorageNodes(storageNodes ...StorageNodeInfo) error {
 	notifyStmt := meta.newNotifyStmt(fmt.Sprintf(clStorageInfoDataIdFormat, meta.getClusterID()))
 
 	// Execute the statement
-	return meta.ExecuteStatementsOnMetaDBInTransaction(deleteStmt, stmt, notifyStmt)
+	return meta.ExecuteStatementsAndNotify(deleteStmt, stmt, notifyStmt)
 }
 
 func (meta *manager) EnableStorageNodes(storageNodes ...StorageNodeInfo) error {
@@ -789,7 +806,7 @@ func (meta *manager) EnableStorageNodes(storageNodes ...StorageNodeInfo) error {
 	notifyStmt := meta.newNotifyStmt(fmt.Sprintf(clStorageInfoDataIdFormat, meta.getClusterID()))
 
 	// Execute the statement
-	return meta.ExecuteStatementsOnMetaDBInTransaction(stmt, notifyStmt)
+	return meta.ExecuteStatementsAndNotify(stmt, notifyStmt)
 }
 
 func (s *StorageNodeInfo) toSelectCriteria() string {
@@ -811,7 +828,7 @@ func (meta *manager) DisableStorageNodes(storageNodes ...StorageNodeInfo) error 
 	notifyStmt := meta.newNotifyStmt(fmt.Sprintf(clStorageInfoDataIdFormat, meta.getClusterID()))
 
 	// Execute the statement
-	return meta.ExecuteStatementsOnMetaDBInTransaction(stmt, notifyStmt)
+	return meta.ExecuteStatementsAndNotify(stmt, notifyStmt)
 }
 
 //goland:noinspection SqlDialectInspection,SqlNoDataSourceInspection
@@ -898,7 +915,7 @@ func (meta *manager) SyncDynamicParams(params map[string]string) error {
 	notifyStmt := meta.newNotifyStmt(fmt.Sprintf(clConfigDataIdFormat, meta.getClusterID()))
 
 	// Execute the statements
-	return meta.ExecuteStatementsOnMetaDBInTransaction(stmt, notifyStmt)
+	return meta.ExecuteStatementsAndNotify(stmt, notifyStmt)
 }
 
 type userPrivSchema struct {
@@ -1052,7 +1069,7 @@ func (meta *manager) CreateDBAccount(user, passwd string, grantOptions ...*Grant
 	notifyStmt := meta.newNotifyStmt(clPrivilegeInfoDataId)
 
 	// Execute the statements
-	return meta.ExecuteStatementsOnMetaDBInTransaction(insertStmt, notifyStmt)
+	return meta.ExecuteStatementsAndNotify(insertStmt, notifyStmt)
 }
 
 func (meta *manager) DeleteDBAccount(user string) error {
@@ -1061,7 +1078,7 @@ func (meta *manager) DeleteDBAccount(user string) error {
 	notifyStmt := meta.newNotifyStmt(clPrivilegeInfoDataId)
 
 	// Execute the statements
-	return meta.ExecuteStatementsOnMetaDBInTransaction(deleteStmt, notifyStmt)
+	return meta.ExecuteStatementsAndNotify(deleteStmt, notifyStmt)
 }
 
 func (meta *manager) SyncAccountPasswd(user, passwd string) error {
@@ -1070,7 +1087,7 @@ func (meta *manager) SyncAccountPasswd(user, passwd string) error {
 	notifyStmt := meta.newNotifyStmt(clPrivilegeInfoDataId)
 
 	// Execute the statements
-	return meta.ExecuteStatementsOnMetaDBInTransaction(updateStmt, notifyStmt)
+	return meta.ExecuteStatementsAndNotify(updateStmt, notifyStmt)
 }
 
 func (meta *manager) SyncSecurityIPs(ips []string) error {
@@ -1128,7 +1145,7 @@ func (meta *manager) DeleteCdcNodes(cdcNodes ...CdcNodeInfo) error {
 
 	deleteStmt := fmt.Sprintf("DELETE from binlog_node_info WHERE %s", strings.Join(selectCriteriaList, " OR "))
 
-	err := meta.ExecuteStatementsOnMetaDBInTransaction(deleteStmt)
+	err := meta.ExecuteStatementsAndNotify(deleteStmt)
 	if dbutil.IsMySQLErrTableNotExists(err) {
 		return nil
 	}
@@ -1143,7 +1160,7 @@ func (meta *manager) Lock() error {
 	notifyStmt := meta.newNotifyStmt(fmt.Sprintf(clLockDataIdFormat, meta.getClusterID()))
 
 	// Execute the statements
-	return meta.ExecuteStatementsOnMetaDBInTransaction(lockStmt, notifyStmt)
+	return meta.ExecuteStatementsAndNotify(lockStmt, notifyStmt)
 }
 
 func (meta *manager) Unlock() error {
@@ -1152,7 +1169,7 @@ func (meta *manager) Unlock() error {
 	notifyStmt := meta.newNotifyStmt(fmt.Sprintf(clLockDataIdFormat, meta.getClusterID()))
 
 	// Execute the statements
-	return meta.ExecuteStatementsOnMetaDBInTransaction(unlockStmt, notifyStmt)
+	return meta.ExecuteStatementsAndNotify(unlockStmt, notifyStmt)
 }
 
 func quoteStringSlice(l []string) []string {
@@ -1220,12 +1237,13 @@ func (meta *manager) GetK8sTopology() (*K8sTopology, error) {
 }
 
 type MetaDB struct {
-	Id     string
-	Host   string
-	Port   int
-	XPort  int
-	User   string
-	Passwd string
+	Id        string
+	Host      string
+	Host4Conn string
+	Port      int
+	XPort     int
+	User      string
+	Passwd    string
 
 	Type StorageType
 }

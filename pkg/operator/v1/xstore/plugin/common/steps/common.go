@@ -26,6 +26,7 @@ import (
 
 	"github.com/alibaba/polardbx-operator/pkg/k8s/control"
 	k8shelper "github.com/alibaba/polardbx-operator/pkg/k8s/helper"
+	"github.com/alibaba/polardbx-operator/pkg/operator/v1/featuregate"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/command"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/convention"
 	xstoremeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/meta"
@@ -43,7 +44,17 @@ func parseChannelFromConfigMap(cm *corev1.ConfigMap) (*channel.SharedChannel, er
 	return sharedChannel, nil
 }
 
-func transformPodsIntoNodes(pods []corev1.Pod) []channel.Node {
+func transformPodsIntoNodesWithHeadlessServices(namespace string, pods []corev1.Pod) []channel.Node {
+	nodes := transformPodsIntoNodes(namespace, pods)
+	// Reset every host to DNS.
+	for i := range nodes {
+		// DNS record for {service} because by default searches {ns}.svc.cluster.local
+		nodes[i].Host = convention.NewHeadlessServiceName(nodes[i].Pod)
+	}
+	return nodes
+}
+
+func transformPodsIntoNodes(namespace string, pods []corev1.Pod) []channel.Node {
 	nodes := make([]channel.Node, 0, len(pods))
 	for _, pod := range pods {
 		paxosPort := k8shelper.MustGetPortFromContainer(
@@ -91,7 +102,11 @@ var UnblockBootstrap = xstorev1reconcile.NewStepBinder("UnblockBootstrap",
 			return flow.Error(err, "Unable to get pods.")
 		}
 
-		sharedChannel.Nodes = transformPodsIntoNodes(pods)
+		if featuregate.EnableXStoreWithHeadlessService.Enabled() {
+			sharedChannel.Nodes = transformPodsIntoNodesWithHeadlessServices(rc.Namespace(), pods)
+		} else {
+			sharedChannel.Nodes = transformPodsIntoNodes(rc.Namespace(), pods)
+		}
 
 		// update configmap.
 		sharedCm.Data[channel.SharedChannelKey] = sharedChannel.String()

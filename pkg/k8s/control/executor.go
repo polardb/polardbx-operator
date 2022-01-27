@@ -128,6 +128,23 @@ func (e *executor) Execute(rc ReconcileContext, task *Task) (result reconcile.Re
 		}
 	}()
 
+	// Handle force requeue after.
+	defer func() {
+		forceRequeueAfter := rc.ForceRequeueAfter()
+		if forceRequeueAfter > 0 {
+			if err != nil {
+				// Reset error (should have been logged by flow.Error()).
+				err = nil
+				result = reconcile.Result{RequeueAfter: forceRequeueAfter}
+			} else {
+				// Set the requeue after if not set or larger than the task's.
+				if result.RequeueAfter == 0 || result.RequeueAfter > forceRequeueAfter {
+					result.RequeueAfter = forceRequeueAfter
+				}
+			}
+		}
+	}()
+
 	// Handle deferred actions.
 	defer func() {
 		err1 := e.executeDeferredSteps(rc, task)

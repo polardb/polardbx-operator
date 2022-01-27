@@ -23,6 +23,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	polardbxv1 "github.com/alibaba/polardbx-operator/api/v1"
+	"github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/convention"
 	polardbxmeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/meta"
 	polardbxv1reconcile "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/reconcile"
 	xstoremeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/meta"
@@ -67,6 +68,7 @@ func (f *objectFactory) NewServiceMonitors() (map[string]promv1.ServiceMonitor, 
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      f.rc.NameInto(suffixPatcher("-gms")),
 				Namespace: f.rc.Namespace(),
+				Labels:    convention.ConstLabels(polardbx),
 			},
 			Spec: promv1.ServiceMonitorSpec{
 				JobLabel: f.rc.NameInto(suffixPatcher("-gms")),
@@ -103,6 +105,7 @@ func (f *objectFactory) NewServiceMonitors() (map[string]promv1.ServiceMonitor, 
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      f.rc.NameInto(suffixPatcher("-gms")),
 				Namespace: f.rc.Namespace(),
+				Labels:    convention.ConstLabels(polardbx),
 			},
 			Spec: promv1.ServiceMonitorSpec{
 				JobLabel: f.rc.NameInto(suffixPatcher("-gms")),
@@ -134,6 +137,7 @@ func (f *objectFactory) NewServiceMonitors() (map[string]promv1.ServiceMonitor, 
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      f.rc.NameInto(suffixPatcher("-dn")),
 				Namespace: f.rc.Namespace(),
+				Labels:    convention.ConstLabels(polardbx),
 			},
 			Spec: promv1.ServiceMonitorSpec{
 				JobLabel: f.rc.NameInto(suffixPatcher("-dn")),
@@ -170,6 +174,7 @@ func (f *objectFactory) NewServiceMonitors() (map[string]promv1.ServiceMonitor, 
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      f.rc.NameInto(suffixPatcher("-cdc")),
 				Namespace: f.rc.Namespace(),
+				Labels:    convention.ConstLabels(polardbx),
 			},
 			Spec: promv1.ServiceMonitorSpec{
 				JobLabel: f.rc.NameInto(suffixPatcher("-cdc")),

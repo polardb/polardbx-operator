@@ -28,6 +28,10 @@ type NodeSpec struct {
 	// if not specified.
 	Image string `json:"image,omitempty"`
 
+	// ImagePullPolicy describes a policy for if/when to pull a container image (especially
+	// for the engine container).
+	ImagePullPolicy v1.PullPolicy `json:"imagePullPolicy,omitempty"`
+
 	// ImagePullSecrets represents the secrets for pulling private images.
 	ImagePullSecrets []v1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
 

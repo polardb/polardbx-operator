@@ -218,7 +218,7 @@ func DataPathsByProcessName(processName string) (map[string]string, error) {
 
 // removeNull remove trailing '\x00' byte of s
 func removeNull(s []byte) []byte {
-	if i := bytes.IndexByte(s, '\x00'); i > 0 {
+	if i := bytes.IndexByte(s, '\x00'); i >= 0 {
 		return s[:i]
 	}
 	return s

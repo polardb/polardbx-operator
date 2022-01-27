@@ -193,6 +193,7 @@ func NewPod(rc *reconcile.Context, xstore *polardbxv1.XStore, nodeSet *polardbxv
 				opts.ExtraLabels(factoryCtx),
 				convention.ConstPodLabels(xstore, nodeSet),
 				map[string]string{
+					xstoremeta.LabelPod:        podName,
 					xstoremeta.LabelRole:       convention.DefaultRoleOf(nodeSet.Role),
 					xstoremeta.LabelGeneration: strconv.FormatInt(generation, 10),
 				},
@@ -223,10 +224,11 @@ func NewPod(rc *reconcile.Context, xstore *polardbxv1.XStore, nodeSet *polardbxv
 						template.Spec.Image,
 						rc.Config().Images().DefaultImageForStore(engine, convention.ContainerEngine, ""),
 					),
-					Ports:      containerPorts[convention.ContainerEngine],
-					WorkingDir: opts.WorkDir(factoryCtx, convention.ContainerEngine),
-					Command:    opts.Command(factoryCtx, convention.ContainerEngine),
-					Resources:  opts.NewResources(factoryCtx, convention.ContainerEngine),
+					ImagePullPolicy: template.Spec.ImagePullPolicy,
+					Ports:           containerPorts[convention.ContainerEngine],
+					WorkingDir:      opts.WorkDir(factoryCtx, convention.ContainerEngine),
+					Command:         opts.Command(factoryCtx, convention.ContainerEngine),
+					Resources:       opts.NewResources(factoryCtx, convention.ContainerEngine),
 					VolumeMounts: k8shelper.PatchVolumeMounts(
 						SystemVolumeMounts(),
 						ConfigMapVolumeMounts(xstore),

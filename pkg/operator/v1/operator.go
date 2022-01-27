@@ -29,9 +29,12 @@ import (
 	polardbxv1 "github.com/alibaba/polardbx-operator/api/v1"
 	clienthelper "github.com/alibaba/polardbx-operator/pkg/k8s/client"
 	"github.com/alibaba/polardbx-operator/pkg/k8s/control"
+	"github.com/alibaba/polardbx-operator/pkg/operator/hint"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/config"
 	polardbxv1controllers "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/controllers"
 	xstorev1controllers "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/controllers"
+	"github.com/alibaba/polardbx-operator/pkg/webhook"
+	"github.com/alibaba/polardbx-operator/pkg/webhook/polardbxcluster"
 )
 
 var (
@@ -52,9 +55,11 @@ type Options struct {
 
 	MetricsAddr             string
 	ListenPort              int
+	WebhookListenPort       int
 	LeaderElection          bool
 	LeaderElectionNamespace string
 	MaxConcurrentReconciles int
+	CertDir                 string
 
 	ConfigPath string
 }
@@ -90,8 +95,16 @@ func setupPolarDBXControllers(opts controllerOptions) error {
 		Logger:         ctrl.Log.WithName("controller").WithName("polardbx"),
 		MaxConcurrency: opts.opts.MaxConcurrentReconciles,
 	}
-	err := polardbxReconciler.SetupWithManager(opts.Manager)
-	if err != nil {
+	if err := polardbxReconciler.SetupWithManager(opts.Manager); err != nil {
+		return err
+	}
+
+	knobsReconciler := polardbxv1controllers.PolarDBXClusterKnobsReconciler{
+		Client:         opts.Manager.GetClient(),
+		Logger:         ctrl.Log.WithName("controller").WithName("polardbxknobs"),
+		MaxConcurrency: opts.opts.MaxConcurrentReconciles,
+	}
+	if err := knobsReconciler.SetupWithManager(opts.Manager); err != nil {
 		return err
 	}
 
@@ -109,6 +122,9 @@ func setupPolarDBXControllers(opts controllerOptions) error {
 //   4. Controllers for XStoreBackup, XStoreBinlogBackup (v1)
 //   5. Controllers for PolarDBXBackupSchedule, PolarDBXBinlogBackupSchedule (v1)
 func Start(ctx context.Context, opts Options) {
+	// Start instruction loader.
+	hint.StartLoader(ctx)
+
 	// Start operator config loader.
 	configLoaderFactory, err := config.NewConfigLoaderAndStartBackgroundRefresh(ctx,
 		config.LoadFromPath(opts.ConfigPath),
@@ -135,6 +151,7 @@ func Start(ctx context.Context, opts Options) {
 		LeaderElection:          opts.LeaderElection,
 		LeaderElectionNamespace: opts.LeaderElectionNamespace,
 		LeaderElectionID:        "polardbx.aliyun.com",
+		CertDir:                 opts.CertDir,
 	})
 	if err != nil {
 		setupLog.Error(err, "Unable to new manager.")
@@ -166,6 +183,26 @@ func Start(ctx context.Context, opts Options) {
 	if err != nil {
 		setupLog.Error(err, "Unable to setup controllers for polardbx.")
 		os.Exit(1)
+	}
+
+	// Setup webhooks.
+	if opts.WebhookListenPort < 0 {
+		// Disable if manually specified.
+		setupLog.Info("Webhooks disabled, will not start!")
+	} else if opts.WebhookListenPort > 0 {
+		// Start a standalone webhook server. TLS enabled or not is dynamically determined.
+		err = polardbxcluster.StartStandaloneWebhookServer(ctx, mgr, opts.WebhookListenPort, opts.ConfigPath, opts.CertDir)
+		if err != nil {
+			setupLog.Error(err, "Unable to start webhook server...")
+			os.Exit(1)
+		}
+	} else {
+		// Defaults ot setup on manager.
+		err = webhook.SetupWebhooks(ctx, mgr, opts.ConfigPath)
+		if err != nil {
+			setupLog.Error(err, "Unable to setup webhooks...")
+			os.Exit(1)
+		}
 	}
 
 	// Start.

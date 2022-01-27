@@ -1332,6 +1332,11 @@ spec:
                                     Controller should fill a default image if not
                                     specified.
                                   type: string
+                                imagePullPolicy:
+                                  description: ImagePullPolicy describes a policy
+                                    for if/when to pull a container image (especially
+                                    for the engine container).
+                                  type: string
                                 imagePullSecrets:
                                   description: ImagePullSecrets represents the secrets
                                     for pulling private images.
@@ -2391,6 +2396,11 @@ spec:
                           image:
                             description: Image is the image of xstore engine. Controller
                               should fill a default image if not specified.
+                            type: string
+                          imagePullPolicy:
+                            description: ImagePullPolicy describes a policy for if/when
+                              to pull a container image (especially for the engine
+                              container).
                             type: string
                           imagePullSecrets:
                             description: ImagePullSecrets represents the secrets for
@@ -3765,6 +3775,11 @@ spec:
                                     Controller should fill a default image if not
                                     specified.
                                   type: string
+                                imagePullPolicy:
+                                  description: ImagePullPolicy describes a policy
+                                    for if/when to pull a container image (especially
+                                    for the engine container).
+                                  type: string
                                 imagePullSecrets:
                                   description: ImagePullSecrets represents the secrets
                                     for pulling private images.
@@ -4824,6 +4839,11 @@ spec:
                           image:
                             description: Image is the image of xstore engine. Controller
                               should fill a default image if not specified.
+                            type: string
+                          imagePullPolicy:
+                            description: ImagePullPolicy describes a policy for if/when
+                              to pull a container image (especially for the engine
+                              container).
                             type: string
                           imagePullSecrets:
                             description: ImagePullSecrets represents the secrets for

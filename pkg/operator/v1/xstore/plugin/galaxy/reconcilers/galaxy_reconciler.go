@@ -19,6 +19,8 @@ package reconcilers
 import (
 	"time"
 
+	"github.com/alibaba/polardbx-operator/pkg/debug"
+
 	"github.com/go-logr/logr"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -58,7 +60,7 @@ func (r *GalaxyReconciler) newReconcileTask(rc *xstorev1reconcile.Context, xstor
 	case polardbxv1xstore.PhaseNew:
 		galaxyinstancesteps.CheckTopologySpec(task)
 
-		// update to render display status.
+		// Update to render display status.
 		instancesteps.UpdateObservedGeneration(task)
 		instancesteps.UpdateObservedTopologyAndConfig(task)
 
@@ -79,7 +81,7 @@ func (r *GalaxyReconciler) newReconcileTask(rc *xstorev1reconcile.Context, xstor
 		// Prepare as much host path volumes as specified in the topology.
 		instancesteps.PrepareHostPathVolumes(task)
 
-		// update the observed generation at the end of pending phase.
+		// Update the observed generation at the end of pending phase.
 		instancesteps.UpdateObservedGeneration(task)
 		instancesteps.UpdateObservedTopologyAndConfig(task)
 
@@ -87,7 +89,7 @@ func (r *GalaxyReconciler) newReconcileTask(rc *xstorev1reconcile.Context, xstor
 		instancesteps.UpdatePhaseTemplate(polardbxv1xstore.PhaseCreating)(task)
 	case polardbxv1xstore.PhaseCreating:
 		// Create pods and save volumes/ports into status.
-		galaxyinstancesteps.CreatePods(task)
+		galaxyinstancesteps.CreatePodsAndHeadlessServices(task)
 		instancesteps.BindHostPathVolumesToHost(task)
 		instancesteps.BindPodPorts(task)
 
@@ -112,7 +114,10 @@ func (r *GalaxyReconciler) newReconcileTask(rc *xstorev1reconcile.Context, xstor
 		instancesteps.CreateAccounts(task)
 
 		// Check connectivity and set engine version into status.
-		instancesteps.CheckConnectivityAndSetEngineVersion(task)
+		control.Branch(debug.IsDebugEnabled(),
+			instancesteps.QueryAndUpdateEngineVersion,          // Query the engine version via command. (DEBUG)
+			instancesteps.CheckConnectivityAndSetEngineVersion, // Updates the engine version by accessing directly.
+		)(task)
 
 		// Go to phase "Running".
 		instancesteps.UpdatePhaseTemplate(polardbxv1xstore.PhaseRunning)(task)
@@ -128,7 +133,7 @@ func (r *GalaxyReconciler) newReconcileTask(rc *xstorev1reconcile.Context, xstor
 			// guides (i.e. manually cordon the node evict the pods on it).
 			instancesteps.WhenPodsDeletedFound(
 				instancesteps.UpdatePhaseTemplate(polardbxv1xstore.PhaseRepairing),
-				control.Requeue("Start repairing..."),
+				control.Retry("Start repairing..."),
 			)(task)
 
 			// Purge logs with interval specified (but not less than 2 minutes).
@@ -141,13 +146,13 @@ func (r *GalaxyReconciler) newReconcileTask(rc *xstorev1reconcile.Context, xstor
 			}
 			galaxyinstancesteps.PurgeLogsTemplate(logPurgeInterval)(task)
 
-			// update host path volume sizes.
+			// Update host path volume sizes.
 			instancesteps.UpdateHostPathVolumeSizesTemplate(time.Minute)(task)
 
 			// Branch disk quota exceeds, lock all candidates and requeue immediately.
 			instancesteps.WhenDiskQuotaExceeds(
 				instancesteps.UpdateStageTemplate(polardbxv1xstore.StageLocking),
-				control.Requeue("Start locking..."),
+				control.Retry("Start locking..."),
 			)(task)
 
 			// Goto upgrading if topology changed. (not breaking the task flow)
@@ -155,11 +160,11 @@ func (r *GalaxyReconciler) newReconcileTask(rc *xstorev1reconcile.Context, xstor
 				instancesteps.UpdatePhaseTemplate(polardbxv1xstore.PhaseUpgrading),
 			)(task)
 
-			// update the observed generation at the end of running phase.
+			// Update the observed generation at the end of running phase.
 			instancesteps.UpdateObservedGeneration(task)
 			instancesteps.UpdateObservedTopologyAndConfig(task)
 
-			control.RequeueAfter(10*time.Second, "Loop while running")(task)
+			control.RetryAfter(10*time.Second, "Loop while running")(task)
 		case polardbxv1xstore.StageLocking:
 			// Set super-read-only on all candidates.
 			galaxyinstancesteps.SetSuperReadOnlyOnAllCandidates(task)
@@ -171,7 +176,7 @@ func (r *GalaxyReconciler) newReconcileTask(rc *xstorev1reconcile.Context, xstor
 		// Purge logs every 30 seconds.
 		galaxyinstancesteps.PurgeLogsTemplate(30 * time.Second)(task)
 
-		// update volume sizes every 30 seconds.
+		// Update volume sizes every 30 seconds.
 		instancesteps.UpdateHostPathVolumeSizesTemplate(30 * time.Second)(task)
 
 		// Unset super-read-only on all candidates.
@@ -181,7 +186,7 @@ func (r *GalaxyReconciler) newReconcileTask(rc *xstorev1reconcile.Context, xstor
 		)(task)
 
 		// Block wait, requeue every 30 seconds.
-		control.RequeueAfter(30*time.Second, "Check every 30 seconds...")(task)
+		control.RetryAfter(30*time.Second, "Check every 30 seconds...")(task)
 	case polardbxv1xstore.PhaseUpgrading:
 		// TODO impl upgrading
 	case polardbxv1xstore.PhaseRepairing:

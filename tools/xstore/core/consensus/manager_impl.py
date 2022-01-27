@@ -139,13 +139,15 @@ class LegacyConsensusManager(AbstractConsensusManager):
             return self._consensus_node_from_local_row(r)
 
     def change_leader(self, target: Union[str, ConsensusNode]):
+        target_server_id = self._get_server_id(target)
         with self._conn.cursor() as cur:
-            cur.execute('change consensus_leader to "%s"' % self._get_address(target))
+            cur.execute('change consensus_leader to %d' % target_server_id)
 
     def configure_follower(self, target: Union[str, ConsensusNode], election_weight: int, force_sync: bool):
+        target_server_id = self._get_server_id(target)
         with self._conn.cursor() as cur:
-            cur.execute('change consensus_node "%s" consensus_force_sync %s consensus_election_weight %d' % (
-                self._get_address(target), "true" if force_sync else "false", election_weight
+            cur.execute('change consensus_node %d consensus_force_sync %s consensus_election_weight %d' % (
+                target_server_id, "true" if force_sync else "false", election_weight
             ))
 
     def modify_cluster_id(self, cluster_id: int):
@@ -163,9 +165,10 @@ class LegacyConsensusManager(AbstractConsensusManager):
     def fix_match_index(self, target: Union[str, ConsensusNode], match_index: int):
         self.check_current_role(ConsensusRole.LEADER)
 
+        target_server_id = self._get_server_id(target)
         with self._conn.cursor() as cur:
-            cur.execute('change consensus_node "%s" consensus_matchindex %d' % (
-                self._get_address(target), match_index
+            cur.execute('change consensus_node %d consensus_matchindex %d' % (
+                target_server_id, match_index
             ))
 
     def add_learner(self, target_addr: str) -> ConsensusNode:
@@ -179,8 +182,9 @@ class LegacyConsensusManager(AbstractConsensusManager):
     def drop_learner(self, target: Union[str, ConsensusNode]):
         self.check_current_role(ConsensusRole.LEADER)
 
+        target_server_id = self._get_server_id(target)
         with self._conn.cursor() as cur:
-            cur.execute('drop consensus_learner "%s"' % self._get_address(target))
+            cur.execute('drop consensus_learner %d' % target_server_id)
 
     def add_follower(self, target_addr: str) -> ConsensusNode:
         self.check_current_role(ConsensusRole.LEADER)
@@ -193,22 +197,25 @@ class LegacyConsensusManager(AbstractConsensusManager):
     def drop_follower(self, target: Union[str, ConsensusNode]):
         self.check_current_role(ConsensusRole.LEADER)
 
+        target_server_id = self._get_server_id(target)
         with self._conn.cursor() as cur:
-            cur.execute('drop consensus_follower "%s"' % self._get_address(target))
+            cur.execute('drop consensus_follower %d' % target_server_id)
 
     def upgrade_learner_to_follower(self, target: Union[str, ConsensusNode]) -> ConsensusNode:
         self.check_current_role(ConsensusRole.LEADER)
 
+        target_server_id = self._get_server_id(target)
         with self._conn.cursor() as cur:
-            cur.execute('change consensus_learner "%s" to consensus_follower' % self._get_address(target))
+            cur.execute('change consensus_learner %d to consensus_follower' % target_server_id)
 
         return self.get_consensus_node(self._get_address(target))
 
     def downgrade_follower_to_learner(self, target: Union[str, ConsensusNode]) -> ConsensusNode:
         self.check_current_role(ConsensusRole.LEADER)
 
+        target_server_id = self._get_server_id(target)
         with self._conn.cursor() as cur:
-            cur.execute('change consensus_follower "%s" to consensus_learner' % self._get_address(target))
+            cur.execute('change consensus_follower %d to consensus_learner' % target_server_id)
 
         return self.get_consensus_node(self._get_address(target))
 
@@ -218,14 +225,16 @@ class LegacyConsensusManager(AbstractConsensusManager):
 
         # change consensus_node "127.0.0.1:15700" consensus_learner_source "127.0.0.1:15701"
         # [consensus_use_applyindex true/false]
+        learner_server_id = self._get_server_id(learner)
+        source_server_id = self._get_server_id(source)
         with self._conn.cursor() as cur:
             if applied_index is not None:
-                cur.execute('change consensus_node "%s" consensus_learner_source "%s" consensus_use_applyindex %s' % (
-                    self._get_address(learner), self._get_address(source), 'true' if applied_index else 'false'
+                cur.execute('change consensus_node %d consensus_learner_source %d consensus_use_applyindex %s' % (
+                    learner_server_id, source_server_id, 'true' if applied_index else 'false'
                 ))
             else:
-                cur.execute('change consensus_node "%s" consensus_learner_source "%s"' % (
-                    self._get_address(learner), self._get_address(source)
+                cur.execute('change consensus_node %d consensus_learner_source %d' % (
+                    learner_server_id, source_server_id
                 ))
 
     def refresh_learner_meta(self):
@@ -386,13 +395,15 @@ class ConsensusManager(AbstractConsensusManager):
             return self._consensus_node_from_local_row(r)
 
     def change_leader(self, target: Union[str, ConsensusNode]):
+        target_server_id = self._get_server_id(target)
         with self._conn.cursor() as cur:
-            cur.execute('call dbms_consensus.change_leader("%s")' % self._get_address(target))
+            cur.execute('call dbms_consensus.change_leader(%d)' % target_server_id)
 
     def configure_follower(self, target: Union[str, ConsensusNode], election_weight: int, force_sync: bool):
+        target_server_id = self._get_server_id(target)
         with self._conn.cursor() as cur:
-            cur.execute('call dbms_consensus.configure_follower("%s", %d, %d)' % (
-                self._get_address(target), election_weight, 1 if force_sync else 0
+            cur.execute('call dbms_consensus.configure_follower(%d, %d, %d)' % (
+                target_server_id, election_weight, 1 if force_sync else 0
             ))
 
     def modify_cluster_id(self, cluster_id: int):
@@ -410,9 +421,10 @@ class ConsensusManager(AbstractConsensusManager):
     def fix_match_index(self, target: Union[str, ConsensusNode], match_index: int):
         self.check_current_role(ConsensusRole.LEADER)
 
+        target_server_id = self._get_server_id(target)
         with self._conn.cursor() as cur:
-            cur.execute('call dbms_consensus.fix_matchindex("%s", %d)' % (
-                self._get_address(target), match_index
+            cur.execute('call dbms_consensus.fix_matchindex(%d, %d)' % (
+                target_server_id, match_index
             ))
 
     def add_learner(self, target_addr: str) -> ConsensusNode:
@@ -426,8 +438,9 @@ class ConsensusManager(AbstractConsensusManager):
     def drop_learner(self, target: Union[str, ConsensusNode]):
         self.check_current_role(ConsensusRole.LEADER)
 
+        target_server_id = self._get_server_id(target)
         with self._conn.cursor() as cur:
-            cur.execute('call dbms_consensus.drop_learner("%s")' % self._get_address(target))
+            cur.execute('call dbms_consensus.drop_learner(%d)' % target_server_id)
 
     def add_follower(self, target_addr: str) -> ConsensusNode:
         node = self.add_learner(target_addr)
@@ -451,16 +464,18 @@ class ConsensusManager(AbstractConsensusManager):
     def upgrade_learner_to_follower(self, target: Union[str, ConsensusNode]) -> ConsensusNode:
         self.check_current_role(ConsensusRole.LEADER)
 
+        target_server_id = self._get_server_id(target)
         with self._conn.cursor() as cur:
-            cur.execute('call dbms_consensus.upgrade_learner("%s")' % self._get_address(target))
+            cur.execute('call dbms_consensus.upgrade_learner(%d)' % target_server_id)
 
         return self.get_consensus_node(self._get_address(target))
 
     def downgrade_follower_to_learner(self, target: Union[str, ConsensusNode]) -> ConsensusNode:
         self.check_current_role(ConsensusRole.LEADER)
 
+        target_server_id = self._get_server_id(target)
         with self._conn.cursor() as cur:
-            cur.execute('call dbms_consensus.downgrade_follower("%s")' % self._get_address(target))
+            cur.execute('call dbms_consensus.downgrade_follower(%d)' % target_server_id)
 
         return self.get_consensus_node(self._get_address(target))
 
@@ -468,14 +483,16 @@ class ConsensusManager(AbstractConsensusManager):
                                  applied_index: bool):
         self.check_current_role(ConsensusRole.LEADER)
 
+        learner_server_id = self._get_server_id(learner)
+        source_server_id = self._get_server_id(source)
         with self._conn.cursor() as cur:
             if applied_index is not None:
-                cur.execute('call dbms_consensus.configure_learner("%s", "%s", %d)' % (
-                    self._get_address(learner), self._get_address(source), 1 if applied_index else 0
+                cur.execute('call dbms_consensus.configure_learner(%d, %d, %d)' % (
+                    learner_server_id, source_server_id, 1 if applied_index else 0
                 ))
             else:
-                cur.execute('call dbms_consensus.configure_learner("%s", "%s")' % (
-                    self._get_address(learner), self._get_address(source)
+                cur.execute('call dbms_consensus.configure_learner(%d, %d)' % (
+                    learner_server_id, source_server_id
                 ))
 
     def refresh_learner_meta(self):

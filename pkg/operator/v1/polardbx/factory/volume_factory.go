@@ -155,6 +155,15 @@ func (v *volumeFactory) newConfigMapVolumeSource(name string, items []corev1.Key
 	}
 }
 
+func (v *volumeFactory) newSecretVolumeSource(name string, items []corev1.KeyToPath) corev1.VolumeSource {
+	return corev1.VolumeSource{
+		Secret: &corev1.SecretVolumeSource{
+			SecretName: name,
+			Items:      items,
+		},
+	}
+}
+
 func (v *volumeFactory) newHostPathVolumeSource(path string, hostPathType corev1.HostPathType) corev1.VolumeSource {
 	return corev1.VolumeSource{
 		HostPath: &corev1.HostPathVolumeSource{
@@ -168,6 +177,7 @@ func (v *volumeFactory) NewVolumesForCN() []corev1.Volume {
 	systemVols := v.NewSystemVolumes()
 
 	configCmName := convention.NewConfigMapName(v.polardbx, convention.ConfigMapTypeConfig)
+	configSecurityName := convention.NewSecretName(v.polardbx, convention.SecretTypeSecurity)
 	volumes := []corev1.Volume{
 		{
 			Name:         "polardbx-log",
@@ -184,6 +194,10 @@ func (v *volumeFactory) NewVolumesForCN() []corev1.Volume {
 		{
 			Name:         "shared",
 			VolumeSource: v.newHostPathVolumeSource("/data/polardbx/__shared", corev1.HostPathDirectoryOrCreate),
+		},
+		{
+			Name:         "polardbx-security",
+			VolumeSource: v.newSecretVolumeSource(configSecurityName, nil),
 		},
 	}
 
@@ -213,6 +227,11 @@ func (v *volumeFactory) NewVolumeMountsForCNEngine() []corev1.VolumeMount {
 		{
 			Name:             "shared",
 			MountPath:        "/shared",
+			MountPropagation: mountPropagationModePtr(corev1.MountPropagationHostToContainer),
+		},
+		{
+			Name:             "polardbx-security",
+			MountPath:        "/home/admin/drds-server/security",
 			MountPropagation: mountPropagationModePtr(corev1.MountPropagationHostToContainer),
 		},
 	}

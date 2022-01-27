@@ -76,9 +76,7 @@ type TopologyRules struct {
 }
 
 type XStoreTemplate struct {
-	// +kubebuilder:default=galaxy
-
-	// Engine of xstore. Default is galaxy.
+	// Engine of xstore. Default is operator dependent.
 	// +optional
 	Engine string `json:"engine,omitempty"`
 
@@ -86,12 +84,16 @@ type XStoreTemplate struct {
 	// +optional
 	Image string `json:"image,omitempty"`
 
+	// ImagePullPolicy describes a policy for if/when to pull a container image (especially
+	// for the engine container).
+	ImagePullPolicy corev1.PullPolicy `json:"imagePullPolicy,omitempty"`
+
 	// ImagePullSecrets represents the secrets for pulling private images.
 	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
 
 	// +kubebuilder:default=ClusterIP
 
-	// Service type for xstore's service. Useful when needs a external IP.
+	// Service type for xstore's service. Useful when needs an external IP.
 	// Default is ClusterIP.
 	// +optional
 	ServiceType corev1.ServiceType `json:"serviceType,omitempty"`
@@ -116,6 +118,10 @@ type CNTemplate struct {
 	// +optional
 	Image string `json:"image,omitempty"`
 
+	// ImagePullPolicy describes a policy for if/when to pull a container image (especially
+	// for the engine container).
+	ImagePullPolicy corev1.PullPolicy `json:"imagePullPolicy,omitempty"`
+
 	// ImagePullSecrets represents the secrets for pulling private images.
 	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
 
@@ -133,6 +139,10 @@ type CDCTemplate struct {
 	// Image for CDC. Should be replaced by default value if not present.
 	// +optional
 	Image string `json:"image,omitempty"`
+
+	// ImagePullPolicy describes a policy for if/when to pull a container image (especially
+	// for the engine container).
+	ImagePullPolicy corev1.PullPolicy `json:"imagePullPolicy,omitempty"`
 
 	// ImagePullSecrets represents the secrets for pulling private images.
 	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`

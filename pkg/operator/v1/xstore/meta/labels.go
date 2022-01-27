@@ -28,6 +28,7 @@ const (
 	LabelName        = "xstore/name"
 	LabelRand        = "xstore/rand"
 	LabelRole        = "xstore/role"
+	LabelPod         = "xstore/pod"
 	LabelNodeRole    = "xstore/node-role"
 	LabelServiceType = "xstore/service"
 	LabelNodeSet     = "xstore/node-set"

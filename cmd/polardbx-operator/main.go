@@ -20,6 +20,7 @@ import (
 	"flag"
 	"strings"
 
+	"github.com/go-logr/logr"
 	"github.com/go-logr/zapr"
 	"go.uber.org/zap"
 
@@ -41,10 +42,13 @@ func init() {
 	flag.StringVar(&operatorOptions.MetricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
 	flag.IntVar(&operatorOptions.MaxConcurrentReconciles, "concurrency", 64, "The max concurrency of each controller.")
 	flag.IntVar(&operatorOptions.ListenPort, "listen-port", 9443, "The port for operator to listen.")
+	flag.IntVar(&operatorOptions.WebhookListenPort, "webhook-listen-port", 0, "The port for webhook to listen. If not specified, "+
+		"webhooks will serve on operator's port. Set to -1 to disable the webhooks (for debug purpose).")
+	flag.StringVar(&operatorOptions.CertDir, "cert-dir", "/etc/operator/certs", "Directory that stores the cert files.")
 	flag.BoolVar(&operatorOptions.LeaderElection, "enable-leader-election", false, "Enable leader election for controller manager.")
 	flag.StringVar(&operatorOptions.LeaderElectionNamespace, "leader-election-namespace", "", "The namespace where leader election happens. "+
 		"If not specified, the namespace where this operator's running is used.")
-	flag.StringVar(&operatorOptions.ConfigPath, "config-path", "/etc/polardbx-operator", "The path that contains configs of polardbx operator.")
+	flag.StringVar(&operatorOptions.ConfigPath, "config-path", "/etc/operator/polardbx", "The path that contains configs of polardbx operator.")
 	flag.StringVar(&featureGates, "feature-gates", "", "Feature gates to enable.")
 
 	flag.Parse()
@@ -54,7 +58,10 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
-	ctrl.SetLogger(zapr.NewLogger(zapLogger))
+
+	// Hack to fix the stupid call stack frame problem in zapr 0.4.0.
+	logger := logr.WithCallDepth(zapr.NewLogger(zapLogger), -1)
+	ctrl.SetLogger(logger)
 
 	// Enable feature gates.
 	featuregate.EnableFeatureGates(strings.Split(strings.ReplaceAll(featureGates, " ", ""), ","))

@@ -38,6 +38,7 @@ import (
 	polardbxv1polardbx "github.com/alibaba/polardbx-operator/api/v1/polardbx"
 	"github.com/alibaba/polardbx-operator/pkg/debug"
 	"github.com/alibaba/polardbx-operator/pkg/k8s/control"
+	"github.com/alibaba/polardbx-operator/pkg/operator/hint"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/config"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/helper"
 	polardbxmeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/meta"
@@ -61,6 +62,11 @@ type PolarDBXReconciler struct {
 
 func (r *PolarDBXReconciler) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	log := r.Logger.WithValues("namespace", request.Namespace, "polardbxcluster", request.Name)
+
+	if hint.IsNamespacePaused(request.Namespace) {
+		log.Info("Reconciling is paused, skip")
+		return reconcile.Result{}, nil
+	}
 
 	rc := polardbxreconcile.NewContext(
 		control.NewBaseReconcileContextFrom(r.BaseRc, ctx, request),
@@ -178,10 +184,13 @@ func (r *PolarDBXReconciler) newReconcileTask(rc *polardbxreconcile.Context, pol
 		commonsteps.TransferPhaseTo(polardbxv1polardbx.PhaseRunning, true)(task)
 
 	case polardbxv1polardbx.PhaseRunning, polardbxv1polardbx.PhaseLocked:
+		// Schedule after 10 seconds.
+		defer control.ScheduleAfter(10*time.Second)(task, true)
+
 		// Recalculate the storage size and sync dynamic configs.
 		control.Block(
 			commonsteps.UpdateDisplayStorageSize,
-			gmssteps.SyncDynamicConfigs(false),
+			// gmssteps.SyncDynamicConfigs(false),
 		)(task)
 
 		// Deal with lock.
@@ -207,14 +216,11 @@ func (r *PolarDBXReconciler) newReconcileTask(rc *polardbxreconcile.Context, pol
 
 		// Update snapshot and observed generation.
 		commonsteps.UpdateSnapshotAndObservedGeneration(task)
-
-		// Requeue after 10 seconds. Could be optimized with an external timer.
-		control.RequeueAfter(10*time.Second, "Loop on running, each 10s.")(task)
 	case polardbxv1polardbx.PhaseUpgrading:
 		// Update storage size and configs.
 		control.Block(
 			commonsteps.UpdateDisplayStorageSize,
-			gmssteps.SyncDynamicConfigs(false),
+			// gmssteps.SyncDynamicConfigs(false),
 		)(task)
 
 		switch polardbx.Status.Stage {
@@ -237,7 +243,7 @@ func (r *PolarDBXReconciler) newReconcileTask(rc *polardbxreconcile.Context, pol
 
 				instancesteps.WaitUntilDNsReady,
 				instancesteps.WaitUntilCNDeploymentsRolledOut,
-				instancesteps.WaitUntilCNDeploymentsRolledOut,
+				instancesteps.WaitUntilCDCDeploymentsRolledOut,
 			)(task)
 
 			// Prepare to rebalance data after DN stores are reconciled if necessary.
@@ -250,8 +256,9 @@ func (r *PolarDBXReconciler) newReconcileTask(rc *polardbxreconcile.Context, pol
 			// Enable added DN stores.
 			gmssteps.EnableDNs(task)
 
-			// Wait terminated CNs to be finalized in GMS to avoid DDL problems.
+			// Wait terminated CN/CDCs to be finalized in GMS to avoid DDL problems.
 			instancesteps.WaitUntilCNPodsStable(task)
+			instancesteps.WaitUntilCDCPodsStable(task)
 
 			// Start to rebalance data after DN stores are reconciled if necessary.
 			rebalancesteps.StartRebalanceTask(task)
@@ -278,6 +285,8 @@ func (r *PolarDBXReconciler) newReconcileTask(rc *polardbxreconcile.Context, pol
 				gmssteps.DisableTrailingDNs,
 				instancesteps.RemoveTrailingDNs,
 			)(task)
+
+			control.When(!debug.IsDebugEnabled(), commonsteps.UpdateDisplayDetailedVersion)(task)
 
 			commonsteps.TransferPhaseTo(polardbxv1polardbx.PhaseRunning, true)(task)
 		}

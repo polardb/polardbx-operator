@@ -22,6 +22,9 @@ import corev1 "k8s.io/api/core/v1"
 type TLS struct {
 	// SecretName of the TLS config's secret.
 	SecretName string `json:"secretName,omitempty"`
+
+	// GenerateSelfSigned represents if let the operator generate and use a self-signed cert.
+	GenerateSelfSigned bool `json:"generateSelfSigned,omitempty"`
 }
 
 // Security represents the security config of the cluster.

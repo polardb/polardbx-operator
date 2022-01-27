@@ -17,6 +17,8 @@ limitations under the License.
 package instance
 
 import (
+	"sort"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -28,6 +30,7 @@ import (
 	polardbxv1xstore "github.com/alibaba/polardbx-operator/api/v1/xstore"
 	"github.com/alibaba/polardbx-operator/pkg/k8s/control"
 	k8shelper "github.com/alibaba/polardbx-operator/pkg/k8s/helper"
+	"github.com/alibaba/polardbx-operator/pkg/meta/core/gms"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/featuregate"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/convention"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/factory"
@@ -58,7 +61,7 @@ var CreateSecretsIfNotFound = polardbxv1reconcile.NewStepBinder("CreateSecretsIf
 			return flow.Error(err, "Unable to get encode key secret.")
 		}
 		if keySecret == nil {
-			keySecret, err = factory.NewObjectFactory(rc).NewEncKeySecret()
+			keySecret, err = factory.NewObjectFactory(rc).NewSecuritySecret()
 			if err != nil {
 				return flow.Error(err, "Unable to new encode key secret.")
 			}
@@ -159,7 +162,7 @@ var CreateOrReconcileGMS = polardbxv1reconcile.NewStepBinder("CreateOrReconcileG
 			// GMS not found in other phases, so transfer the phase into failed.
 			if !helper.IsPhaseIn(polardbx, polardbxv1polardbx.PhaseCreating, polardbxv1polardbx.PhaseRestoring) {
 				helper.TransferPhase(polardbx, polardbxv1polardbx.PhaseFailed)
-				return flow.Requeue("GMS not found, transfer into failed.")
+				return flow.Retry("GMS not found, transfer into failed.")
 			}
 
 			objectFactory := factory.NewObjectFactory(rc)
@@ -233,7 +236,7 @@ var CreateOrReconcileDNs = polardbxv1reconcile.NewStepBinder("CreateOrReconcileD
 
 			if lastIndex != replicas && lastIndex != len(dnStores) {
 				helper.TransferPhase(polardbx, polardbxv1polardbx.PhaseFailed)
-				return flow.Requeue("Found broken DN, transfer into failed.")
+				return flow.Retry("Found broken DN, transfer into failed.")
 			}
 		}
 
@@ -282,8 +285,59 @@ var CreateOrReconcileDNs = polardbxv1reconcile.NewStepBinder("CreateOrReconcileD
 			}
 		}
 
+		// Remove DNs not enabled in GMS and larger than current target replicas (safe because not in use).
+		toRemoveStores := make(map[int]*polardbxv1.XStore, 0)
+		for index, xstore := range dnStores {
+			if index >= replicas {
+				toRemoveStores[index] = xstore
+			}
+		}
+		if len(toRemoveStores) > 0 {
+			mgr, err := rc.GetPolarDBXGMSManager()
+			if err != nil {
+				return flow.Error(err, "Unable to get manager for GMS.")
+			}
+
+			storageNodeIds := make(map[string]int)
+			if initialized, err := mgr.IsMetaDBInitialized(); err != nil {
+				return flow.Error(err, "Unable to determine if GMS is initialized.")
+			} else if initialized {
+				storageNodes, err := mgr.ListStorageNodes(gms.StorageKindMaster)
+				if err != nil {
+					return flow.Error(err, "Unable to list storage nodes in GMS.")
+				}
+				for _, s := range storageNodes {
+					storageNodeIds[s.Id] = 1
+				}
+			} else {
+				// No storage nodes.
+			}
+
+			canRemoveStoreIndices := make([]int, 0)
+			for index, xstore := range toRemoveStores {
+				if _, found := storageNodeIds[xstore.Name]; !found {
+					canRemoveStoreIndices = append(canRemoveStoreIndices, index)
+				}
+			}
+			if len(canRemoveStoreIndices) > 0 {
+				sort.Slice(canRemoveStoreIndices, func(i, j int) bool {
+					return canRemoveStoreIndices[i] > canRemoveStoreIndices[j]
+				})
+				flow.Logger().Info("Trying to remove trailing xstores (not in use)",
+					"trailing-indices", canRemoveStoreIndices)
+				for _, index := range canRemoveStoreIndices {
+					xstore := dnStores[index]
+					err := rc.Client().Delete(rc.Context(), xstore, client.PropagationPolicy(metav1.DeletePropagationBackground))
+					if err != nil {
+						return flow.Error(err, "Unable to delete unused trailing xstore.", "xstore", xstore.Name)
+					}
+				}
+				flow.Logger().Info("Unused trailing xstores are all removed.")
+			}
+		}
+
 		if anyChanged {
-			return flow.Requeue("DNs created or updated!")
+			return flow.Retry("DNs created or updated!")
 		}
 
 		return flow.Pass()
@@ -312,7 +366,7 @@ var RemoveTrailingDNs = polardbxv1reconcile.NewStepBinder("RemoveTrailingDNs",
 		}
 
 		if len(dnStores) > replicas {
-			return flow.Requeue("Trailing DNs are deleted.")
+			return flow.Retry("Trailing DNs are deleted.")
 		}
 		return flow.Pass()
 	},
@@ -389,7 +443,7 @@ func reconcileGroupedDeployments(rc *polardbxv1reconcile.Context, flow control.F
 	}
 
 	if anyChanged {
-		return flow.Requeue("Deployments reconciled.")
+		return flow.Retry("Deployments reconciled.")
 	}
 
 	return flow.Pass()
@@ -424,7 +478,7 @@ var WaitUntilGMSReady = polardbxv1reconcile.NewStepBinder("WaitUntilGMSReady",
 
 		if gms.Status.Phase == polardbxv1xstore.PhaseFailed {
 			helper.TransferPhase(rc.MustGetPolarDBX(), polardbxv1polardbx.PhaseFailed)
-			return flow.Requeue("XStore of GMS is failed, transfer phase into failed.")
+			return flow.Retry("XStore of GMS is failed, transfer phase into failed.")
 		}
 
 		if isXStoreReady(gms) {
@@ -446,7 +500,7 @@ var WaitUntilDNsReady = polardbxv1reconcile.NewStepBinder("WaitUntilDNsReady",
 		for _, dnStore := range dnStores {
 			if dnStore.Status.Phase == polardbxv1xstore.PhaseFailed {
 				helper.TransferPhase(rc.MustGetPolarDBX(), polardbxv1polardbx.PhaseFailed)
-				return flow.Requeue("XStore of DN is failed, transfer phase into failed.", "xstore", dnStore.Name)
+				return flow.Retry("XStore of DN is failed, transfer phase into failed.", "xstore", dnStore.Name)
 			}
 
 			if !isXStoreReady(dnStore) {
@@ -500,6 +554,31 @@ var WaitUntilCNPodsStable = polardbxv1reconcile.NewStepBinder("WaitUntilCNPodsSt
 
 		cnTemplate := &polardbx.Status.SpecSnapshot.Topology.Nodes.CN
 		if len(unFinalizedPodsSize) == int(cnTemplate.Replicas) {
+			return flow.Pass()
+		}
+		return flow.Wait("Wait until some pod to be finalized.")
+	},
+)
+
+var WaitUntilCDCPodsStable = polardbxv1reconcile.NewStepBinder("WaitUntilCDCPodsStable",
+	func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+		polardbx := rc.MustGetPolarDBX()
+
+		cdcPods, err := rc.GetPods(polardbxmeta.RoleCDC)
+		if err != nil {
+			return flow.Error(err, "Unable to get pods of CN.")
+		}
+
+		unFinalizedPodsSize := k8shelper.FilterPodsBy(cdcPods, func(pod *corev1.Pod) bool {
+			return len(pod.Finalizers) > 0
+		})
+
+		cdcTemplate := polardbx.Status.SpecSnapshot.Topology.Nodes.CDC
+		cdcReplicas := 0
+		if cdcTemplate != nil {
+			cdcReplicas = int(cdcTemplate.Replicas)
+		}
+		if len(unFinalizedPodsSize) == cdcReplicas {
 			return flow.Pass()
 		}
 		return flow.Wait("Wait until some pod to be finalized.")

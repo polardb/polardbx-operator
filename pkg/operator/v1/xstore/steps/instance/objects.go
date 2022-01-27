@@ -20,7 +20,6 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
-
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -28,6 +27,7 @@ import (
 	polardbxv1xstore "github.com/alibaba/polardbx-operator/api/v1/xstore"
 	"github.com/alibaba/polardbx-operator/pkg/k8s/control"
 	k8shelper "github.com/alibaba/polardbx-operator/pkg/k8s/helper"
+	"github.com/alibaba/polardbx-operator/pkg/operator/v1/featuregate"
 	xstoreexec "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/command"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/convention"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/factory"
@@ -56,15 +56,15 @@ var CreateSecret = xstorev1reconcile.NewStepBinder("CreateSecret",
 	},
 )
 
-func CreatePodsWithExtraFactory(extraPodFactory factory.ExtraPodFactory) control.BindFunc {
-	return xstorev1reconcile.NewStepBinder("CreatePods",
+func CreatePodsAndHeadlessServicesWithExtraFactory(extraPodFactory factory.ExtraPodFactory) control.BindFunc {
+	return xstorev1reconcile.NewStepBinder("CreatePodsAndHeadlessServices",
 		func(rc *xstorev1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
 			xstore := rc.MustGetXStore()
 
 			topology := xstore.Status.ObservedTopology
 			generation := xstore.Status.ObservedGeneration
 
-			// Get current pods
+			// Get current pods.
 			pods, err := rc.GetXStorePods()
 			if err != nil {
 				return flow.Error(err, "Unable to get pods.")
@@ -127,6 +127,29 @@ func CreatePodsWithExtraFactory(extraPodFactory factory.ExtraPodFactory) control
 							}
 
 							newCnt++
+						}
+					}
+				}
+			}
+
+			if featuregate.EnableXStoreWithHeadlessService.Enabled() {
+				// Get current headless services.
+				headlessServices, err := rc.GetXStoreHeadlessServices()
+				if err != nil {
+					return flow.Error(err, "Unable to get headless services.")
+				}
+
+				// For each pod, create a headless service.
+				for _, nodeSet := range nodeSets {
+					for i := 0; i < int(nodeSet.Replicas); i++ {
+						podName := convention.NewPodName(xstore, &nodeSet, i)
+						_, exists := headlessServices[podName]
+						if !exists {
+							svc := factory.NewHeadlessService(xstore, podName)
+							err := rc.SetControllerRefAndCreate(svc)
+							if err != nil {
+								return flow.Error(err, "Unable to create headless service for pod.", "pod", podName)
+							}
 						}
 					}
 				}

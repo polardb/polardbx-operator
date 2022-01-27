@@ -34,25 +34,15 @@ import (
 )
 
 type DataRebalanceTask struct {
-	From          int      `json:"from,omitempty"`
-	To            int      `json:"to,omitempty"`
-	JobIds        []string `json:"job_ids,omitempty"`
-	ShowMoveIndex int      `json:"show_move_index,omitempty"`
+	From   int      `json:"from,omitempty"`
+	To     int      `json:"to,omitempty"`
+	JobIds []string `json:"job_ids,omitempty"`
 }
 
 func (t *DataRebalanceTask) startRebalanceClusterForScaleOut(rc *polardbxv1reconcile.Context) ([]group.RebalanceAction, error) {
 	groupMgr, err := rc.GetPolarDBXGroupManager()
 	if err != nil {
 		return nil, err
-	}
-
-	moveStatus, err := groupMgr.ShowMoveStatus("", t.ShowMoveIndex)
-	if err != nil {
-		return nil, err
-	}
-	// Consider it's in rebalancing if there's new move status after prepare.
-	if len(moveStatus) > 0 {
-		return nil, nil
 	}
 
 	return groupMgr.RebalanceCluster(t.To)
@@ -77,6 +67,10 @@ func (t *DataRebalanceTask) Skip() bool {
 	return t.From > 0 && t.From == t.To
 }
 
+func (t *DataRebalanceTask) Started() bool {
+	return t.JobIds != nil
+}
+
 func (t *DataRebalanceTask) Start(rc *polardbxv1reconcile.Context) ([]group.RebalanceAction, error) {
 	if t.From == t.To {
 		return nil, nil
@@ -88,29 +82,6 @@ func (t *DataRebalanceTask) Start(rc *polardbxv1reconcile.Context) ([]group.Reba
 	} else { // Scale in
 		return t.startDrainNodes(rc)
 	}
-}
-
-func (t *DataRebalanceTask) getShowMoveDatabaseProgress(rc *polardbxv1reconcile.Context) (int, error) {
-	groupMgr, err := rc.GetPolarDBXGroupManager()
-	if err != nil {
-		return 0, err
-	}
-
-	moveStatus, err := groupMgr.ShowMoveStatus("", t.ShowMoveIndex)
-	if err != nil {
-		return 0, err
-	}
-
-	if len(moveStatus) == 0 {
-		return 100, nil
-	}
-
-	progress := 0
-	for _, mv := range moveStatus {
-		progress += int(mv.Progress)
-	}
-
-	return progress / len(moveStatus), nil
 }
 
 func (t *DataRebalanceTask) areScaleInDrainedNodesOffline(rc *polardbxv1reconcile.Context) (bool, error) {
@@ -129,7 +100,7 @@ func (t *DataRebalanceTask) getScaleInProgressByCountingDrainedNodes(rc *polardb
 
 	toDrainCnt := t.From - t.To
 
-	if toDrainCnt == 0 {
+	if toDrainCnt <= 0 {
 		return 100, nil
 	}
 
@@ -152,6 +123,38 @@ func (t *DataRebalanceTask) getScaleInProgressByCountingDrainedNodes(rc *polardb
 	return drainedCnt * 100 / toDrainCnt, nil
 }
 
+func (t *DataRebalanceTask) getProgressByDDL(rc *polardbxv1reconcile.Context) (int, error) {
+	if len(t.JobIds) == 0 {
+		return 100, nil
+	}
+
+	groupMgr, err := rc.GetPolarDBXGroupManager()
+	if err != nil {
+		return 0, err
+	}
+
+	succCnt := 0
+	partial := 0
+	for _, jobId := range t.JobIds {
+		stat, err := groupMgr.ShowDDL(jobId)
+		if err != nil {
+			return 0, err
+		}
+		if stat == nil {
+			succCnt++
+			continue
+		}
+		if stat.Progress < 100 {
+			partial += stat.Progress
+		} else {
+			// Workaround cases that progress is 100 but job is still running.
+			partial += 99
+		}
+	}
+
+	return (succCnt*100 + partial) / len(t.JobIds), nil
+}
+
 func (t *DataRebalanceTask) Progress(rc *polardbxv1reconcile.Context) (int, error) {
 	if t.From == t.To {
 		return 100, nil
@@ -159,9 +162,9 @@ func (t *DataRebalanceTask) Progress(rc *polardbxv1reconcile.Context) (int, erro
 		if !featuregate.AutoDataRebalance.Enabled() {
 			return 100, nil
 		}
-		return t.getShowMoveDatabaseProgress(rc)
+		return t.getProgressByDDL(rc)
 	} else {
-		return t.getShowMoveDatabaseProgress(rc)
+		return t.getProgressByDDL(rc)
 	}
 }
 
@@ -183,11 +186,13 @@ var PrepareRebalanceTaskContext = polardbxv1reconcile.NewStepBinder("PrepareReba
 
 		contextAccess := task.NewContextAccess(taskCm, "rebalance")
 		rebalanceTask := &DataRebalanceTask{}
-		ok, err := contextAccess.Read(rebalanceTask)
+		found, err := contextAccess.Read(rebalanceTask)
 		if err != nil {
 			return flow.Error(err, "Unable to read rebalance task context.")
 		}
-		if ok {
+
+		// Skip when find already initialized.
+		if found {
 			return flow.Pass()
 		}
 
@@ -207,20 +212,10 @@ var PrepareRebalanceTaskContext = polardbxv1reconcile.NewStepBinder("PrepareReba
 
 		fromReplicas := len(storageNodes)
 
-		groupMgr, err := rc.GetPolarDBXGroupManager()
-		if err != nil {
-			return flow.Error(err, "Unable to get group manager.")
-		}
-		moveStatus, err := groupMgr.ShowMoveStatus("", 0)
-		if err != nil {
-			return flow.Error(err, "Unable to get move status.")
-		}
-
 		// Write task context into config map.
 		rebalanceTask = &DataRebalanceTask{
-			From:          fromReplicas,
-			To:            toReplicas,
-			ShowMoveIndex: len(moveStatus),
+			From: fromReplicas,
+			To:   toReplicas,
 		}
 
 		err = contextAccess.Write(rebalanceTask)
@@ -257,18 +252,48 @@ var StartRebalanceTask = polardbxv1reconcile.NewStepBinder("StartRebalanceTask",
 		}
 
 		// Skip immediately.
-		if rebalanceTask.Skip() {
+		if rebalanceTask.Skip() || rebalanceTask.Started() {
 			return flow.Pass()
 		}
 
 		// Start a new task.
 		rebalanceActions, err := rebalanceTask.Start(rc)
 		if err != nil {
-			return flow.Error(err, "Unable to start rebalance task.")
+			if err == group.ErrAlreadyInRebalance {
+				flow.Logger().Info("Already in rebalance.")
+			} else {
+				return flow.Error(err, "Unable to start rebalance task.")
+			}
 		}
 
 		// Log actions.
 		flow.Logger().Info("Rebalance actions started.", "rebalance-actions", rebalanceActions)
+
+		// Record job ids into task.
+		jobs := make(map[string][]group.RebalanceAction)
+		for _, action := range rebalanceActions {
+			if _, ok := jobs[action.JobId]; !ok {
+				jobs[action.JobId] = make([]group.RebalanceAction, 0, 1)
+			}
+			jobs[action.JobId] = append(jobs[action.JobId], action)
+		}
+		jobIds := make([]string, 0, len(jobs))
+		for id := range jobs {
+			jobIds = append(jobIds, id)
+		}
+		rebalanceTask.JobIds = jobIds
+
+		// Write task context into configmap.
+		err = contextAccess.Write(rebalanceTask)
+		if err != nil {
+			return flow.Error(err, "Unable to write rebalance task into config map.")
+		}
+
+		// Update config map.
+		err = rc.Client().Update(rc.Context(), taskCm)
+		if err != nil {
+			return flow.Error(err, "Unable to update task config map.")
+		}
 
 		return flow.Pass()
 	},
@@ -310,7 +335,7 @@ func WatchRebalanceTaskAntUpdateProgress(interval time.Duration) control.BindFun
 			polardbx.Status.StatusForPrint.RebalanceProcess = fmt.Sprintf("%.1f%%", float64(progress))
 
 			if progress < 100 {
-				return flow.RequeueAfter(interval, "Rebalance not ready, wait for recheck.")
+				return flow.RetryAfter(interval, "Rebalance not ready, wait for recheck.")
 			} else {
 				return flow.Pass()
 			}
@@ -394,7 +419,7 @@ var EnsureTrailingDNsAreDrainedOrBlock = polardbxv1reconcile.NewStepBinder(
 				return flow.Error(err, "Unable to determine offline status from GMS.")
 			}
 			if !offline {
-				return flow.RequeueAfter(20*time.Second, "Block until trailing DNs are marked offline.")
+				return flow.RetryAfter(20*time.Second, "Block until trailing DNs are marked offline.")
 			}
 		}
 

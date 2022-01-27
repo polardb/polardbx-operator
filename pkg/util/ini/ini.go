@@ -41,7 +41,7 @@ func CanonicalizeMyCnfFile(f *ini.File, allowDuplicate bool) error {
 			canonicalName := strings.ReplaceAll(key.Name(), "-", "_")
 
 			// Keep the last "-", which has special meaning.
-			if canonicalName[len(canonicalName)-1] == '-' {
+			if key.Name()[len(canonicalName)-1] == '-' {
 				canonicalName = canonicalName[:len(canonicalName)-1] + "-"
 			}
 

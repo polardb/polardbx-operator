@@ -38,6 +38,7 @@ const metadbDatabaseName = "polardbx_meta_db"
 type Env struct {
 	InstanceID      string `json:"instance_id"`
 	InstanceType    string `json:"instance_type"`
+	PodId           string `json:"pod_id"`
 	LocalIP         string `json:"local_ip"`
 	ServerPort      int    `json:"server_port"`
 	HtapPort        int    `json:"htap_port"`
@@ -75,6 +76,10 @@ func (env *Env) lookupIntEnv(key string) (int, error) {
 func (env *Env) Load() error {
 	var exists bool
 	var err error
+
+	if env.PodId, exists = os.LookupEnv("POD_ID"); !exists {
+		return errors.New("env 'POD_ID' not found")
+	}
 
 	if localIp, exists := os.LookupEnv("POD_IP"); exists {
 		env.LocalIP = localIp
@@ -183,7 +188,7 @@ func Do() {
 		Username: env.MetaDBUser,
 		Password: passwd,
 		Database: metadbDatabaseName,
-		Timeout:  5000,
+		Timeout:  10 * time.Second,
 	})
 	if err != nil {
 		fmt.Println("Error when connecting to metadb: " + err.Error())
@@ -194,9 +199,9 @@ func Do() {
 
 	fmt.Printf("Try self-registration, register %s:%d to metadb...\n", env.LocalIP, env.ServerPort)
 	stmt := fmt.Sprintf(`INSERT IGNORE INTO server_info 
-		(inst_id, inst_type, ip, port, htap_port, mgr_port, mpp_port, status, cpu_core, mem_size) 
-		VALUES ('%s', '%s', '%s', %d, %d, %d, %d, %d, %d, %d)`, env.InstanceID, env.InstanceType, env.LocalIP,
-		env.ServerPort, env.HtapPort, env.MgrPort, env.MppPort, 0, env.CpuCore, env.MemSize)
+		(inst_id, inst_type, ip, port, htap_port, mgr_port, mpp_port, status, cpu_core, mem_size, extras) 
+		VALUES ('%s', '%s', '%s', %d, %d, %d, %d, %d, %d, %d, '%s')`, env.InstanceID, env.InstanceType, env.LocalIP,
+		env.ServerPort, env.HtapPort, env.MgrPort, env.MppPort, 0, env.CpuCore, env.MemSize, env.PodId)
 	notifyStmt := fmt.Sprintf(`UPDATE config_listener SET op_version = op_version + 1 WHERE data_id = 'polardbx.server.info.%s'`, env.InstanceID)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

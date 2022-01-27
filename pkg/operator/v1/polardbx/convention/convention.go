@@ -86,6 +86,9 @@ func NewSecretName(polardbx *polardbxv1.PolarDBXCluster, secretType SecretType) 
 
 const (
 	SecretKeyEncodeKey = "security.encode-key"
+	SecretKeyRootCrt   = "root.crt"
+	SecretKeyServerKey = "server.key"
+	SecretKeyServerCrt = "server.crt"
 )
 
 // Conventions for configs.
@@ -133,7 +136,14 @@ func NewDNName(polardbx *polardbxv1.PolarDBXCluster, i int) string {
 
 // Conventions for labels.
 
-func ConstLabels(polardbx *polardbxv1.PolarDBXCluster, role string) map[string]string {
+func ConstLabels(polardbx *polardbxv1.PolarDBXCluster) map[string]string {
+	return map[string]string{
+		polardbxmeta.LabelName: polardbx.Name,
+		polardbxmeta.LabelRand: polardbx.Status.Rand,
+	}
+}
+
+func ConstLabelsWithRole(polardbx *polardbxv1.PolarDBXCluster, role string) map[string]string {
 	return map[string]string{
 		polardbxmeta.LabelName: polardbx.Name,
 		polardbxmeta.LabelRand: polardbx.Status.Rand,
@@ -143,7 +153,7 @@ func ConstLabels(polardbx *polardbxv1.PolarDBXCluster, role string) map[string]s
 
 func ConstLabelsForDN(polardbx *polardbxv1.PolarDBXCluster, index int) map[string]string {
 	return k8shelper.PatchLabels(
-		ConstLabels(polardbx, polardbxmeta.RoleDN),
+		ConstLabelsWithRole(polardbx, polardbxmeta.RoleDN),
 		map[string]string{
 			polardbxmeta.LabelDNIndex: strconv.Itoa(index),
 		},
@@ -152,7 +162,7 @@ func ConstLabelsForDN(polardbx *polardbxv1.PolarDBXCluster, index int) map[strin
 
 func ConstLabelsForCN(polardbx *polardbxv1.PolarDBXCluster, cnType string) map[string]string {
 	return k8shelper.PatchLabels(
-		ConstLabels(polardbx, polardbxmeta.RoleCN),
+		ConstLabelsWithRole(polardbx, polardbxmeta.RoleCN),
 		map[string]string{
 			polardbxmeta.LabelCNType: cnType,
 		},
@@ -160,11 +170,11 @@ func ConstLabelsForCN(polardbx *polardbxv1.PolarDBXCluster, cnType string) map[s
 }
 
 func ConstLabelsForGMS(polardbx *polardbxv1.PolarDBXCluster) map[string]string {
-	return ConstLabels(polardbx, polardbxmeta.RoleGMS)
+	return ConstLabelsWithRole(polardbx, polardbxmeta.RoleGMS)
 }
 
 func ConstLabelsForCDC(polardbx *polardbxv1.PolarDBXCluster) map[string]string {
-	return ConstLabels(polardbx, polardbxmeta.RoleCDC)
+	return ConstLabelsWithRole(polardbx, polardbxmeta.RoleCDC)
 }
 
 func ParseIndexFromDN(xstore *polardbxv1.XStore) (int, error) {

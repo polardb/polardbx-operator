@@ -38,6 +38,20 @@ endif
 clean:
 	@rm -rf target
 
+BUILD_IMAGE_ARGS=
+ifneq (, $(REPO))
+	BUILD_IMAGE_ARGS:=${BUILD_IMAGE_ARGS} --repo $(REPO)
+endif
+ifneq (, $(TAG))
+	BUILD_IMAGE_ARGS:=${BUILD_IMAGE_ARGS} --tag $(TAG)
+endif
+ifneq (, $(LATEST))
+	BUILD_IMAGE_ARGS:=${BUILD_IMAGE_ARGS} --also-latest
+endif
+ifneq (, $(TARGET))
+	BUILD_IMAGE_ARGS:=${BUILD_IMAGE_ARGS} $(TARGET)
+endif
+
 define BUILD_IMAGES_HELP_INFO
 # Build images.
 #
@@ -53,7 +67,7 @@ build:
 	@echo "$$BUILD_IMAGES_HELP_INFO"
 else
 build: plugin-gen
-	@hack/make-rules/build-images.py --repo "$(REPO)" $(TARGET) --tag "$(TAG)"
+	@hack/make-rules/build-images.py ${BUILD_IMAGE_ARGS}
 endif
 
 define PUSH_IMAGES_HELP_INFO
@@ -71,7 +85,7 @@ push:
 	@echo "$$PUSH_IMAGES_HELP_INFO"
 else
 push: plugin-gen
-	@hack/make-rules/build-images.py --push --repo "$(REPO)" $(TARGET) --tag "$(TAG)"
+	@hack/make-rules/build-images.py --push ${BUILD_IMAGE_ARGS}
 endif
 
 define GENERATE_HELP_INFO
@@ -95,7 +109,7 @@ plugin-gen:
 
 .PHONY: controller-gen
 controller-gen:
-	@controller-gen object:headerFile="hack/boilerplates/boilerplate.go.txt",year=$(CURRENT_YEAR) paths="api/..."
+	@controller-gen object:headerFile="hack/boilerplates/boilerplate.go.txt",year=$(CURRENT_YEAR) paths="./api/..."
 	@go fmt ./api/...
 
 define UPDATE_VENDOR_LICENSES_HELP_INFO
@@ -139,7 +153,9 @@ ifeq ($(PRINT_HELP), y)
 e2e-test:
 	@echo "$$E2E_TEST_HELP_INFO"
 else
-	# TODO run e2e
+# @go test ./test/e2e -v -args timeout 6000 -ginkgo.progress -ginkgo.v
+e2e-test:
+	@ginkgo -v -progress -p ./test/e2e
 endif
 
 .PHONY: manifests
@@ -152,9 +168,9 @@ generate-notice:
 
 .PHONY: verify-boilerplates
 verify-boilerplates:
-	@hack/make-rules/verify-boilerplates.py --language go --include-dirs api,cmd,pkg,test --exclude-dirs vendor
-	@hack/make-rules/verify-boilerplates.py --language bash --exclude-dirs vendor
-	@hack/make-rules/verify-boilerplates.py --language python --exclude-dirs vendor,tools/xstore/venv
+	@hack/make-rules/verify-boilerplates.py --language go --include-dirs api,cmd,pkg,test --exclude-dirs vendor --start-year 2021
+	@hack/make-rules/verify-boilerplates.py --language bash --exclude-dirs vendor --start-year 2021
+	@hack/make-rules/verify-boilerplates.py --language python --exclude-dirs vendor,tools/xstore/venv --start-year 2021
 
 .PHONY: helm-package
 helm-package:

@@ -16,7 +16,9 @@ limitations under the License.
 
 package control
 
-import "sigs.k8s.io/controller-runtime/pkg/reconcile"
+import (
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+)
 
 type ExecuteFunc = func(rc ReconcileContext, flow Flow) (reconcile.Result, error)
 
@@ -138,6 +140,9 @@ func Branch(cond bool, a, b BindFunc) BindFunc {
 }
 
 func Block(binds ...BindFunc) BindFunc {
+	if len(binds) == 1 {
+		return binds[0]
+	}
 	return func(t *Task, deferred ...bool) {
 		for _, bind := range binds {
 			bind(t, deferred...)

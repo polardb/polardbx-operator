@@ -41,7 +41,7 @@ type ObjectFactory interface {
 	NewXStoreDN(idx int) (*polardbxv1.XStore, error)
 
 	NewSecret() (*corev1.Secret, error)
-	NewEncKeySecret() (*corev1.Secret, error)
+	NewSecuritySecret() (*corev1.Secret, error)
 	NewConfigMap(cmType convention.ConfigMapType) (*corev1.ConfigMap, error)
 
 	NewServiceMonitors() (map[string]promv1.ServiceMonitor, error)

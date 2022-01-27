@@ -5,7 +5,7 @@ metadata:
   namespace: {{ .Release.Namespace }}
   labels:
     app.kubernetes.io/name: {{ .Chart.Name }}
-    app.kubernets.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
     app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/component: polardbx-hpfs
 spec:
@@ -46,7 +46,7 @@ spec:
         {{- if .Values.useLatestImage }}
         image: {{ .Values.imageRepo }}{{ "/" }}{{ .Values.images.hpfs}}:latest
         {{- else }}
-        image: {{ .Values.imageRepo }}{{ "/" }}{{ .Values.images.hpfs}}:{{ .Chart.AppVersion }}
+        image: {{ .Values.imageRepo }}{{ "/" }}{{ .Values.images.hpfs}}:{{ .Values.imageTag | default .Chart.AppVersion }}
         {{- end }}
         imagePullPolicy: {{ .Values.imagePullPolicy }}
         resources:
@@ -61,9 +61,9 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         volumeMounts:
-        - mountPath: /data/xstore
+        - mountPath: {{ .Values.node.volumes.data }}/xstore
           name: xdata
-        - mountPath: /data/hpfs
+        - mountPath: {{ .Values.node.volumes.data }}/hpfs
           name: hpfs-data
         - mountPath: /sys/fs/cgroup/blkio
           name: cgroups-blkio
@@ -75,11 +75,11 @@ spec:
         args:
         - --port={{ .Values.hostPathFileService.port }}
         - --host-name=$(NODE_NAME)
-        - --limited-paths=/data
-        - --task-db=/data/hpfs/task.db
+        - --limited-paths={{ .Values.node.volumes.data }}
+        - --task-db={{ .Values.node.volumes.data }}/hpfs/task.db
         - --k8s-namespace=$(NAMESPACE)
         - --k8s-selector=app.kubernetes.io/component=polardbx-hpfs
-        - --lock-file=/data/hpfs/hpfs.lock
+        - --lock-file={{ .Values.node.volumes.data }}/hpfs/hpfs.lock
         securityContext:
           privileged: true
         livenessProbe:
