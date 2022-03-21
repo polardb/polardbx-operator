@@ -2,6 +2,7 @@ package configuration
 
 import (
 	"context"
+	polardbxv1polardbx "github.com/alibaba/polardbx-operator/api/v1/polardbx"
 	"strings"
 	"time"
 
@@ -46,6 +47,13 @@ var _ = ginkgo.Describe("[PolarDBXCluster] [DnMyCnf:Modify]", func() {
 
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Minute)
 		defer cancel()
+
+		pxcframework.WaitForPolarDBXClusterToInPhases(f.Client,
+			obj.Name, obj.Namespace,
+			[]polardbxv1polardbx.Phase{
+				polardbxv1polardbx.PhaseRunning,
+			},
+			5*time.Minute)
 
 		var xstores v12.XStoreList
 
@@ -93,6 +101,7 @@ var _ = ginkgo.Describe("[PolarDBXCluster] [DnMyCnf:Modify]", func() {
 		framework.ExpectNoError(f.Client.Get(f.Ctx, types.NamespacedName{
 			Name: obj.Name, Namespace: f.Namespace,
 		}, obj))
+
 		// Expect all ok in running.
 		pxcframework.NewExpectation(f, obj).ExpectAllOk(true)
 	})

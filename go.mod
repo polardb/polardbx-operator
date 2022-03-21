@@ -54,6 +54,7 @@ require (
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/text v0.3.7
 	gomodules.xyz/jsonpatch/v2 v2.2.0
+	modernc.org/mathutil v1.4.1
 )
 
 require (
@@ -121,7 +122,6 @@ require (
 	modernc.org/cc/v3 v3.33.7 // indirect
 	modernc.org/ccgo/v3 v3.9.6 // indirect
 	modernc.org/libc v1.9.11 // indirect
-	modernc.org/mathutil v1.4.1 // indirect
 	modernc.org/memory v1.0.4 // indirect
 	modernc.org/opt v0.1.1 // indirect
 	modernc.org/strutil v1.1.1 // indirect
