@@ -121,9 +121,9 @@ monitors:
 monitors:
   prometheus:
     persist: true
-	# K8s 集群内支持的 storage class
+    # K8s 集群内支持的 storage class
     storageClassName: ssd
-	# 存储空间的大小
+    # 存储空间的大小
     storageRequest: 100G
 ```
 

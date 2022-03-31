@@ -1,5 +1,4 @@
 GalaxyKube -- PolarDB-X Operator
-
 ---
 
 PolarDB-X Operator is a Kubernetes extension that aims to create and manage PolarDB-X cluster on Kubernetes. It follows
