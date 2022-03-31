@@ -141,7 +141,7 @@ func TryDetectLeaderChange(rc *xstorev1reconcile.Context, pods []corev1.Pod, log
 
 		role, leader, err := ReportRoleAndCurrentLeader(rc, pod, logger)
 		if err != nil {
-			logger.Error(err, "Unable to report role and current leader on pod.", "pod", previousLeader)
+			logger.Error(err, "Unable to report role and current leader on pod.", "pod", pod.Name)
 		} else {
 			if role == xstoremeta.RoleLeader {
 				return pod.Name, pod.Name != previousLeader

@@ -1,0 +1,164 @@
+apiVersion: v1
+items:
+- apiVersion: v1
+  data:
+  {{- (.Files.Glob "dashboard/apiserver.json").AsConfig | nindent 4 }}
+  kind: ConfigMap
+  metadata:
+    name: grafana-dashboard-apiserver
+    namespace: {{ .Release.Namespace }}
+- apiVersion: v1
+  data:
+  {{- (.Files.Glob "dashboard/cluster-total.json").AsConfig | nindent 4 }}
+  kind: ConfigMap
+  metadata:
+    name: grafana-dashboard-cluster-total
+    namespace: {{ .Release.Namespace }}
+- apiVersion: v1
+  data:
+  {{- (.Files.Glob "dashboard/controller-manager.json").AsConfig | nindent 4 }}
+  kind: ConfigMap
+  metadata:
+    name: grafana-dashboard-controller-manager
+    namespace: {{ .Release.Namespace }}
+- apiVersion: v1
+  data:
+  {{- (.Files.Glob "dashboard/k8s-resources-cluster.json").AsConfig | nindent 4 }}
+  kind: ConfigMap
+  metadata:
+    name: grafana-dashboard-k8s-resources-cluster
+    namespace: {{ .Release.Namespace }}
+- apiVersion: v1
+  data:
+  {{- (.Files.Glob "dashboard/k8s-resources-namespace.json").AsConfig | nindent 4 }}
+  kind: ConfigMap
+  metadata:
+    name: grafana-dashboard-k8s-resources-namespace
+    namespace: {{ .Release.Namespace }}
+- apiVersion: v1
+  data:
+  {{- (.Files.Glob "dashboard/k8s-resources-node.json").AsConfig | nindent 4 }}
+  kind: ConfigMap
+  metadata:
+    name: grafana-dashboard-k8s-resources-node
+    namespace: {{ .Release.Namespace }}
+- apiVersion: v1
+  data:
+  {{- (.Files.Glob "dashboard/k8s-resources-pod.json").AsConfig | nindent 4 }}
+  kind: ConfigMap
+  metadata:
+    name: grafana-dashboard-k8s-resources-pod
+    namespace: {{ .Release.Namespace }}
+- apiVersion: v1
+  data:
+  {{- (.Files.Glob "dashboard/k8s-resources-workload.json").AsConfig | nindent 4 }}
+  kind: ConfigMap
+  metadata:
+    name: grafana-dashboard-k8s-resources-workload
+    namespace: {{ .Release.Namespace }}
+- apiVersion: v1
+  data:
+  {{- (.Files.Glob "dashboard/k8s-resources-workloads-namespace.json").AsConfig | nindent 4 }}
+  kind: ConfigMap
+  metadata:
+    name: grafana-dashboard-k8s-resources-workloads-namespace
+    namespace: {{ .Release.Namespace }}
+- apiVersion: v1
+  data:
+  {{- (.Files.Glob "dashboard/kubelet.json").AsConfig | nindent 4 }}
+  kind: ConfigMap
+  metadata:
+    name: grafana-dashboard-kubelet
+    namespace: {{ .Release.Namespace }}
+- apiVersion: v1
+  data:
+  {{- (.Files.Glob "dashboard/namespace-by-pod.json").AsConfig | nindent 4 }}
+  kind: ConfigMap
+  metadata:
+    name: grafana-dashboard-namespace-by-pod
+    namespace: {{ .Release.Namespace }}
+- apiVersion: v1
+  data:
+  {{- (.Files.Glob "dashboard/namespace-by-workload.json").AsConfig | nindent 4 }}
+  kind: ConfigMap
+  metadata:
+    name: grafana-dashboard-namespace-by-workload
+    namespace: {{ .Release.Namespace }}
+- apiVersion: v1
+  data:
+  {{- (.Files.Glob "dashboard/node-cluster-rsrc-use.json").AsConfig | nindent 4 }}
+  kind: ConfigMap
+  metadata:
+    name: grafana-dashboard-node-cluster-rsrc-use
+    namespace: {{ .Release.Namespace }}
+- apiVersion: v1
+  data:
+  {{- (.Files.Glob "dashboard/node-rsrc-use.json").AsConfig | nindent 4 }}
+  kind: ConfigMap
+  metadata:
+    name: grafana-dashboard-node-rsrc-use
+    namespace: {{ .Release.Namespace }}
+- apiVersion: v1
+  data:
+  {{- (.Files.Glob "dashboard/nodes.json").AsConfig | nindent 4 }}
+  kind: ConfigMap
+  metadata:
+    name: grafana-dashboard-nodes
+    namespace: {{ .Release.Namespace }}
+- apiVersion: v1
+  data:
+  {{- (.Files.Glob "dashboard/persistentvolumesusage.json").AsConfig | nindent 4 }}
+  kind: ConfigMap
+  metadata:
+    name: grafana-dashboard-persistentvolumesusage
+    namespace: {{ .Release.Namespace }}
+- apiVersion: v1
+  data:
+  {{- (.Files.Glob "dashboard/pod-total.json").AsConfig | nindent 4 }}
+  kind: ConfigMap
+  metadata:
+    name: grafana-dashboard-pod-total
+    namespace: {{ .Release.Namespace }}
+- apiVersion: v1
+  data:
+  {{- (.Files.Glob "dashboard/prometheus-remote-write.json").AsConfig | nindent 4 }}
+  kind: ConfigMap
+  metadata:
+    name: grafana-dashboard-prometheus-remote-write
+    namespace: {{ .Release.Namespace }}
+- apiVersion: v1
+  data:
+  {{- (.Files.Glob "dashboard/prometheus.json").AsConfig | nindent 4 }}
+  kind: ConfigMap
+  metadata:
+    name: grafana-dashboard-prometheus
+    namespace: {{ .Release.Namespace }}
+- apiVersion: v1
+  data:
+  {{- (.Files.Glob "dashboard/proxy.json").AsConfig | nindent 4 }}
+  kind: ConfigMap
+  metadata:
+    name: grafana-dashboard-proxy
+    namespace: {{ .Release.Namespace }}
+- apiVersion: v1
+  data:
+  {{- (.Files.Glob "dashboard/scheduler.json").AsConfig | nindent 4 }}
+  kind: ConfigMap
+  metadata:
+    name: grafana-dashboard-scheduler
+    namespace: {{ .Release.Namespace }}
+- apiVersion: v1
+  data:
+  {{- (.Files.Glob "dashboard/statefulset.json").AsConfig | nindent 4 }}
+  kind: ConfigMap
+  metadata:
+    name: grafana-dashboard-statefulset
+    namespace: {{ .Release.Namespace }}
+- apiVersion: v1
+  data:
+  {{- (.Files.Glob "dashboard/workload-total.json").AsConfig | nindent 4 }}
+  kind: ConfigMap
+  metadata:
+    name: grafana-dashboard-workload-total
+    namespace: {{ .Release.Namespace }}
+kind: ConfigMapList

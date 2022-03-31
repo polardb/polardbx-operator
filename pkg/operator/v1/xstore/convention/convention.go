@@ -162,6 +162,16 @@ func NewPodName(xstore *polardbxv1.XStore, nodeSet *polardbxv1xstore.NodeSet, in
 	return podName
 }
 
+func PodIndexInNodeSet(podName string) (int, error) {
+	dashIndex := strings.LastIndex(podName, "-")
+	if dashIndex < 0 {
+		return 0, errors.New("invalid pod name, no dash found")
+	}
+
+	indexStr := podName[dashIndex+1:]
+	return strconv.Atoi(indexStr)
+}
+
 // Conventions for config.
 
 const (

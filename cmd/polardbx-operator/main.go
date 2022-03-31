@@ -27,8 +27,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	"github.com/alibaba/polardbx-operator/pkg/debug"
+	"github.com/alibaba/polardbx-operator/pkg/featuregate"
 	operatorv1 "github.com/alibaba/polardbx-operator/pkg/operator/v1"
-	"github.com/alibaba/polardbx-operator/pkg/operator/v1/featuregate"
 )
 
 var (
@@ -64,7 +64,7 @@ func init() {
 	ctrl.SetLogger(logger)
 
 	// Enable feature gates.
-	featuregate.EnableFeatureGates(strings.Split(strings.ReplaceAll(featureGates, " ", ""), ","))
+	featuregate.SetupFeatureGates(strings.Split(strings.ReplaceAll(featureGates, " ", ""), ","))
 }
 
 func main() {

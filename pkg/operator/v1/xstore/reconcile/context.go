@@ -301,6 +301,19 @@ func (rc *Context) GetXStoreConfigMap(cmType convention.ConfigMapType) (*corev1.
 	return cm.(*corev1.ConfigMap), nil
 }
 
+func (rc *Context) GetXStorePod(name string) (*corev1.Pod, error) {
+	pods, err := rc.GetXStorePods()
+	if err != nil {
+		return nil, err
+	}
+	for _, pod := range pods {
+		if pod.Name == name {
+			return &pod, nil
+		}
+	}
+	return nil, apierrors.NewNotFound(schema.GroupResource{}, "")
+}
+
 func (rc *Context) GetXStorePods() ([]corev1.Pod, error) {
 	if rc.pods == nil {
 		xstore := rc.MustGetXStore()

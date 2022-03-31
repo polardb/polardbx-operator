@@ -1,0 +1,30 @@
+{{/*
+Create the cluster role of prometheus to use
+*/}}
+{{- if .Values.monitors.prometheus.rbac.create -}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: polardbx-prometheus-k8s
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - nodes/metrics
+  verbs:
+  - get
+- nonResourceURLs:
+  - /metrics
+  verbs:
+  - get
+- apiGroups:
+  - ""
+  resources:
+  - services
+  - pods
+  - endpoints
+  verbs:
+  - get
+  - list
+  - watch
+{{- end -}}

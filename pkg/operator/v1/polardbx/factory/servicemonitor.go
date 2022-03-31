@@ -17,6 +17,7 @@ limitations under the License.
 package factory
 
 import (
+	"fmt"
 	"strings"
 
 	promv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
@@ -63,12 +64,20 @@ func (f *objectFactory) NewServiceMonitors() (map[string]promv1.ServiceMonitor, 
 		return nil, err
 	}
 
+	monitor, err := f.rc.GetPolarDBXMonitor()
+	if err != nil {
+		return nil, err
+	}
+
+	monitorInterval := monitor.Spec.MonitorInterval
+	scrapeTimeout := monitor.Spec.ScrapeTimeout
+
 	return map[string]promv1.ServiceMonitor{
 		polardbxmeta.RoleGMS: {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      f.rc.NameInto(suffixPatcher("-gms")),
 				Namespace: f.rc.Namespace(),
-				Labels:    convention.ConstLabels(polardbx),
+				Labels:    convention.ConstLabelsWithRole(polardbx, polardbxmeta.RoleGMS),
 			},
 			Spec: promv1.ServiceMonitorSpec{
 				JobLabel: f.rc.NameInto(suffixPatcher("-gms")),
@@ -85,8 +94,8 @@ func (f *objectFactory) NewServiceMonitors() (map[string]promv1.ServiceMonitor, 
 				Endpoints: []promv1.Endpoint{
 					{
 						Port:           "metrics",
-						Interval:       "5s",
-						ScrapeTimeout:  "4s",
+						Interval:       fmt.Sprintf("%.0fs", monitorInterval.Seconds()),
+						ScrapeTimeout:  fmt.Sprintf("%.0fs", scrapeTimeout.Seconds()),
 						RelabelConfigs: relabelConfig4GMS(f.rc, polardbx),
 					},
 				},
@@ -95,20 +104,21 @@ func (f *objectFactory) NewServiceMonitors() (map[string]promv1.ServiceMonitor, 
 				},
 				Selector: metav1.LabelSelector{
 					MatchLabels: map[string]string{
-						polardbxmeta.LabelName: polardbx.Name,
-						polardbxmeta.LabelRole: polardbxmeta.RoleGMS,
+						polardbxmeta.LabelName:      polardbx.Name,
+						polardbxmeta.LabelRole:      polardbxmeta.RoleGMS,
+						xstoremeta.LabelServiceType: "metrics",
 					},
 				},
 			},
 		},
 		polardbxmeta.RoleCN: {
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      f.rc.NameInto(suffixPatcher("-gms")),
+				Name:      f.rc.NameInto(suffixPatcher("-cn")),
 				Namespace: f.rc.Namespace(),
-				Labels:    convention.ConstLabels(polardbx),
+				Labels:    convention.ConstLabelsWithRole(polardbx, polardbxmeta.RoleCN),
 			},
 			Spec: promv1.ServiceMonitorSpec{
-				JobLabel: f.rc.NameInto(suffixPatcher("-gms")),
+				JobLabel: f.rc.NameInto(suffixPatcher("-cn")),
 				TargetLabels: []string{
 					polardbxmeta.LabelName,
 					polardbxmeta.LabelRole,
@@ -118,8 +128,8 @@ func (f *objectFactory) NewServiceMonitors() (map[string]promv1.ServiceMonitor, 
 				Endpoints: []promv1.Endpoint{
 					{
 						Port:          "metrics",
-						Interval:      "5s",
-						ScrapeTimeout: "4s",
+						Interval:      fmt.Sprintf("%.0fs", monitorInterval.Seconds()),
+						ScrapeTimeout: fmt.Sprintf("%.0fs", scrapeTimeout.Seconds()),
 					},
 				},
 				NamespaceSelector: promv1.NamespaceSelector{
@@ -137,7 +147,7 @@ func (f *objectFactory) NewServiceMonitors() (map[string]promv1.ServiceMonitor, 
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      f.rc.NameInto(suffixPatcher("-dn")),
 				Namespace: f.rc.Namespace(),
-				Labels:    convention.ConstLabels(polardbx),
+				Labels:    convention.ConstLabelsWithRole(polardbx, polardbxmeta.RoleDN),
 			},
 			Spec: promv1.ServiceMonitorSpec{
 				JobLabel: f.rc.NameInto(suffixPatcher("-dn")),
@@ -155,8 +165,8 @@ func (f *objectFactory) NewServiceMonitors() (map[string]promv1.ServiceMonitor, 
 				Endpoints: []promv1.Endpoint{
 					{
 						Port:          "metrics",
-						Interval:      "5s",
-						ScrapeTimeout: "4s",
+						Interval:      fmt.Sprintf("%.0fs", monitorInterval.Seconds()),
+						ScrapeTimeout: fmt.Sprintf("%.0fs", scrapeTimeout.Seconds()),
 					},
 				},
 				NamespaceSelector: promv1.NamespaceSelector{
@@ -174,7 +184,7 @@ func (f *objectFactory) NewServiceMonitors() (map[string]promv1.ServiceMonitor, 
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      f.rc.NameInto(suffixPatcher("-cdc")),
 				Namespace: f.rc.Namespace(),
-				Labels:    convention.ConstLabels(polardbx),
+				Labels:    convention.ConstLabelsWithRole(polardbx, polardbxmeta.RoleCDC),
 			},
 			Spec: promv1.ServiceMonitorSpec{
 				JobLabel: f.rc.NameInto(suffixPatcher("-cdc")),
@@ -186,8 +196,8 @@ func (f *objectFactory) NewServiceMonitors() (map[string]promv1.ServiceMonitor, 
 				Endpoints: []promv1.Endpoint{
 					{
 						Port:          "metrics",
-						Interval:      "5s",
-						ScrapeTimeout: "4s",
+						Interval:      fmt.Sprintf("%.0fs", monitorInterval.Seconds()),
+						ScrapeTimeout: fmt.Sprintf("%.0fs", scrapeTimeout.Seconds()),
 					},
 				},
 				NamespaceSelector: promv1.NamespaceSelector{

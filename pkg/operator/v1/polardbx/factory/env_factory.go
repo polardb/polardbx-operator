@@ -24,9 +24,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	polardbxv1 "github.com/alibaba/polardbx-operator/api/v1"
+	"github.com/alibaba/polardbx-operator/pkg/featuregate"
 	"github.com/alibaba/polardbx-operator/pkg/meta/core/gms"
 	"github.com/alibaba/polardbx-operator/pkg/meta/core/gms/security"
-	"github.com/alibaba/polardbx-operator/pkg/operator/v1/featuregate"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/helper"
 	polardbxv1reconcile "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/reconcile"
 	dictutil "github.com/alibaba/polardbx-operator/pkg/util/dict"

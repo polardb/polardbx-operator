@@ -18,6 +18,7 @@ package instance
 
 import (
 	"github.com/go-logr/logr"
+	"k8s.io/apimachinery/pkg/api/equality"
 
 	"github.com/alibaba/polardbx-operator/pkg/k8s/control"
 	xstorev1reconcile "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/reconcile"
@@ -26,8 +27,8 @@ import (
 func WhenTopologyChanged(binders ...control.BindFunc) control.BindFunc {
 	return xstorev1reconcile.NewStepIfBinder("TopologyChanged",
 		func(rc *xstorev1reconcile.Context, log logr.Logger) (bool, error) {
-			// TODO impl topology change detection.
-			return false, nil
+			xstore := rc.MustGetXStore()
+			return !equality.Semantic.DeepEqual(xstore.Status.ObservedTopology, &xstore.Spec.Topology), nil
 		},
 		binders...)
 }

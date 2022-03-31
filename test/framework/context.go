@@ -19,6 +19,7 @@ package framework
 import (
 	"context"
 	"flag"
+	promv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -36,6 +37,7 @@ var scheme = runtime.NewScheme()
 func init() {
 	_ = clientgoscheme.AddToScheme(scheme)
 	_ = polardbxv1.AddToScheme(scheme)
+	_ = promv1.AddToScheme(scheme)
 }
 
 type TestContextType struct {

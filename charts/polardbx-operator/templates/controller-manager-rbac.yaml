@@ -59,6 +59,12 @@ rules:
   - "*"
   verbs:
   - "*"
+- apiGroups:
+  - monitoring.coreos.com
+  resources:
+  - "*"
+  verbs:
+  - "*"
 
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -121,6 +127,12 @@ rules:
   - "*"
 - apiGroups:
   - polardbx.aliyun.com
+  resources:
+  - "*"
+  verbs:
+  - "*"
+- apiGroups:
+  - monitoring.coreos.com
   resources:
   - "*"
   verbs:

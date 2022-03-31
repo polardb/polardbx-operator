@@ -1,0 +1,25 @@
+apiVersion: monitoring.coreos.com/v1
+kind: Alertmanager
+metadata:
+  labels:
+    alertmanager: main
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+  name: main
+  namespace: {{ .Release.Namespace }}
+spec:
+  image: {{ .Values.monitors.alertManager.repo }}{{ "/" }}{{ .Values.monitors.alertManager.image }}:{{ .Values.monitors.alertManager.version }}
+  {{- with .Values.monitors.alertManager.nodeSelector }}
+  nodeSelector:
+  {{ toYaml . | indent 2 }}
+  {{- end }}
+  replicas: {{ .Values.monitors.alertManager.replicas }}
+  securityContext:
+    fsGroup: 2000
+    runAsNonRoot: true
+    runAsUser: 1000
+  serviceAccountName: alertmanager-main
+  version: {{ .Values.monitors.alertManager.version }}
+  resources:
+  {{ toYaml .Values.monitors.alertManager.resources | indent 4 }}
+

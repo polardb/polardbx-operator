@@ -28,8 +28,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/rand"
 
 	polardbxv1xstore "github.com/alibaba/polardbx-operator/api/v1/xstore"
+	"github.com/alibaba/polardbx-operator/pkg/featuregate"
 	k8shelper "github.com/alibaba/polardbx-operator/pkg/k8s/helper"
-	"github.com/alibaba/polardbx-operator/pkg/operator/v1/featuregate"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/command"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/convention"
 	xstoremeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/meta"

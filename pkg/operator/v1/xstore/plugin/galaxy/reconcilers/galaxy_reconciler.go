@@ -17,12 +17,18 @@ limitations under the License.
 package reconcilers
 
 import (
+	"fmt"
 	"time"
-
-	"github.com/alibaba/polardbx-operator/pkg/debug"
 
 	"github.com/go-logr/logr"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	"github.com/alibaba/polardbx-operator/pkg/debug"
+	"github.com/alibaba/polardbx-operator/pkg/featuregate"
+	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/change/driver/planner"
+	changereconcile "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/change/driver/reconcile"
+	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/factory"
+	galaxyfactory "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/plugin/galaxy/factory"
 
 	polardbxv1 "github.com/alibaba/polardbx-operator/api/v1"
 	polardbxv1xstore "github.com/alibaba/polardbx-operator/api/v1/xstore"
@@ -40,11 +46,16 @@ func (r *GalaxyReconciler) Reconcile(rc *xstorev1reconcile.Context, log logr.Log
 	xstore := rc.MustGetXStore()
 	log = log.WithValues("phase", xstore.Status.Phase, "stage", xstore.Status.Stage)
 
-	task := r.newReconcileTask(rc, xstore, log)
+	task, err := r.newReconcileTask(rc, xstore, log)
+	if err != nil {
+		log.Error(err, "Failed to build reconcile task.")
+		return reconcile.Result{}, err
+	}
+
 	return control.NewExecutor(log).Execute(rc, task)
 }
 
-func (r *GalaxyReconciler) newReconcileTask(rc *xstorev1reconcile.Context, xstore *polardbxv1.XStore, log logr.Logger) *control.Task {
+func (r *GalaxyReconciler) newReconcileTask(rc *xstorev1reconcile.Context, xstore *polardbxv1.XStore, log logr.Logger) (*control.Task, error) {
 	task := control.NewTask()
 
 	// Deferred steps, will always be executed in the deferred sequence.
@@ -58,7 +69,7 @@ func (r *GalaxyReconciler) newReconcileTask(rc *xstorev1reconcile.Context, xstor
 
 	switch xstore.Status.Phase {
 	case polardbxv1xstore.PhaseNew:
-		galaxyinstancesteps.CheckTopologySpec(task)
+		instancesteps.CheckTopologySpec(task)
 
 		// Update to render display status.
 		instancesteps.UpdateObservedGeneration(task)
@@ -105,8 +116,8 @@ func (r *GalaxyReconciler) newReconcileTask(rc *xstorev1reconcile.Context, xstor
 		// Wait until leader ready.
 		instancesteps.WaitUntilCandidatesAndVotersReady(task)
 
-		// Dummy role reconciliation.
-		galaxyinstancesteps.DummyReconcileConsensusRoleLabels(task)
+		// Role reconciliation.
+		instancesteps.ReconcileConsensusRoleLabels(task)
 
 		instancesteps.WaitUntilLeaderElected(task)
 
@@ -126,7 +137,12 @@ func (r *GalaxyReconciler) newReconcileTask(rc *xstorev1reconcile.Context, xstor
 	case polardbxv1xstore.PhaseRunning:
 		switch xstore.Status.Stage {
 		case polardbxv1xstore.StageEmpty:
-			galaxyinstancesteps.DummyReconcileConsensusRoleLabels(task)
+			// Role reconciliation.
+			if featuregate.EnableGalaxyClusterMode.Enabled() {
+				instancesteps.ReconcileConsensusRoleLabels(task)
+			} else {
+				galaxyinstancesteps.DummyReconcileConsensusRoleLabels(task)
+			}
 
 			// Goto repair if deleted pods found. We do not do repair for running pods
 			// with host failure. It should be handled manually as the Kubernetes
@@ -187,10 +203,57 @@ func (r *GalaxyReconciler) newReconcileTask(rc *xstorev1reconcile.Context, xstor
 
 		// Block wait, requeue every 30 seconds.
 		control.RetryAfter(30*time.Second, "Check every 30 seconds...")(task)
-	case polardbxv1xstore.PhaseUpgrading:
-		// TODO impl upgrading
-	case polardbxv1xstore.PhaseRepairing:
-		// TODO impl repairing
+	case polardbxv1xstore.PhaseUpgrading, polardbxv1xstore.PhaseRepairing:
+		selfHeal := xstore.Status.Phase == polardbxv1xstore.PhaseRepairing
+
+		switch xstore.Status.Stage {
+		case polardbxv1xstore.StageEmpty:
+			ec, err := instancesteps.LoadExecutionContext(rc)
+			if err != nil {
+				return nil, err
+			}
+			if ec == nil {
+				ec, err = instancesteps.NewExecutionContext(rc, xstore, selfHeal)
+			}
+
+			defer instancesteps.TrackAndLazyUpdateExecuteContext(ec)(task, true)
+			if featuregate.EnableGalaxyClusterMode.Enabled() {
+				instancesteps.ReconcileConsensusRoleLabels(task)
+			} else {
+				galaxyinstancesteps.DummyReconcileConsensusRoleLabels(task)
+			}
+
+			// Set pod factory.
+			ec.PodFactory = &galaxyfactory.ExtraPodFactoryGalaxy{
+				Delegate: &factory.DefaultExtraPodFactory{},
+			}
+
+			pl := planner.NewPlanner(rc, ec, selfHeal)
+			if err := pl.Prepare(); err != nil {
+				return nil, fmt.Errorf("failed to prepare planner: %w", err)
+			}
+			if pl.NeedRebuild() {
+				if err := pl.Build(); err != nil {
+					return nil, fmt.Errorf("failed to build plan: %w", err)
+				}
+				control.Retry("Plan's built, start executing...")(task)
+			} else {
+				control.Branch(ec.Completed(),
+					// Update the snapshots on completion.
+					control.Block(
+						instancesteps.UpdateObservedGeneration,
+						instancesteps.UpdateObservedTopologyAndConfig,
+						instancesteps.UpdateStageTemplate(polardbxv1xstore.StageClean, true),
+					),
+
+					// Execute the plan.
+					changereconcile.BuildExecutionBlock(ec),
+				)(task)
+			}
+		case polardbxv1xstore.StageClean:
+			instancesteps.DeleteExecutionContext(task)
+			instancesteps.UpdatePhaseTemplate(polardbxv1xstore.PhaseRunning, true)(task)
+		}
 	case polardbxv1xstore.PhaseDeleting:
 		// Cancel all async tasks.
 		instancesteps.CancelAsyncTasks(task)
@@ -214,5 +277,5 @@ func (r *GalaxyReconciler) newReconcileTask(rc *xstorev1reconcile.Context, xstor
 		log.Info("Unknown.")
 	}
 
-	return task
+	return task, nil
 }

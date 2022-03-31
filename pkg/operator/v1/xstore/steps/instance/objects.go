@@ -25,9 +25,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	polardbxv1xstore "github.com/alibaba/polardbx-operator/api/v1/xstore"
+	"github.com/alibaba/polardbx-operator/pkg/featuregate"
 	"github.com/alibaba/polardbx-operator/pkg/k8s/control"
 	k8shelper "github.com/alibaba/polardbx-operator/pkg/k8s/helper"
-	"github.com/alibaba/polardbx-operator/pkg/operator/v1/featuregate"
 	xstoreexec "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/command"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/convention"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/factory"
@@ -284,6 +284,6 @@ func WhenPodsDeletedFound(binders ...control.BindFunc) control.BindFunc {
 				}
 			}
 
-			return notFailedPods < expectedPods, nil
+			return len(pods) < expectedPods, nil
 		}, binders...)
 }

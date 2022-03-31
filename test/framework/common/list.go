@@ -33,8 +33,14 @@ func iterateOverObjects(objList interface{}, f func(obj client.Object) bool) {
 	}
 	for i := 0; i < v.Len(); i++ {
 		// Always get the pointer.
-		vi := v.Index(i).Addr()
-		vo := vi.Interface().(client.Object)
+		vi := v.Index(i)
+		var vo client.Object
+		if vi.Kind() == reflect.Ptr {
+			vo = vi.Interface().(client.Object)
+		} else {
+			vo = vi.Addr().Interface().(client.Object)
+		}
+
 		if f(vo) {
 			return
 		}

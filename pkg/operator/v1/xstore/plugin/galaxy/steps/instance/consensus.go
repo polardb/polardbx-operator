@@ -31,6 +31,7 @@ import (
 	xstorev1reconcile "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/reconcile"
 )
 
+// Deprecated
 var DummyReconcileConsensusRoleLabels = plugin.NewStepBinder(galaxy.Engine, "ReconcileConsensusRoleLabels",
 	func(rc *xstorev1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
 		xstore := rc.MustGetXStore()
@@ -49,17 +50,22 @@ var DummyReconcileConsensusRoleLabels = plugin.NewStepBinder(galaxy.Engine, "Rec
 		}
 
 		// Try to reconcile the label.
-		leaderSwitched := false
-		candidatePod := &candidatePods[0]
-		currentLeader := candidatePod.Name
-		if candidatePod.Labels[xstoremeta.LabelRole] != xstoremeta.RoleLeader {
-			candidatePod.Labels[xstoremeta.LabelRole] = xstoremeta.RoleLeader
-			err := rc.Client().Update(rc.Context(), candidatePod)
-			if err != nil {
-				flow.Logger().Error(err, "Unable to reconcile label of node role",
-					"pod", candidatePod.Name, "role", xstoremeta.RoleLeader)
+		currentLeader := xstore.Status.LeaderPod
+
+		candidatePods = k8shelper.FilterPodsBy(candidatePods, k8shelper.IsPodReady)
+		if len(candidatePods) > 0 {
+			candidatePod := &candidatePods[0]
+			currentLeader = candidatePod.Name
+			if candidatePod.Labels[xstoremeta.LabelRole] != xstoremeta.RoleLeader {
+				candidatePod.Labels[xstoremeta.LabelRole] = xstoremeta.RoleLeader
+				err := rc.Client().Update(rc.Context(), candidatePod)
+				if err != nil {
+					flow.Logger().Error(err, "Unable to reconcile label of node role",
+						"pod", candidatePod.Name, "role", xstoremeta.RoleLeader)
+				}
 			}
-			leaderSwitched = true
+		} else {
+			currentLeader = ""
 		}
 
 		if len(currentLeader) == 0 {
@@ -73,7 +79,7 @@ var DummyReconcileConsensusRoleLabels = plugin.NewStepBinder(galaxy.Engine, "Rec
 			})
 
 			return flow.Continue("Leader not found!")
-		} else if leaderSwitched {
+		} else if currentLeader != xstore.Status.LeaderPod {
 			xstore.Status.LeaderPod = currentLeader
 
 			rc.UpdateXStoreCondition(&polardbxv1xstore.Condition{

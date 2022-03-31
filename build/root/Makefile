@@ -34,6 +34,14 @@ target: plugin-gen
 	@hack/make-rules/build.py $(TARGET)
 endif
 
+.PHONY: fmt
+fmt:
+	@go fmt ./...
+
+.PHONY: lint
+lint:
+	@go vet ./...
+
 .PHONY: clean
 clean:
 	@rm -rf target
@@ -174,4 +182,6 @@ verify-boilerplates:
 
 .PHONY: helm-package
 helm-package:
-	mkdir -p target/charts && helm package charts/polardbx-operator -d target/charts
+	@mkdir -p target/charts
+	@helm package charts/polardbx-operator -d target/charts
+	@helm package charts/polardbx-monitor -d target/charts

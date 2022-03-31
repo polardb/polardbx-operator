@@ -98,14 +98,34 @@ class GalaxyEngine(EngineCommon):
         if extra_args:
             args.update(extra_args)
 
+        if self.context.node_role() == convention.NODE_ROLE_VOTER:
+            args['loose-cluster-log-type-node'] = 'ON'
+        elif self.context.node_role() == convention.NODE_ROLE_LEARNER:
+            args['loose-cluster-learner-node'] = 'ON'
+
         # build cmd, use --k=v or --k to build the arguments
         cmd = [os.path.join(self.path_home, 'bin', binary), '--defaults-file=' + self.file_config] + [
             '--%s=%s' % (str(k), v) if v else ('--' + str(k)) for k, v in args.items()]
 
         return cmd
 
+    def _get_cluster_info(self, learner: bool = False, local: bool = False):
+        shared_channel = self.context.shared_channel()
+
+        if local:
+            return '%s:%d@1' % (self.context.pod_info().ip(), self.context.port_paxos())
+
+        pod_info = self.context.pod_info()
+        if learner:
+            node_info = shared_channel.get_node_by_pod_name(pod_info.name())
+            return node_info.addr()
+        else:
+            idx = shared_channel.get_node_index(self.context.pod_info().name())
+            return ';'.join([n.addr() for n in shared_channel.list_nodes()]) + '@' + str(idx + 1)
+
     def _new_initialize_command(self):
         return self._command_mysqld(extra_args={
+            'loose-cluster-info': self._get_cluster_info(),
             'initialize-insecure': None,
         })
 
@@ -217,5 +237,14 @@ class GalaxyEngine(EngineCommon):
 
         return True
 
+    def _reset_cluster_info(self, learner):
+        self.check_run_process(self._command_mysqld(extra_args={
+            'cluster-force-change-meta': 'ON',
+            'cluster-info': self._get_cluster_info(learner=learner),
+        }))
+
     def handle_indicate(self, indicate: str):
-        pass
+        if 'reset-cluster-info' == indicate:
+            self._reset_cluster_info(learner=False)
+        elif 'reset-cluster-info-to-learner' == indicate:
+            self._reset_cluster_info(learner=True)

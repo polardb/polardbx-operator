@@ -1,0 +1,206 @@
+# monitor related components
+monitors:
+  # AlertManager related config.
+  # AlertManager will not be installed by default
+  alertManager:
+    # AlertManager docker repo and image. It can be set to your private repo.
+    repo: quay.io/prometheus
+    image: alertmanager
+    # AlertManager version
+    version: v0.21.0
+    # AlertManager replicas
+    replicas: 0
+    # AlertManager ports default: 9093
+    port: 9093
+    # The node selector labels, AlterManager pod will deploy only on the nodes with such labels
+    nodeSelector:
+      kubernetes.io/os: linux
+    # ServiceAccount configuration of AlertManager. If ServiceAccount exists, set create to false
+    serviceAccount:
+      create: true
+
+    # AlertManager service type, default: ClusterIP. Support NodePort, LoadBalancer, ClusterIP
+    serviceType: ClusterIP
+
+    # AlertManager resources, default is empty
+    resources: {}
+
+  # Grafana related configurations
+  grafana:
+    # Grafana docker repo and image. It can be set to your private repo.
+    repo: grafana
+    image: grafana
+    version: 7.5.3
+    # Grafana replicas, you can scale out/in grafana by this value.
+    replicas: 1
+    # Grafana port, default: 3000
+    port: 3000
+    # Grafana service type, default: ClusterIP. Support NodePort, LoadBalancer, ClusterIP
+    serviceType: ClusterIP
+
+    # Grafana resources configuration
+    resources:
+      requests:
+        cpu: 2000m
+        memory: 4Gi
+      limits:
+        cpu: 4000m
+        memory: 8Gi
+    # The node selector labels, Grafana pod will deploy only on the nodes with such labels
+    nodeSelector:
+      kubernetes.io/os: linux
+
+    # ServiceAccount configuration of Grafana. If ServiceAccount exists, set create to false
+    serviceAccount:
+      create: true
+
+  # KubeStateMetrics related configuration.
+  # kube-state-metrics (KSM) is a simple service that listens to the Kubernetes API server and generates metrics
+  # about the state of the objects.
+  kubeStateMetrics:
+    repo: quay.io/coreos
+    image: kube-state-metrics
+    version: v1.9.7
+    replicas: 1
+
+    # The node selector labels, KubeStateMetrics pod will deploy only on the nodes with such labels
+    nodeSelector:
+      kubernetes.io/os: linux
+
+    # RBAC and ServiceAccount of KubeStateMetrics
+    rbac:
+      create: true
+    serviceAccount:
+      create: true
+
+    resources: {}
+
+  # KubeRBACProxy is a small HTTP proxy for a single upstream, that can perform RBAC authorization
+  # against the Kubernetes API using SubjectAccessReview.
+  kubeRBACProxy:
+    repo: quay.io/brancz
+    image: kube-rbac-proxy
+    version: v0.8.0
+
+    resources: {}
+
+  # NodeExporter is Prometheus exporter for hardware and OS metrics exposed by *NIX kernels,
+  # written in Go with pluggable metric collectors.
+  # It is a DaemonSet deployed in K8s
+  nodeExporter:
+    # NodeExporter docker repo and image
+    repo: quay.io/prometheus
+    image: node-exporter
+    version: v1.0.1
+    # Node exporter port, update this value if port conflict
+    port: 9100
+
+    # Node exporter RBAC and ServiceAccount
+    rbac:
+      create: true
+    serviceAccount:
+      create: true
+
+    # Node exporter resources, you can scale up/down
+    resources:
+      limits:
+        cpu: 250m
+        memory: 512Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
+
+  # PrometheusAdapter is an implementation of the custom.metrics.k8s.io API using Prometheus
+  prometheusAdapter:
+    # PrometheusAdapter docker repo and image
+    repo: directxman12
+    image: k8s-prometheus-adapter
+    version: v0.8.2
+    # PrometheusAdapter replicas
+    replicas: 1
+
+    # The node selector labels, PrometheusAdapter pod will deploy only on the nodes with such labels
+    nodeSelector:
+      kubernetes.io/os: linux
+
+    # RBAC and ServiceAccount of PrometheusAdapter
+    rbac:
+      create: true
+    serviceAccount:
+      create: true
+
+    resources: {}
+
+  # Prometheus configuration
+  prometheus:
+    # Docker repo and image of Prometheus
+    repo: quay.io/prometheus
+    image: prometheus
+    version: v2.22.1
+    # Prometheus node replicas, you can scale out/in prometheus by this value
+    replicas: 1
+    # Prometheus service type, default: ClusterIP. Support NodePort, LoadBalancer, ClusterIP
+    serviceType: ClusterIP
+
+    # Prometheus node selector. The prometheus pod will deployed on the nodes with such labels
+    nodeSelector:
+      kubernetes.io/os: linux
+
+    # Monitor data retention time
+    retention: 1w
+    # Monitor data retention size
+    retentionSize: 200GB
+    # Prometheus resources
+    resources:
+      requests:
+        cpu: 4000m
+        memory: 8Gi
+      limits:
+        cpu: 8000m
+        memory: 16Gi
+
+    # Prometheus RBAC and ServiceAccount
+    rbac:
+      create: true
+    serviceAccount:
+      create: true
+
+    # Monitor data persist configuration, default is false
+    persist: false
+    # If persist is true, the monitor data storage class
+    storageClassName: ssd
+    # If persist is true, the monitor data storage size request
+    storageRequest: 40G
+
+  # The Prometheus Operator provides Kubernetes native deployment and management of Prometheus and related monitoring
+  # components. The purpose of this component is to simplify and automate the configuration of a Prometheus based
+  # monitoring stack for Kubernetes clusters.
+  prometheusOperator:
+    repo: quay.io/prometheus-operator
+    image: prometheus-operator
+    version: v0.44.1
+    replicas: 1
+
+    # The node selector labels, PrometheusOperator pod will deploy only on the nodes with such labels
+    nodeSelector:
+      kubernetes.io/os: linux
+
+    # PrometheusOperator RBAC and ServiceAccount
+    rbac:
+      create: true
+    serviceAccount:
+      create: true
+
+    resources:
+      limits:
+        cpu: 200m
+        memory: 200Mi
+      requests:
+        cpu: 100m
+        memory: 100Mi
+
+  # PrometheusOperator related component
+  prometheusConfigReloader:
+    repo: quay.io/prometheus-operator
+    image: prometheus-config-reloader
+    version: v0.44.1

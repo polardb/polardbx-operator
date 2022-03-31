@@ -26,6 +26,7 @@ import (
 
 	polardbxv1 "github.com/alibaba/polardbx-operator/api/v1"
 	polardbxv1xstore "github.com/alibaba/polardbx-operator/api/v1/xstore"
+	"github.com/alibaba/polardbx-operator/pkg/featuregate"
 	k8shelper "github.com/alibaba/polardbx-operator/pkg/k8s/helper"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/convention"
 	xstoremeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/meta"
@@ -89,7 +90,7 @@ type PodFactoryOptions struct {
 	TemplateMergePolicy
 }
 
-func patchNodeTemplate(origin *polardbxv1xstore.NodeTemplate, overlay *polardbxv1xstore.NodeTemplate, overwrite bool) *polardbxv1xstore.NodeTemplate {
+func PatchNodeTemplate(origin *polardbxv1xstore.NodeTemplate, overlay *polardbxv1xstore.NodeTemplate, overwrite bool) *polardbxv1xstore.NodeTemplate {
 	if overlay == nil {
 		return origin
 	}
@@ -126,7 +127,7 @@ func NewPod(rc *reconcile.Context, xstore *polardbxv1.XStore, nodeSet *polardbxv
 	podName := convention.NewPodName(xstore, nodeSet, index)
 
 	// Get current template by applying the merge policy
-	template := patchNodeTemplate(topology.Template.DeepCopy(), nodeSet.Template,
+	template := PatchNodeTemplate(topology.Template.DeepCopy(), nodeSet.Template,
 		opts.TemplateMergePolicy == TemplateMergePolicyOverwrite)
 
 	// Setup context
@@ -266,6 +267,7 @@ func NewPod(rc *reconcile.Context, xstore *polardbxv1.XStore, nodeSet *polardbxv
 					VolumeMounts: append(SystemVolumeMounts(), volumeMounts[convention.ContainerProber]...),
 					Args: []string{
 						"--listen-port", fmt.Sprintf("%d", allocatedPorts[convention.PortProbe]),
+						"--feature-gates", featuregate.ExtraFeatureGateArg(),
 					},
 					Env:       k8shelper.PatchEnvs(SystemEnvs(), envs[convention.ContainerProber]),
 					Resources: opts.NewResources(factoryCtx, convention.ContainerExporter),

@@ -1,0 +1,13 @@
+apiVersion: v2
+name: polardbx-monitor
+description: Helm chart of polardbx-operator monitor plugin
+type: application
+version: 1.2.0
+appVersion: v1.2.0
+keywords:
+  - polardb-x
+  - operator
+  - monitor
+home: https://www.aliyun.com/product/drds
+sources:
+  - https://github.com/ApsaraDB/galaxykube

@@ -37,9 +37,10 @@ const RootAccount = "polardbx_root"
 type ServiceType string
 
 const (
-	ServiceTypeReadWrite ServiceType = "readwrite"
-	ServiceTypeReadOnly  ServiceType = "readonly"
-	ServiceTypeMetrics   ServiceType = "metrics"
+	ServiceTypeReadWrite  ServiceType = "readwrite"
+	ServiceTypeReadOnly   ServiceType = "readonly"
+	ServiceTypeMetrics    ServiceType = "metrics"
+	ServiceTypeCDCMetrics ServiceType = "cdc-metrics"
 )
 
 func GetPolarDBXServiceName(polardbx *polardbxv1.PolarDBXCluster) string {
@@ -60,6 +61,8 @@ func NewServiceName(polardbx *polardbxv1.PolarDBXCluster, serviceType ServiceTyp
 		return polardbxServiceName + "-ro"
 	case ServiceTypeMetrics:
 		return polardbxServiceName + "-metrics"
+	case ServiceTypeCDCMetrics:
+		return polardbxServiceName + "-cdc-metrics"
 	}
 	panic("invalid service type: " + serviceType)
 }

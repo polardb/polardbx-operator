@@ -1,5 +1,20 @@
 # Changelog
 
+## 2023-03-31
+
+Release v1.2.0.
+
++ Enhancement & New Features
+  + Provide a new CR `PolarDBXMonitor` for declaring the monitoring of some `PolarDBXCluster`. The controller will create `ServiceMonitors` to make prometheus scraping the metrics.
+  + Provide a new chart `polardbx-monitor` which packages a customized [kube-prometheus](https://github.com/prometheus-operator/kube-prometheus) release with predefined dashboards for monitoring PolarDB-X clusters.
+  + Provide support for xpaxos version of [galaxyengine](https://github.com/ApsaraDB/galaxyengine). Now the `PolarDBXCluster` controller will create a typical paxos cluster (leader + follower + logger) for each GMS and DN by default. 
+    + **Note** this is a breaking change. After the upgrade, the old `XStores` will be in an unmaintainable state. Update of the GMS/DN is not possible due to incompatible data/log formats. You may have to delete all the `PolarDBXCluster` in your Kubernetes before/after the upgrade.
+    + If you want to keep the compatibility, you can disable this feature by declaring feature gate with negative symbol `EnableGalaxyCluster-`. After that, no multi-node `XStore` with galaxy engine can be created.
+  + Support scaling up/down and self-healing of the `XStores`.
+
++ Bug Fix
+  + Fix the behavior of polardbx-exporter when part of the scrape tasks fail.
+
 ## 2022-01-27
 
 Release v1.1.0.
@@ -19,7 +34,7 @@ Release v1.1.0.
   + Support collect metrics for hotspot JVM 11.
   + Add e2e test tests.
 
-+ Fixes
++ Bug Fix
   + Fix the wrong call stack when logging with `flow.Error` in some cases. 
   + Fix the wrong timeout in polardbx-init.
   + Fix configuring host path of data volumes in values.yaml (helm).

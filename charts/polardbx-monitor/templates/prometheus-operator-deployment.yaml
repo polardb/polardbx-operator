@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/component: controller
+    app.kubernetes.io/name: prometheus-operator
+    app.kubernetes.io/version: {{ .Values.monitors.prometheusOperator.version }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+  name: prometheus-operator
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: {{ .Values.monitors.prometheusOperator.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: controller
+      app.kubernetes.io/name: prometheus-operator
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: controller
+        app.kubernetes.io/name: prometheus-operator
+        app.kubernetes.io/version: {{ .Values.monitors.prometheusOperator.version }}
+    spec:
+      containers:
+      - args:
+        - --kubelet-service=kube-system/kubelet
+        - --prometheus-config-reloader={{ .Values.monitors.prometheusConfigReloader.repo }}{{"/"}}{{ .Values.monitors.prometheusConfigReloader.image }}:{{ .Values.monitors.prometheusConfigReloader.version}}
+        image: {{ .Values.monitors.prometheusOperator.repo }}{{"/"}}{{ .Values.monitors.prometheusOperator.image }}:{{ .Values.monitors.prometheusOperator.version }}
+        name: prometheus-operator
+        ports:
+        - containerPort: 8080
+          name: http
+        resources:
+{{ toYaml .Values.monitors.prometheusOperator.resources | indent 10 }}
+        securityContext:
+          allowPrivilegeEscalation: false
+      - args:
+        - --logtostderr
+        - --secure-listen-address=:8443
+        - --tls-cipher-suites=TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
+        - --upstream=http://127.0.0.1:8080/
+        image: {{ .Values.monitors.kubeRBACProxy.repo }}{{"/"}}{{ .Values.monitors.kubeRBACProxy.image }}:{{ .Values.monitors.kubeRBACProxy.version }}
+        name: kube-rbac-proxy
+        resources:
+{{ toYaml .Values.monitors.kubeRBACProxy.resources | indent 10 }}
+        ports:
+        - containerPort: 8443
+          name: https
+        securityContext:
+          runAsGroup: 65532
+          runAsNonRoot: true
+          runAsUser: 65532
+      {{- with .Values.monitors.prometheusOperator.nodeSelector }}
+      nodeSelector:
+      {{ toYaml . | indent 2 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+      serviceAccountName: prometheus-operator

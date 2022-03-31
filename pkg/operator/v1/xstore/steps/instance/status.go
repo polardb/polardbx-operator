@@ -59,6 +59,7 @@ func UpdatePhaseTemplate(phase polardbxv1xstore.Phase, requeue ...bool) control.
 			if err != nil {
 				return flow.Error(err, "Unable to get xstore.")
 			}
+			xstore.Status.Stage = polardbxv1xstore.StageEmpty
 			xstore.Status.Phase = phase
 			if len(requeue) == 0 || !requeue[0] {
 				return flow.Continue("Phase updated!", "target-phase", phase)

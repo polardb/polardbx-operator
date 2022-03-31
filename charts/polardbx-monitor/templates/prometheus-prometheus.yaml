@@ -1,0 +1,50 @@
+apiVersion: monitoring.coreos.com/v1
+kind: Prometheus
+metadata:
+  labels:
+    prometheus: k8s
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+  name: k8s
+  namespace: {{ .Release.Namespace }}
+spec:
+  {{- if .Values.monitors.prometheus.persist }}
+  storage:
+    volumeClaimTemplate:
+      spec:
+        storageClassName: {{ .Values.monitors.prometheus.storageClassName }}
+        resources:
+          requests:
+            storage: {{ .Values.monitors.prometheus.storageRequest }}
+  {{- end }}
+  alerting:
+    alertmanagers:
+    - name: alertmanager-main
+      namespace: {{ .Release.Namespace }}
+      port: web
+  image: {{ .Values.monitors.prometheus.repo }}{{"/"}}{{ .Values.monitors.prometheus.image }}:{{ .Values.monitors.prometheus.version}}
+  {{- with .Values.monitors.prometheus.nodeSelector }}
+  nodeSelector:
+  {{ toYaml . | indent 2 }}
+  {{- end }}
+  podMonitorNamespaceSelector: {}
+  podMonitorSelector: {}
+  probeNamespaceSelector: {}
+  probeSelector: {}
+  replicas: {{ .Values.monitors.prometheus.replicas }}
+  retention: {{ .Values.monitors.prometheus.retention }}
+  retentionSize: {{ .Values.monitors.prometheus.retentionSize }}
+  resources:
+{{ toYaml .Values.monitors.prometheus.resources | indent 4 }}
+  ruleSelector:
+    matchLabels:
+      prometheus: k8s
+      role: alert-rules
+  securityContext:
+    fsGroup: 2000
+    runAsNonRoot: true
+    runAsUser: 1000
+  serviceAccountName: prometheus-k8s
+  serviceMonitorNamespaceSelector: {{"{}"}}
+  serviceMonitorSelector: {{"{}"}}
+  version: {{ .Values.monitors.prometheus.version }}

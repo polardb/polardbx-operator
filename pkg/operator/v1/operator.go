@@ -18,6 +18,8 @@ package v1
 
 import (
 	"context"
+	promv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"os"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -44,6 +46,8 @@ var (
 func initScheme() {
 	_ = clientgoscheme.AddToScheme(scheme)
 	_ = polardbxv1.AddToScheme(scheme)
+	_ = promv1.AddToScheme(scheme)
+	_ = apiextensionsv1.AddToScheme(scheme)
 }
 
 func init() {
@@ -105,6 +109,17 @@ func setupPolarDBXControllers(opts controllerOptions) error {
 		MaxConcurrency: opts.opts.MaxConcurrentReconciles,
 	}
 	if err := knobsReconciler.SetupWithManager(opts.Manager); err != nil {
+		return err
+	}
+
+	monitorReconciler := polardbxv1controllers.PolarDBXMonitorReconciler{
+		BaseRc:         opts.BaseReconcileContext,
+		Client:         opts.Manager.GetClient(),
+		LoaderFactory:  opts.LoaderFactory,
+		Logger:         ctrl.Log.WithName("controller").WithName("polardbxmonitor"),
+		MaxConcurrency: opts.opts.MaxConcurrentReconciles,
+	}
+	if err := monitorReconciler.SetupWithManager(opts.Manager); err != nil {
 		return err
 	}
 

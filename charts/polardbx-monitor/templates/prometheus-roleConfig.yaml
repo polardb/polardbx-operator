@@ -1,0 +1,17 @@
+{{/*
+Create the role of prometheus to use
+*/}}
+{{- if .Values.monitors.prometheus.rbac.create -}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: polardbx-prometheus-k8s-config
+  namespace: {{ .Release.Namespace }}
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+{{- end -}}

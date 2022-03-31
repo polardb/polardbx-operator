@@ -98,7 +98,7 @@ func (f *objectFactory) NewReadOnlyService() (*corev1.Service, error) {
 	}, nil
 }
 
-func (f *objectFactory) NewCDCService() (*corev1.Service, error) {
+func (f *objectFactory) NewCDCMetricsService() (*corev1.Service, error) {
 	polardbx, err := f.rc.GetPolarDBX()
 	if err != nil {
 		return nil, err
@@ -111,7 +111,7 @@ func (f *objectFactory) NewCDCService() (*corev1.Service, error) {
 
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      serviceName + "-cdc",
+			Name:      serviceName + "-cdc-metrics",
 			Namespace: f.rc.Namespace(),
 			Labels:    convention.ConstLabelsForCDC(polardbx),
 		},
@@ -123,7 +123,7 @@ func (f *objectFactory) NewCDCService() (*corev1.Service, error) {
 					Name:       "metrics",
 					Protocol:   corev1.ProtocolTCP,
 					Port:       8081,
-					TargetPort: intstr.FromString("daemon"),
+					TargetPort: intstr.FromString("metrics"),
 				},
 			},
 		},

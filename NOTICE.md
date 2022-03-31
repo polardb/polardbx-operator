@@ -18,6 +18,8 @@ The following sections summaries those components and their licenses.
 
 + gopkg.in/inf.v0, [3-Clause BSD license](./LICENSES/vendor/gopkg.in/inf.v0/LICENSE).
 
++ gopkg.in/tomb.v1, [3-Clause BSD license](./LICENSES/vendor/gopkg.in/tomb.v1/LICENSE).
+
 + gopkg.in/ini.v1, [Apache 2.0 license](./LICENSES/vendor/gopkg.in/ini.v1/LICENSE).
 
 + google.golang.org/grpc, [Apache 2.0 license](./LICENSES/vendor/google.golang.org/grpc/LICENSE).
@@ -72,11 +74,21 @@ The following sections summaries those components and their licenses.
 
 + github.com/onsi/gomega, [MIT license](./LICENSES/vendor/github.com/onsi/gomega/LICENSE).
 
-+ github.com/StackExchange/wmi, [MIT license](./LICENSES/vendor/github.com/StackExchange/wmi/LICENSE).
++ github.com/onsi/ginkgo, [MIT license](./LICENSES/vendor/github.com/onsi/ginkgo/LICENSE).
+
++ github.com/onsi/ginkgo/reporters/stenographer/support/go-isatty, [MIT license](./LICENSES/vendor/github.com/onsi/ginkgo/reporters/stenographer/support/go-isatty/LICENSE).
+
++ github.com/onsi/ginkgo/reporters/stenographer/support/go-colorable, [MIT license](./LICENSES/vendor/github.com/onsi/ginkgo/reporters/stenographer/support/go-colorable/LICENSE).
 
 + github.com/davecgh/go-spew, [ISC license](./LICENSES/vendor/github.com/davecgh/go-spew/LICENSE).
 
 + github.com/jbenet/go-context, [MIT license](./LICENSES/vendor/github.com/jbenet/go-context/LICENSE).
+
++ github.com/tklauser/numcpus, [Apache 2.0 license](./LICENSES/vendor/github.com/tklauser/numcpus/LICENSE).
+
++ github.com/tklauser/go-sysconf, [3-Clause BSD license](./LICENSES/vendor/github.com/tklauser/go-sysconf/LICENSE).
+
++ github.com/yusufpapurcu/wmi, [MIT license](./LICENSES/vendor/github.com/yusufpapurcu/wmi/LICENSE).
 
 + github.com/evanphx/json-patch, [3-Clause BSD license](./LICENSES/vendor/github.com/evanphx/json-patch/LICENSE).
 
@@ -97,6 +109,8 @@ The following sections summaries those components and their licenses.
 + github.com/golang/protobuf, [3-Clause BSD license](./LICENSES/vendor/github.com/golang/protobuf/LICENSE).
 
 + github.com/json-iterator/go, [MIT license](./LICENSES/vendor/github.com/json-iterator/go/LICENSE).
+
++ github.com/power-devops/perfstat, [MIT license](./LICENSES/vendor/github.com/power-devops/perfstat/LICENSE).
 
 + github.com/google/gofuzz, [Apache 2.0 license](./LICENSES/vendor/github.com/google/gofuzz/LICENSE).
 
@@ -163,6 +177,10 @@ The following sections summaries those components and their licenses.
 + github.com/gofrs/flock, [3-Clause BSD license](./LICENSES/vendor/github.com/gofrs/flock/LICENSE).
 
 + github.com/go-logfmt/logfmt, [MIT license](./LICENSES/vendor/github.com/go-logfmt/logfmt/LICENSE).
+
++ github.com/lufia/plan9stats, [3-Clause BSD license](./LICENSES/vendor/github.com/lufia/plan9stats/LICENSE).
+
++ github.com/nxadm/tail, [MIT license](./LICENSES/vendor/github.com/nxadm/tail/LICENSE).
 
 + github.com/gogo/protobuf, [3-Clause BSD license](./LICENSES/vendor/github.com/gogo/protobuf/LICENSE).
 

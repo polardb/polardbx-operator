@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    alertmanager: main
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+  name: alertmanager-main
+  namespace: {{ .Release.Namespace }}
+spec:
+  ports:
+  - name: web
+    port: {{ .Values.monitors.alertManager.port }}
+    targetPort: web
+  selector:
+    alertmanager: main
+    app: alertmanager
+  sessionAffinity: ClientIP
+  type: {{ .Values.monitors.alertManager.serviceType }}
+

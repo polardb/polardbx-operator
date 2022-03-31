@@ -19,7 +19,10 @@ package plugin
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"strings"
 
+	"github.com/alibaba/polardbx-operator/pkg/featuregate"
 	"github.com/alibaba/polardbx-operator/pkg/probe/xstore_ext"
 	"github.com/alibaba/polardbx-operator/pkg/util/network"
 )
@@ -39,6 +42,19 @@ func init() {
 				return err
 			}
 
+			if featuregate.EnableGalaxyClusterMode.Enabled() {
+				// Check the read write status if leader.
+				row = db.QueryRowContext(ctx, "SELECT ROLE, SERVER_READY_FOR_RW FROM information_schema.ALISQL_CLUSTER_LOCAL")
+				var role, rwReady string
+				if err := row.Scan(&role, &rwReady); err != nil {
+					return err
+				}
+				if role == "Leader" {
+					if strings.ToLower(rwReady) != "yes" {
+						return errors.New("leader not ready")
+					}
+				}
+			}
 			return nil
 		}))
 }

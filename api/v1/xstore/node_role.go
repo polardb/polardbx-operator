@@ -16,6 +16,8 @@ limitations under the License.
 
 package xstore
 
+import "strings"
+
 type NodeRole string
 
 const (
@@ -41,3 +43,15 @@ const (
 	// never be voted to be a leader.
 	RoleVoter NodeRole = "Voter"
 )
+
+func FromNodeRoleValue(val string) NodeRole {
+	vals := []NodeRole{
+		RoleLeader, RoleFollower, RoleLeader, RoleLearner, RoleCandidate, RoleVoter,
+	}
+	for _, v := range vals {
+		if strings.ToLower(string(v)) == strings.ToLower(val) {
+			return v
+		}
+	}
+	panic("undefined")
+}

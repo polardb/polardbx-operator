@@ -34,7 +34,7 @@ func checkTopologySpec(xstore *polardbxv1.XStore) error {
 
 	// Empty is allowed.
 	if len(topology.NodeSets) == 0 {
-		return nil
+		return errors.New("node sets are empty")
 	}
 
 	// Currently, galaxy engine only supports with 1 replica.
@@ -55,6 +55,7 @@ func checkTopologySpec(xstore *polardbxv1.XStore) error {
 	return nil
 }
 
+// Deprecated
 var CheckTopologySpec = plugin.NewStepBinder(galaxy.Engine, "CheckTopologySpec",
 	func(rc *xstorev1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
 		xstore := rc.MustGetXStore()

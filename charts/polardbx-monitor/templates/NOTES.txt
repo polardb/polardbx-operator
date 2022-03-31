@@ -1,0 +1,22 @@
+polardbx-operator monitor plugin is installed. Please check the status of components:
+
+    kubectl get pods --namespace {{ .Release.Namespace }}
+
+Now start to monitor your polardbx cluster.
+
+Here's the manifest for quick start:
+
+```yaml
+apiVersion: polardbx.aliyun.com/v1
+kind: PolarDBXMonitor
+metadata:
+  name: quick-start-monitor
+spec:
+  clusterName: quick-start
+  monitorInterval: 30s
+  scrapeTimeout: 10s
+```
+
+* spec.clusterName: The PolarDB-X cluster name you want to monitor
+* spec.monitorInterval: monitor interval, default 30s
+* spec.scrapeTimeout: monitor data scrabe timeout, default 10s

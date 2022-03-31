@@ -68,7 +68,7 @@ def print_current_info(full):
 
     with global_mgr.consensus_manager() as mgr:
         current_node = mgr.current_node()
-        current_node_info = chan.get_node_by_addr(current_node.addr)
+        current_node_info = chan.get_node_by_pod_name(global_mgr.context().pod_info().name())
         leader_addr = current_node.local_info.current_leader
         leader_node_info = chan.get_node_by_addr(leader_addr) if leader_addr != '' else None
 

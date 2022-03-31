@@ -22,6 +22,7 @@ import (
 	"k8s.io/utils/pointer"
 
 	polardbxv1 "github.com/alibaba/polardbx-operator/api/v1"
+	k8shelper "github.com/alibaba/polardbx-operator/pkg/k8s/helper"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/convention"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/plugin/common/channel"
 )
@@ -35,7 +36,7 @@ func NewSharedConfigMap(xstore *polardbxv1.XStore) (*corev1.ConfigMap, error) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      convention.NewConfigMapName(xstore, convention.ConfigMapTypeShared),
 			Namespace: xstore.Namespace,
-			Labels:    convention.ConstLabels(xstore),
+			Labels:    k8shelper.PatchLabels(convention.ConstLabels(xstore), convention.LabelGeneration(xstore)),
 		},
 		Immutable: pointer.Bool(false),
 		Data: map[string]string{

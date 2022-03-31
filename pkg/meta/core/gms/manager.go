@@ -22,6 +22,8 @@ import (
 	"strconv"
 
 	"k8s.io/apimachinery/pkg/types"
+
+	"github.com/alibaba/polardbx-operator/pkg/featuregate"
 )
 
 // ClusterKind defines the PolarDBX cluster's kinds
@@ -147,7 +149,11 @@ func GetStorageType(engine string, version string) (StorageType, error) {
 			return 0, errors.New("unrecognized storage engine version: " + version)
 		}
 	case "galaxy":
-		return StorageTypeGalaxySingle, nil
+		if featuregate.EnableGalaxyClusterMode.Enabled() {
+			return StorageTypeGalaxyCluster, nil
+		} else {
+			return StorageTypeGalaxySingle, nil
+		}
 	case "polardb":
 		return StorageTypePolarDB, nil
 	case "mysql":

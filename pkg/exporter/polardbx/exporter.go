@@ -248,7 +248,7 @@ func (e *Exporter) scrape(ch chan<- prometheus.Metric) (up float64) {
 	}
 	wg.Wait()
 
-	if errCnt > 0 {
+	if int(errCnt) == len(scrapeTasks) {
 		return 0
 	}
 

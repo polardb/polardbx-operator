@@ -53,3 +53,12 @@ func IsTLSEnabled(polardbx *polardbxv1.PolarDBXCluster) bool {
 		(len(polardbx.Spec.Security.TLS.SecretName) > 0 ||
 			polardbx.Spec.Security.TLS.GenerateSelfSigned)
 }
+
+func IsMonitorConfigChanged(monitor *polardbxv1.PolarDBXMonitor) bool {
+	spec := &monitor.Spec
+	specSnapshot := monitor.Status.MonitorSpecSnapshot
+
+	monitorConfigChanged := !equality.Semantic.DeepEqual(spec, specSnapshot)
+
+	return monitorConfigChanged
+}

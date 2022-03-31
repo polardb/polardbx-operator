@@ -1,0 +1,27 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: prometheus-polardbx-rules
+  namespace: {{ .Release.Namespace }}
+  labels:
+    prometheus: k8s
+    role: alert-rules
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  groups:
+    - name: polardbx.rules
+      interval: 30s
+      rules:
+        - expr: |
+            sum by (cluster, namespace, pod, container, polardbx_name, polardbx_role, xcluster_role, xcluster_name) (
+                rate(
+                (container_cpu_usage_seconds_total{job="kubelet", metrics_path="/metrics/cadvisor", image!="", container=~"server|engine"}
+                * on (pod) group_left(polardbx_name, polardbx_role, xcluster_role, xcluster_name)
+                topk by (pod) (1, (abs((polardbx_up or polardbx_cdc_up or mysql_up{polardbx_name!=""}) - 0.5) * 2)))[2m:]
+                )
+            ) * on (cluster, namespace, pod) group_left(node) topk by (cluster, namespace, pod) (
+                1, max by(cluster, namespace, pod, node) (kube_pod_info{node!=""})
+            )
+          record: polardbx_container_cpu_usage_seconds_total:sum_rate
+

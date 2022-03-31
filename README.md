@@ -12,6 +12,8 @@ Follow the [[Quick Start](./docs/en/deploy/quick-start.md) / [快速开始](./do
 
 ## Documentation
 
+**NOTE: v1.2.0 introduces a breaking change to support the new xpaxos galaxyengine. Please refer to the [CHANGELOG](./CHANGELOG.md) for upgrade guidance.**
+
 Refer to the documentations for more details, such as CRD definitions and operation guides.
 
 + [简体中文](docs/zh/index.md)
@@ -26,22 +28,20 @@ Implemented:
 
 + ✅ Basic Lifetime Management
 + ✅ Liveness/Readiness Probing & Self Healing
-+ ✅ Metrics Export
-+ ✅ Configuration (Partial, controller and resources)
-+ ✅ Scale and Upgrade (CN/CDC)
-+ ✅ Automated Failover (CN/CDC)
++ ✅ Metrics Export and Grafana/Prometheus Integration
++ ✅ Dynamic Configuration
++ ✅ Scale and Upgrade
++ ✅ Automated Data Rebalance
++ ✅ Automated Failover
++ ✅ Security and TLS
 + ✅ Multiple Architecture Support
   + linux/amd64, linux/arm64
 
 Working in progress:
 
-+ [T0] Security and TLS
-+ [T0] Scale and Upgrade (GMS/DN)
-+ [T0] Automated Failover (GMS/DN)
 + [T0] Backup and Restore 
 + [T1] Backup Plan
-+ [T1] Configuration (DN)
-+ [T1] Automated Data Rebalance
++ [T1] Configuration (DN) 
 + [T2] Dashboard
 + ...
 

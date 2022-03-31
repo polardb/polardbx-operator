@@ -30,7 +30,7 @@ import (
 type ObjectFactory interface {
 	NewService() (*corev1.Service, error)
 	NewReadOnlyService() (*corev1.Service, error)
-	NewCDCService() (*corev1.Service, error)
+	NewCDCMetricsService() (*corev1.Service, error)
 
 	NewDeployments4CN() (map[string]appsv1.Deployment, error)
 	NewDeployments4CDC() (map[string]appsv1.Deployment, error)

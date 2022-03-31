@@ -24,6 +24,7 @@ import (
 	"github.com/onsi/gomega"
 	// test sources
 	_ "github.com/alibaba/polardbx-operator/test/e2e/polardbxcluster"
+	_ "github.com/alibaba/polardbx-operator/test/e2e/polardbxmonitor"
 	_ "github.com/alibaba/polardbx-operator/test/e2e/xstore"
 	"github.com/alibaba/polardbx-operator/test/framework"
 )

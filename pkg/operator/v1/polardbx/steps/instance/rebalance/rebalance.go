@@ -24,10 +24,10 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	"github.com/alibaba/polardbx-operator/pkg/featuregate"
 	"github.com/alibaba/polardbx-operator/pkg/k8s/control"
 	"github.com/alibaba/polardbx-operator/pkg/meta/core/gms"
 	"github.com/alibaba/polardbx-operator/pkg/meta/core/group"
-	"github.com/alibaba/polardbx-operator/pkg/operator/v1/featuregate"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/convention"
 	polardbxv1reconcile "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/reconcile"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/task"
@@ -349,6 +349,10 @@ func IsTrailingDNsDrained(rc *polardbxv1reconcile.Context, rebalanceTask *DataRe
 	drainedDNs := make(map[string]int, 0)
 	for i := rebalanceTask.To; i < rebalanceTask.From; i++ {
 		drainedDNs[convention.NewDNName(polardbx, i)] = 0
+	}
+
+	if len(drainedDNs) == 0 {
+		return true, nil
 	}
 
 	// Check for each schema.

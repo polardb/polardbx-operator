@@ -105,3 +105,7 @@ quick-start-ml92-cn-default-6d5956d4f4-jzq2d   3/3     Running   0              
 ## 配置
 
 参考 [[配置指南]](./configuration/overview.md) 来设置和修改配置。
+
+## 监控
+
+参考 [[监控]](./monitor/monitor.md) 为 PolarDB-X 集群开启监控功能。 

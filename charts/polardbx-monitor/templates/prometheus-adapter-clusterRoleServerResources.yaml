@@ -1,0 +1,16 @@
+{{/*
+Create the cluster role of prometheus adaptor to use
+*/}}
+{{- if .Values.monitors.prometheusAdapter.rbac.create -}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: resource-metrics-server-resources
+rules:
+- apiGroups:
+  - metrics.k8s.io
+  resources:
+  - '*'
+  verbs:
+  - '*'
+{{- end -}}

@@ -99,7 +99,7 @@ func NewTaskConfigMap(xstore *polardbxv1.XStore) *corev1.ConfigMap {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      convention.NewConfigMapName(xstore, convention.ConfigMapTypeTask),
 			Namespace: xstore.Namespace,
-			Labels:    convention.ConstLabels(xstore),
+			Labels:    k8shelper.PatchLabels(convention.ConstLabels(xstore), convention.LabelGeneration(xstore)),
 		},
 		Immutable: pointer.Bool(false),
 	}

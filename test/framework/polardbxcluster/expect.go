@@ -19,6 +19,8 @@ package polardbxcluster
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	v1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"time"
 
 	"github.com/onsi/gomega"
@@ -770,6 +772,44 @@ func (e *Expectation) ExpectObservableStatusUpdated() {
 
 	// Detailed version.
 	gomega.Expect(status.DetailedVersion).NotTo(gomega.BeEmpty(), "detailed version is empty")
+}
+
+func (e *Expectation) ExpectServiceMonitorsOK() {
+	labels := map[string]string{
+		"polardbx/name": e.obj.Name,
+	}
+	ns := e.obj.Namespace
+
+	var polardbxMonitors polardbxv1.PolarDBXMonitorList
+	framework.ExpectNoError(e.c.List(e.ctx, &polardbxMonitors, client.InNamespace(ns), client.MatchingLabels(labels)))
+	monitors := polardbxMonitors.Items
+	gomega.Expect(monitors).NotTo(gomega.BeEmpty(), "no PolarDBXMonitor found")
+	gomega.Expect(monitors).Should(gomega.HaveLen(1), "must be 1 PolarDBXMonitor found")
+	monitor := monitors[0]
+
+	var serviceMonitors v1.ServiceMonitorList
+	framework.ExpectNoError(e.c.List(e.ctx, &serviceMonitors, client.InNamespace(ns), client.MatchingLabels(labels)))
+	items := serviceMonitors.Items
+	gomega.Expect(items).NotTo(gomega.BeEmpty(), "no ServiceMonitor found")
+	monitorsByRole := common.MapObjectsFromObjectListByLabel(items, "polardbx/role")
+
+	gomega.Expect(monitorsByRole).To(gomega.HaveLen(4), "must be 4 servicemonitors for all role")
+
+	framework.ExpectHaveKeys(monitorsByRole, "cn", "dn", "gms", "cdc")
+	gomega.Expect(monitorsByRole["cn"]).To(gomega.HaveLen(1), "must be 1 cn servicemonitor")
+	gomega.Expect(monitorsByRole["cdc"]).To(gomega.HaveLen(1), "must be 1 cdc servicemonitor")
+	gomega.Expect(monitorsByRole["dn"]).To(gomega.HaveLen(1), "must be 1 dn servicemonitor")
+	gomega.Expect(monitorsByRole["gms"]).To(gomega.HaveLen(1), "must be 1 gms servicemonitor")
+
+	monitorInterval := fmt.Sprintf("%.0fs", monitor.Spec.MonitorInterval.Seconds())
+	scrapeTimeout := fmt.Sprintf("%.0fs", monitor.Spec.ScrapeTimeout.Seconds())
+	for _, item := range items {
+		gomega.Expect(item.Spec.Endpoints[0].Interval).To(gomega.BeEquivalentTo(monitorInterval),
+			"service monitor interval should be equal to polardbx monitor")
+		gomega.Expect(item.Spec.Endpoints[0].ScrapeTimeout).To(gomega.BeEquivalentTo(scrapeTimeout),
+			"service monitor scrapeTimeout should be equal to polardbx monitor")
+	}
+
 }
 
 func (e *Expectation) ExpectAllOk() {

@@ -24,9 +24,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	"github.com/alibaba/polardbx-operator/pkg/featuregate"
 	"github.com/alibaba/polardbx-operator/pkg/k8s/control"
 	k8shelper "github.com/alibaba/polardbx-operator/pkg/k8s/helper"
-	"github.com/alibaba/polardbx-operator/pkg/operator/v1/featuregate"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/command"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/convention"
 	xstoremeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/meta"

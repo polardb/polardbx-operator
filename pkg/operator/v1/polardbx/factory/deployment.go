@@ -31,9 +31,9 @@ import (
 
 	polardbxv1 "github.com/alibaba/polardbx-operator/api/v1"
 	polardbxv1polardbx "github.com/alibaba/polardbx-operator/api/v1/polardbx"
+	"github.com/alibaba/polardbx-operator/pkg/featuregate"
 	k8shelper "github.com/alibaba/polardbx-operator/pkg/k8s/helper"
 	"github.com/alibaba/polardbx-operator/pkg/meta/core/gms"
-	"github.com/alibaba/polardbx-operator/pkg/operator/v1/featuregate"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/convention"
 	polardbxmeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/meta"
 	"github.com/alibaba/polardbx-operator/pkg/probe"
@@ -390,6 +390,11 @@ func (f *objectFactory) newDeployment4CN(group string, mr *matchingRule) (*appsv
 		})
 	}
 
+	dnsPolicy := corev1.DNSClusterFirst
+	if template.HostNetwork {
+		dnsPolicy = corev1.DNSClusterFirstWithHostNet
+	}
+
 	probeConfigure.ConfigureForCNEngine(&engineContainer, ports)
 	proberContainer := corev1.Container{
 		Name:  convention.ContainerProber,
@@ -511,7 +516,7 @@ func (f *objectFactory) newDeployment4CN(group string, mr *matchingRule) (*appsv
 					Containers:                    containers,
 					RestartPolicy:                 corev1.RestartPolicyAlways,
 					TerminationGracePeriodSeconds: pointer.Int64(30),
-					DNSPolicy:                     corev1.DNSClusterFirst,
+					DNSPolicy:                     dnsPolicy,
 					HostNetwork:                   template.HostNetwork,
 					ShareProcessNamespace:         pointer.Bool(true),
 					Affinity:                      affinity,
@@ -613,6 +618,11 @@ func (f *objectFactory) newDeployment4CDC(group string, mr *matchingRule) (*apps
 	probeConfigure.ConfigureForCDCEngine(&engineContainer, ports)
 	containers := []corev1.Container{engineContainer}
 
+	dnsPolicy := corev1.DNSClusterFirst
+	if template.HostNetwork {
+		dnsPolicy = corev1.DNSClusterFirstWithHostNet
+	}
+
 	// Container exporter if enabled
 	if config.Cluster().EnableExporters() {
 		exporterContainer := corev1.Container{
@@ -676,7 +686,7 @@ func (f *objectFactory) newDeployment4CDC(group string, mr *matchingRule) (*apps
 					Containers:                    containers,
 					RestartPolicy:                 corev1.RestartPolicyAlways,
 					TerminationGracePeriodSeconds: pointer.Int64(30),
-					DNSPolicy:                     corev1.DNSClusterFirst,
+					DNSPolicy:                     dnsPolicy,
 					ShareProcessNamespace:         pointer.Bool(true),
 					Affinity:                      affinity,
 					// FIXME host network for CDC isn't supported

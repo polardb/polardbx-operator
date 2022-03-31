@@ -18,15 +18,24 @@ package main
 
 import (
 	"flag"
+	"strings"
 
+	"github.com/alibaba/polardbx-operator/pkg/featuregate"
 	"github.com/alibaba/polardbx-operator/pkg/probe"
 )
 
-var port int
+var (
+	port         int
+	featureGates string
+)
 
 func init() {
 	flag.IntVar(&port, "listen-port", 9090, "Listen port.")
+	flag.StringVar(&featureGates, "feature-gates", "", "Feature gates to enable.")
 	flag.Parse()
+
+	// Enable feature gates.
+	featuregate.SetupFeatureGates(strings.Split(strings.ReplaceAll(featureGates, " ", ""), ","))
 }
 
 func main() {

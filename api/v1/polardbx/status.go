@@ -152,3 +152,12 @@ type ClusterReplicasStatus struct {
 	// CDC defines the replica status for CDC.
 	CDC *ReplicasStatus `json:"cdc,omitempty"`
 }
+
+type MonitorStatus string
+
+const (
+	MonitorStatusPending    MonitorStatus = ""
+	MonitorStatusCreating   MonitorStatus = "Creating"
+	MonitorStatusMonitoring MonitorStatus = "Monitoring"
+	MonitorStatusUpdating   MonitorStatus = "Updating"
+)

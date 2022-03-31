@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/name: node-exporter
+    app.kubernetes.io/version: {{ .Values.monitors.nodeExporter.version}}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+  name: node-exporter
+  namespace: {{ .Release.Namespace }}
+spec:
+  clusterIP: None
+  ports:
+  - name: https
+    port: {{ .Values.monitors.nodeExporter.port }}
+    targetPort: https
+  selector:
+    app.kubernetes.io/name: node-exporter
+

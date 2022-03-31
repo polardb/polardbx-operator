@@ -220,7 +220,7 @@ func (rc *BaseReconcileContext) GetCrd(apiVersion, kind string) (*apiextensionsv
 	// Branch not cached, query from api server.
 	if rc.customResourceDefinitions == nil {
 		var customResourceDefinitions apiextensionsv1.CustomResourceDefinitionList
-		if err := rc.client.List(rc.context, &customResourceDefinitions); err != nil {
+		if err := rc.Client().List(rc.Context(), &customResourceDefinitions); err != nil {
 			return nil, err
 		}
 		rc.customResourceDefinitions = &customResourceDefinitions

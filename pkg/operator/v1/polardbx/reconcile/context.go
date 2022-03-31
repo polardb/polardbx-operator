@@ -63,6 +63,9 @@ type Context struct {
 	gmsStore        *polardbxv1.XStore
 	dnStores        map[int]*polardbxv1.XStore
 
+	polardbxMonitor    *polardbxv1.PolarDBXMonitor
+	polardbxMonitorKey types.NamespacedName
+
 	// Hint cache
 	controllerHints []string
 
@@ -743,6 +746,37 @@ func (rc *Context) Close() error {
 		return errs[0]
 	}
 	return nil
+}
+
+func (rc *Context) PolardbxMonitorKey() types.NamespacedName {
+	return rc.polardbxMonitorKey
+}
+
+func (rc *Context) SetPolardbxMonitorKey(polardbxMonitorKey types.NamespacedName) {
+	rc.polardbxMonitorKey = polardbxMonitorKey
+}
+
+func (rc *Context) GetPolarDBXMonitor() (*polardbxv1.PolarDBXMonitor, error) {
+	if rc.polardbxMonitor == nil {
+		polardbxMonitor, err := rc.objectCache.GetObject(
+			rc.Context(),
+			rc.polardbxMonitorKey,
+			&polardbxv1.PolarDBXMonitor{},
+		)
+		if err != nil {
+			return nil, err
+		}
+		rc.polardbxMonitor = polardbxMonitor.(*polardbxv1.PolarDBXMonitor)
+	}
+	return rc.polardbxMonitor, nil
+}
+
+func (rc *Context) MustGetPolarDBXMonitor() *polardbxv1.PolarDBXMonitor {
+	polardbxMonitor, err := rc.GetPolarDBXMonitor()
+	if err != nil {
+		panic(err)
+	}
+	return polardbxMonitor
 }
 
 func NewContext(base *control.BaseReconcileContext, configLoader func() config.Config) *Context {

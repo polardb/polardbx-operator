@@ -28,10 +28,10 @@ import (
 	polardbxv1 "github.com/alibaba/polardbx-operator/api/v1"
 	polardbxv1polardbx "github.com/alibaba/polardbx-operator/api/v1/polardbx"
 	polardbxv1xstore "github.com/alibaba/polardbx-operator/api/v1/xstore"
+	"github.com/alibaba/polardbx-operator/pkg/featuregate"
 	"github.com/alibaba/polardbx-operator/pkg/k8s/control"
 	k8shelper "github.com/alibaba/polardbx-operator/pkg/k8s/helper"
 	"github.com/alibaba/polardbx-operator/pkg/meta/core/gms"
-	"github.com/alibaba/polardbx-operator/pkg/operator/v1/featuregate"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/convention"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/factory"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/helper"
@@ -82,7 +82,7 @@ var CreateServicesIfNotFound = polardbxv1reconcile.NewStepBinder("CreateServices
 		for _, serviceType := range []convention.ServiceType{
 			convention.ServiceTypeReadWrite,
 			convention.ServiceTypeReadOnly,
-			// convention.ServiceTypeMetrics,
+			convention.ServiceTypeCDCMetrics,
 		} {
 			service, err := rc.GetPolarDBXService(serviceType)
 			if client.IgnoreNotFound(err) != nil {
@@ -95,6 +95,8 @@ var CreateServicesIfNotFound = polardbxv1reconcile.NewStepBinder("CreateServices
 					service, err = objectFactory.NewService()
 				case convention.ServiceTypeReadOnly:
 					service, err = objectFactory.NewReadOnlyService()
+				case convention.ServiceTypeCDCMetrics:
+					service, err = objectFactory.NewCDCMetricsService()
 				default:
 					panic("unimplemented")
 				}
