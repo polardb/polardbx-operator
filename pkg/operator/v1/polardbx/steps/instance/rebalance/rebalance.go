@@ -34,25 +34,25 @@ import (
 )
 
 type DataRebalanceTask struct {
-	From   int      `json:"from,omitempty"`
-	To     int      `json:"to,omitempty"`
-	JobIds []string `json:"job_ids,omitempty"`
+	From   int     `json:"from,omitempty"`
+	To     int     `json:"to,omitempty"`
+	PlanId *string `json:"plan_id,omitempty"`
 }
 
-func (t *DataRebalanceTask) startRebalanceClusterForScaleOut(rc *polardbxv1reconcile.Context) ([]group.RebalanceAction, error) {
+func (t *DataRebalanceTask) startRebalanceClusterForScaleOut(rc *polardbxv1reconcile.Context) (string, error) {
 	groupMgr, err := rc.GetPolarDBXGroupManager()
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	return groupMgr.RebalanceCluster(t.To)
 }
 
-func (t *DataRebalanceTask) startDrainNodes(rc *polardbxv1reconcile.Context) ([]group.RebalanceAction, error) {
+func (t *DataRebalanceTask) startDrainNodes(rc *polardbxv1reconcile.Context) (string, error) {
 	polardbx := rc.MustGetPolarDBX()
 	groupMgr, err := rc.GetPolarDBXGroupManager()
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	toDrainDNs := make([]string, 0)
@@ -68,15 +68,15 @@ func (t *DataRebalanceTask) Skip() bool {
 }
 
 func (t *DataRebalanceTask) Started() bool {
-	return t.JobIds != nil
+	return t.PlanId != nil
 }
 
-func (t *DataRebalanceTask) Start(rc *polardbxv1reconcile.Context) ([]group.RebalanceAction, error) {
+func (t *DataRebalanceTask) Start(rc *polardbxv1reconcile.Context) (string, error) {
 	if t.From == t.To {
-		return nil, nil
+		return "", nil
 	} else if t.From < t.To { // Scale out
 		if !featuregate.AutoDataRebalance.Enabled() {
-			return nil, nil
+			return "", nil
 		}
 		return t.startRebalanceClusterForScaleOut(rc)
 	} else { // Scale in
@@ -124,7 +124,7 @@ func (t *DataRebalanceTask) getScaleInProgressByCountingDrainedNodes(rc *polardb
 }
 
 func (t *DataRebalanceTask) getProgressByDDL(rc *polardbxv1reconcile.Context) (int, error) {
-	if len(t.JobIds) == 0 {
+	if t.PlanId == nil {
 		return 100, nil
 	}
 
@@ -133,26 +133,21 @@ func (t *DataRebalanceTask) getProgressByDDL(rc *polardbxv1reconcile.Context) (i
 		return 0, err
 	}
 
-	succCnt := 0
-	partial := 0
-	for _, jobId := range t.JobIds {
-		stat, err := groupMgr.ShowDDL(jobId)
-		if err != nil {
-			return 0, err
-		}
-		if stat == nil {
-			succCnt++
-			continue
-		}
-		if stat.Progress < 100 {
-			partial += stat.Progress
-		} else {
-			// Workaround cases that progress is 100 but job is still running.
-			partial += 99
-		}
+	status, err := groupMgr.ShowDDLPlanStatus(*t.PlanId)
+	if err != nil {
+		return 0, err
 	}
-
-	return (succCnt*100 + partial) / len(t.JobIds), nil
+	if status.IsSuccess() {
+		return 100, nil
+	} else {
+		// Bound to [0, 100)
+		if status.Progress < 0 {
+			return 0, nil
+		} else if status.Progress >= 100 {
+			return 99, nil
+		}
+		return status.Progress, nil
+	}
 }
 
 func (t *DataRebalanceTask) Progress(rc *polardbxv1reconcile.Context) (int, error) {
@@ -257,7 +252,7 @@ var StartRebalanceTask = polardbxv1reconcile.NewStepBinder("StartRebalanceTask",
 		}
 
 		// Start a new task.
-		rebalanceActions, err := rebalanceTask.Start(rc)
+		planId, err := rebalanceTask.Start(rc)
 		if err != nil {
 			if err == group.ErrAlreadyInRebalance {
 				flow.Logger().Info("Already in rebalance.")
@@ -267,21 +262,10 @@ var StartRebalanceTask = polardbxv1reconcile.NewStepBinder("StartRebalanceTask",
 		}
 
 		// Log actions.
-		flow.Logger().Info("Rebalance actions started.", "rebalance-actions", rebalanceActions)
+		flow.Logger().Info("Rebalance actions started.", "rebalance-plan", planId)
 
-		// Record job ids into task.
-		jobs := make(map[string][]group.RebalanceAction)
-		for _, action := range rebalanceActions {
-			if _, ok := jobs[action.JobId]; !ok {
-				jobs[action.JobId] = make([]group.RebalanceAction, 0, 1)
-			}
-			jobs[action.JobId] = append(jobs[action.JobId], action)
-		}
-		jobIds := make([]string, 0, len(jobs))
-		for id := range jobs {
-			jobIds = append(jobIds, id)
-		}
-		rebalanceTask.JobIds = jobIds
+		// Record into task context.
+		rebalanceTask.PlanId = &planId
 
 		// Write task context into configmap.
 		err = contextAccess.Write(rebalanceTask)

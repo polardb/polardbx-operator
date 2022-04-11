@@ -47,7 +47,7 @@ $ su galaxykube
 执行下面的命令启动一个 minikube，
 
 ```bash
-minikube start --cpus 4 --memory 7960 --image-mirror-country cn --registry-mirror=https://docker.mirrors.ustc.edu.cn
+minikube start --cpus 4 --memory 7960 --image-mirror-country cn --registry-mirror=https://docker.mirrors.sjtug.sjtu.edu.cn
 ```
 
 > 注：这里我们使用了阿里云的 minikube 镜像源以及 USTC 提供的 docker 镜像源来加速镜像的拉取。
@@ -131,7 +131,7 @@ $ kubectl create namespace polardbx-operator-system
 执行以下命令安装 PolarDB-X Operator。
 
 ```bash
-$ helm install --namespace polardbx-operator-system polardbx-operator https://github.com/ApsaraDB/galaxykube/releases/download/v1.2.0/polardbx-operator-1.2.0.tgz
+$ helm install --namespace polardbx-operator-system polardbx-operator https://github.com/ApsaraDB/galaxykube/releases/download/v1.2.1/polardbx-operator-1.2.0.tgz
 ```
 
 期望看到如下输出：

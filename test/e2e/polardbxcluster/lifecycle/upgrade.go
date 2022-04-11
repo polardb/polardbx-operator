@@ -354,7 +354,7 @@ var _ = ginkgo.Describe("[PolarDBXCluster] [Lifecycle:Upgrade]", func() {
 		resources := corev1.ResourceRequirements{
 			Limits: corev1.ResourceList{
 				corev1.ResourceCPU:    resource.MustParse("2"),
-				corev1.ResourceMemory: resource.MustParse("2Gi"),
+				corev1.ResourceMemory: resource.MustParse("4Gi"),
 			},
 			Requests: corev1.ResourceList{
 				corev1.ResourceCPU:    resource.MustParse("200m"),

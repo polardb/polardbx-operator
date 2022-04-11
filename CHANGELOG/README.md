@@ -1,5 +1,14 @@
 # Changelog
 
+## 2022-04-11
+
+Release v1.2.1.
+
+This is a bugfix release.
++ Fix the CDC problem by setting the 'consensuslog_revise' variable of galaxyengine to ON.
++ Update docker registry mirror used in China mainland from ustc to sjtug.
++ Fix the scale in/out progress: use "schedule rebalance" command.
+
 ## 2022-03-31
 
 Release v1.2.0.

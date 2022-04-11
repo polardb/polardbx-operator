@@ -493,13 +493,22 @@ var WaitUntilGMSReady = polardbxv1reconcile.NewStepBinder("WaitUntilGMSReady",
 
 var WaitUntilDNsReady = polardbxv1reconcile.NewStepBinder("WaitUntilDNsReady",
 	func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+		polardbx := rc.MustGetPolarDBX()
+		topology := &polardbx.Status.SpecSnapshot.Topology
+
 		dnStores, err := rc.GetDNMap()
 		if err != nil {
 			return flow.Error(err, "Unable to list xstores of DNs.")
 		}
 
-		notReadyCnt := 0
-		for _, dnStore := range dnStores {
+		notReadyCnt, skipCnt := 0, 0
+		for i, dnStore := range dnStores {
+			// Trailing DNs.
+			if i >= int(topology.Nodes.DN.Replicas) {
+				skipCnt++
+				continue
+			}
+
 			if dnStore.Status.Phase == polardbxv1xstore.PhaseFailed {
 				helper.TransferPhase(rc.MustGetPolarDBX(), polardbxv1polardbx.PhaseFailed)
 				return flow.Retry("XStore of DN is failed, transfer phase into failed.", "xstore", dnStore.Name)
@@ -511,10 +520,10 @@ var WaitUntilDNsReady = polardbxv1reconcile.NewStepBinder("WaitUntilDNsReady",
 		}
 
 		if notReadyCnt > 0 {
-			return flow.Wait("Some xstore of DN is not ready, wait.")
+			return flow.Wait("Some xstore of DN is not ready, wait.", "not-ready", notReadyCnt, "skip", skipCnt)
 		}
 
-		return flow.Continue("XStores of DNs are ready.")
+		return flow.Continue("XStores of DNs are ready.", "skip", skipCnt)
 	},
 )
 

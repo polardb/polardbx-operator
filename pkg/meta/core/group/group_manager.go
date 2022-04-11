@@ -46,13 +46,6 @@ type Group struct {
 	Movable    bool   `json:"movable"`
 }
 
-type RebalanceAction struct {
-	JobId  string `json:"job_id,omitempty"` // JOB_ID
-	Schema string `json:"schema,omitempty"` // SCHEMA
-	Name   string `json:"name,omitempty"`   // NAME
-	Action string `json:"action,omitempty"` // ACTION
-}
-
 type DDLStatus struct {
 	JobId     string    `json:"job_id,omitempty"`     // JOB_ID
 	Schema    string    `json:"schema,omitempty"`     // OBJECT_SCHEMA
@@ -72,6 +65,16 @@ type DDLResult struct {
 	Content string `json:"content,omitempty"` // RESULT_CONTENT
 }
 
+type DDLPlanStatus struct {
+	PlanId   string `json:"plan_id,omitempty"`  // PLAN_ID
+	State    string `json:"state,omitempty"`    // State
+	Progress int    `json:"progress,omitempty"` // Progress
+}
+
+func (s *DDLPlanStatus) IsSuccess() bool {
+	return strings.ToUpper(s.State) == "SUCCESS"
+}
+
 type GroupManager interface {
 	ListSchemas() ([]string, error)
 	CreateSchema(schema string, createTables ...string) error
@@ -80,11 +83,12 @@ type GroupManager interface {
 	CountStorages() (int, error)
 	GetGroupsOn(schema, storageId string) ([]Group, error)
 	PreloadSchema(schema string, addrs ...string) error
-	RebalanceCluster(storageExpected int) ([]RebalanceAction, error)
-	DrainStorageNodes(storageNodes ...string) ([]RebalanceAction, error)
+	RebalanceCluster(storageExpected int) (string, error)
+	DrainStorageNodes(storageNodes ...string) (string, error)
 	GetClusterVersion() (string, error)
 	ShowDDL(jobId string) (*DDLStatus, error)
 	ShowDDLResult(jobId string) (*DDLResult, error)
+	ShowDDLPlanStatus(planId string) (*DDLPlanStatus, error)
 	Close() error
 }
 
@@ -95,6 +99,22 @@ type groupManager struct {
 	db         *sql.DB
 
 	caseInsensitive bool
+}
+
+//goland:noinspection SqlDialectInspection,SqlNoDataSourceInspection
+func (m *groupManager) ShowDDLPlanStatus(planId string) (*DDLPlanStatus, error) {
+	conn, err := m.getConn("")
+	if err != nil {
+		return nil, err
+	}
+	defer dbutil.DeferClose(conn)
+
+	row := conn.QueryRowContext(m.ctx, "SELECT plan_id, state, progress FROM information_schema.ddl_plan WHERE plan_id = ?", planId)
+	var s DDLPlanStatus
+	if err := row.Scan(&s.PlanId, &s.State, &s.Progress); err != nil {
+		return nil, err
+	}
+	return &s, nil
 }
 
 func (m *groupManager) CountStorages() (int, error) {
@@ -427,32 +447,6 @@ func (m *groupManager) GetGroupsOn(schema, storageId string) ([]Group, error) {
 	return filteredGroups, nil
 }
 
-func scanRebalanceActions(rs *sql.Rows) ([]RebalanceAction, error) {
-	rebalanceActions := make([]RebalanceAction, 0)
-
-	var jobId, schema, name, action sql.NullString
-	m := map[string]interface{}{
-		"JOB_ID": &jobId,
-		"SCHEMA": &schema,
-		"NAME":   &name,
-		"ACTION": &action,
-	}
-	for rs.Next() {
-		err := dbutil.Scan(rs, m, dbutil.ScanOpt{CaseInsensitive: true})
-		if err != nil {
-			return nil, err
-		}
-		rebalanceActions = append(rebalanceActions, RebalanceAction{
-			JobId:  jobId.String,
-			Schema: schema.String,
-			Name:   name.String,
-			Action: action.String,
-		})
-	}
-
-	return rebalanceActions, nil
-}
-
 //goland:noinspection SqlNoDataSourceInspection,SqlDialectInspection
 func (m *groupManager) countStorages(conn *sql.Conn, ctx context.Context) (int, error) {
 	rs, err := conn.QueryContext(ctx, "SHOW STORAGE")
@@ -496,10 +490,10 @@ func (m *groupManager) convertRebalanceError(err error) error {
 }
 
 //goland:noinspection SqlNoDataSourceInspection,SqlDialectInspection
-func (m *groupManager) RebalanceCluster(storageExpected int) ([]RebalanceAction, error) {
+func (m *groupManager) RebalanceCluster(storageExpected int) (string, error) {
 	conn, err := m.getConn("")
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	defer dbutil.DeferClose(conn)
 
@@ -508,40 +502,38 @@ func (m *groupManager) RebalanceCluster(storageExpected int) ([]RebalanceAction,
 
 	storageCnt, err := m.countStorages(conn, ctx)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	if storageCnt < storageExpected {
-		return nil, errors.New("storage size not match")
+		return "", errors.New("storage size not match")
 	}
 
-	rs, err := conn.QueryContext(ctx, `rebalance cluster`)
-	if err != nil {
-		return nil, m.convertRebalanceError(err)
+	row := conn.QueryRowContext(ctx, `schedule rebalance cluster`)
+	var planId string
+	if err := row.Scan(&planId); err != nil {
+		return "", m.convertRebalanceError(err)
 	}
-	defer dbutil.DeferClose(rs)
-
-	return scanRebalanceActions(rs)
+	return planId, nil
 }
 
 //goland:noinspection SqlNoDataSourceInspection
-func (m *groupManager) DrainStorageNodes(storageNodes ...string) ([]RebalanceAction, error) {
+func (m *groupManager) DrainStorageNodes(storageNodes ...string) (string, error) {
 	conn, err := m.getConn("")
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	defer dbutil.DeferClose(conn)
 
 	ctx, cancel := context.WithTimeout(m.ctx, 5*time.Second)
 	defer cancel()
 
-	rs, err := conn.QueryContext(ctx, fmt.Sprintf(`rebalance cluster drain_node='%s'`,
+	row := conn.QueryRowContext(ctx, fmt.Sprintf(`schedule rebalance cluster drain_node='%s'`,
 		strings.Join(storageNodes, ",")))
-	if err != nil {
-		return nil, m.convertRebalanceError(err)
+	var planId string
+	if err := row.Scan(&planId); err != nil {
+		return "", m.convertRebalanceError(err)
 	}
-	defer dbutil.DeferClose(rs)
-
-	return scanRebalanceActions(rs)
+	return planId, nil
 }
 
 func (m *groupManager) Close() error {

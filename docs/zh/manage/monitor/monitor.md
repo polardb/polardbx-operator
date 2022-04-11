@@ -23,7 +23,7 @@ kubectl apply -f https://raw.githubusercontent.com/ApsaraDB/galaxykube/v1.2.0/ch
 
 执行如下命令安装 PolarDB-X Monitor：
 ```bash
- helm install --namespace polardbx-monitor polardbx-monitor https://github.com/ApsaraDB/galaxykube/releases/download/v1.2.0/polardbx-monitor-1.2.0.tgz
+ helm install --namespace polardbx-monitor polardbx-monitor https://github.com/ApsaraDB/galaxykube/releases/download/v1.2.1/polardbx-monitor-1.2.0.tgz
 ```
 > 注：通过这种方式安装 Prometheus 和 Grafana 采用的都是默认配置便于快速体验。如果部署在生产集群，你可以参考[定制 PolarDB-X Monitor 配置](#configure_prometheus_grafana)
 
@@ -103,7 +103,7 @@ PolarDB-X Monitor 的 helm chart 采用了默认的 Prometheus 和 Grafana 配�
  ```bash
  helm upgrade --namespace polardbx-monitor polardbx-monitor polardbx-monitor-1.2.0.tgz -f values.yaml
  ```
-values.yaml 文件包含了 Prometheus 和 Grafana 的相关配置项，下面针对常见的几种场景给出配置示例，详细的配置列表详见：[values.yaml](https://raw.githubusercontent.com/ApsaraDB/galaxykube/v1.2.0/charts/polardbx-monitor/values.yaml)。
+values.yaml 文件包含了 Prometheus 和 Grafana 的相关配置项，下面针对常见的几种场景给出配置示例，详细的配置列表详见：[values.yaml](https://raw.githubusercontent.com/ApsaraDB/galaxykube/v1.2.1/charts/polardbx-monitor/values.yaml)。
 
 ### <a name="configure_load_balancer">配置 LoadBalancer</a>
 如果您的 K8s 集群支持 LoadBalancer，可以在安装或者升级 PolarDB-X Monitor 的时候通过 -f 参数指定如下配置：
