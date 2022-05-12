@@ -131,7 +131,13 @@ $ kubectl create namespace polardbx-operator-system
 执行以下命令安装 PolarDB-X Operator。
 
 ```bash
-$ helm install --namespace polardbx-operator-system polardbx-operator https://github.com/ApsaraDB/galaxykube/releases/download/v1.2.1/polardbx-operator-1.2.0.tgz
+$ helm install --namespace polardbx-operator-system polardbx-operator https://github.com/ApsaraDB/galaxykube/releases/download/v1.2.1/polardbx-operator-1.2.1.tgz
+```
+
+您也可以通过 PolarDB-X 的 Helm Chart 仓库安装:
+```bash
+helm repo add polardbx https://polardbx-charts.oss-cn-beijing.aliyuncs.com
+helm install --namespace polardbx-operator-system polardbx-operator polardbx/polardbx-operator
 ```
 
 期望看到如下输出：

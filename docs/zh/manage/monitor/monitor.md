@@ -23,7 +23,13 @@ kubectl apply -f https://raw.githubusercontent.com/ApsaraDB/galaxykube/v1.2.0/ch
 
 执行如下命令安装 PolarDB-X Monitor：
 ```bash
- helm install --namespace polardbx-monitor polardbx-monitor https://github.com/ApsaraDB/galaxykube/releases/download/v1.2.1/polardbx-monitor-1.2.0.tgz
+ helm install --namespace polardbx-monitor polardbx-monitor https://github.com/ApsaraDB/galaxykube/releases/download/v1.2.1/polardbx-monitor-1.2.1.tgz
+```
+
+您也可以通过 PolarDB-X 的 Helm Chart 仓库安装:
+```bash
+helm repo add polardbx https://polardbx-charts.oss-cn-beijing.aliyuncs.com
+helm install --namespace polardbx-monitor polardbx-monitor polardbx/polardbx-monitor
 ```
 > 注：通过这种方式安装 Prometheus 和 Grafana 采用的都是默认配置便于快速体验。如果部署在生产集群，你可以参考[定制 PolarDB-X Monitor 配置](#configure_prometheus_grafana)
 
