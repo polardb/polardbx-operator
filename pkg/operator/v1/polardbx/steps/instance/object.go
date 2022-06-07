@@ -18,6 +18,8 @@ package instance
 
 import (
 	"sort"
+	"sync"
+	"sync/atomic"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -244,6 +246,9 @@ var CreateOrReconcileDNs = polardbxv1reconcile.NewStepBinder("CreateOrReconcileD
 
 		objectFactory := factory.NewObjectFactory(rc)
 		anyChanged := false
+		wg := &sync.WaitGroup{}
+		errs := make([]error, replicas)
+		var errCnt uint32
 		for i := 0; i < replicas; i++ {
 			observedDnStore, ok := dnStores[i]
 
@@ -253,10 +258,18 @@ var CreateOrReconcileDNs = polardbxv1reconcile.NewStepBinder("CreateOrReconcileD
 					return flow.Error(err, "Unable to new xstore of DN.", "index", i)
 				}
 
-				err = rc.SetControllerRefAndCreate(newDnStore)
-				if err != nil {
-					return flow.Error(err, "Unable to create xstore of DN.", "index", i)
-				}
+				wg.Add(1)
+				logger, idx := flow.Logger(), i
+				go func() {
+					defer wg.Done()
+					err = rc.SetControllerRefAndCreate(newDnStore)
+					if err != nil {
+						logger.Error(err, "Unable to create xstore of DN.", "index", i)
+						errs[idx] = err
+						atomic.AddUint32(&errCnt, 1)
+					}
+				}()
+
 				anyChanged = true
 			} else {
 				generation, err := convention.GetGenerationLabelValue(observedDnStore)
@@ -278,13 +291,33 @@ var CreateOrReconcileDNs = polardbxv1reconcile.NewStepBinder("CreateOrReconcileD
 
 					convention.CopyMetadataForUpdate(&newDnStore.ObjectMeta, &observedDnStore.ObjectMeta, observedGeneration)
 
-					err = rc.Client().Update(rc.Context(), newDnStore)
-					if err != nil {
-						return flow.Error(err, "Unable to update xstore of DN.", "index", i)
-					}
+					wg.Add(1)
+					logger, idx := flow.Logger(), i
+					go func() {
+						defer wg.Done()
+						err = rc.Client().Update(rc.Context(), newDnStore)
+						if err != nil {
+							logger.Error(err, "Unable to update xstore of DN.", "index", i)
+							errs[idx] = err
+							atomic.AddUint32(&errCnt, 1)
+						}
+					}()
+
 					anyChanged = true
 				}
 			}
+		}
+
+		wg.Wait()
+		if errCnt > 0 {
+			var firstErr error
+			for _, err := range errs {
+				if err != nil {
+					firstErr = err
+					break
+				}
+			}
+			return flow.Error(firstErr, "Unable to create or reconcile xstores of DN.", "error-cnt", errCnt)
 		}
 
 		// Remove DNs not enabled in GMS and larger than current target replicas (safe because not in use).

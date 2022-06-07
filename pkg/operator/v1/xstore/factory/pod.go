@@ -210,6 +210,7 @@ func NewPod(rc *reconcile.Context, xstore *polardbxv1.XStore, nodeSet *polardbxv
 				ConfigMapVolumes(xstore),
 				volumes,
 			),
+			EnableServiceLinks:            pointer.BoolPtr(false),
 			ImagePullSecrets:              template.Spec.ImagePullSecrets,
 			DNSPolicy:                     corev1.DNSClusterFirstWithHostNet,
 			RestartPolicy:                 corev1.RestartPolicyAlways,

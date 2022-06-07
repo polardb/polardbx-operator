@@ -50,7 +50,15 @@ func (c *objectCache) GetObject(ctx context.Context, name types.NamespacedName, 
 		c.SetObject(obj)
 		return obj, nil
 	}
-	return objects[name.String()], nil
+	if obj, ok := objects[name.String()]; ok {
+		return obj, nil
+	}
+	err = c.client.Get(ctx, name, obj)
+	if err != nil {
+		return nil, err
+	}
+	c.SetObject(obj)
+	return obj, nil
 }
 
 func (c *objectCache) SetObject(object client.Object) {

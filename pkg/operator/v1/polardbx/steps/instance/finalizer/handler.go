@@ -17,6 +17,10 @@ limitations under the License.
 package finalizer
 
 import (
+	"sync"
+	"sync/atomic"
+	"time"
+
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -162,12 +166,26 @@ var RemoveFinalizersOnStores = polardbxv1reconcile.NewStepBinder("RemoveFinalize
 			return flow.Error(err, "Unable to get xstores of DN.")
 		}
 
-		for _, xstore := range dnStores {
-			err := removeFinalizerOnStore(rc, xstore)
-			if err != nil {
-				return flow.Error(err, "Unable to remove finalizer on xstore of DN.", "xstore", xstore.Name)
-			}
+		errCnt := int32(0)
+		wg := &sync.WaitGroup{}
+		for i := range dnStores {
+			xstore := dnStores[i]
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				err := removeFinalizerOnStore(rc, xstore)
+				if err != nil {
+					flow.Logger().Error(err, "Unable to remove finalizer on xstore of DN.", "xstore", xstore.Name)
+					atomic.AddInt32(&errCnt, 1)
+				}
+			}()
 		}
+		wg.Wait()
+
+		if errCnt > 0 {
+			return flow.RetryAfter(5*time.Second, "Retry finalizer remove after 5 seconds...")
+		}
+
 		return flow.Continue("Finalizers on XStores are removed!")
 	},
 )

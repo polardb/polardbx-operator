@@ -368,6 +368,10 @@ func (f *DefaultExtraPodFactory) newProbeHandlerViaProber(endpoint, target strin
 					Name:  "Probe-Extra",
 					Value: extra,
 				},
+				{
+					Name:  "Probe-Timeout",
+					Value: "10s",
+				},
 			},
 		},
 	}
@@ -381,20 +385,20 @@ func (f *DefaultExtraPodFactory) NewProbes(ctx *PodFactoryContext, container str
 				Handler: f.newProbeHandlerViaProber("/liveness", probe.TypeXStore,
 					ctx.portMap[convention.PortProbe], ctx.portMap[convention.PortAccess], ctx.engine),
 				InitialDelaySeconds: 5,
-				TimeoutSeconds:      5,
+				TimeoutSeconds:      10,
 				PeriodSeconds:       10,
 				FailureThreshold:    360,
 			},
 			LivenessProbe: &corev1.Probe{
 				Handler: f.newProbeHandlerViaProber("/liveness", probe.TypeXStore,
 					ctx.portMap[convention.PortProbe], ctx.portMap[convention.PortAccess], ctx.engine),
-				TimeoutSeconds: 5,
+				TimeoutSeconds: 10,
 				PeriodSeconds:  10,
 			},
 			ReadinessProbe: &corev1.Probe{
 				Handler: f.newProbeHandlerViaProber("/readiness", probe.TypeXStore,
 					ctx.portMap[convention.PortProbe], ctx.portMap[convention.PortAccess], ctx.engine),
-				TimeoutSeconds: 5,
+				TimeoutSeconds: 10,
 				PeriodSeconds:  10,
 			},
 		}

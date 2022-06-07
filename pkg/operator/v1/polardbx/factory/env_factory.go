@@ -221,7 +221,7 @@ func (e *envFactory) newJvmInjectionEnvVarForCNEngine(debugPort int) corev1.EnvV
 	staticConfig := e.polardbx.Spec.Config.CN.Static
 	if staticConfig != nil {
 		if staticConfig.EnableCoroutine {
-			tddlOpts = append(tddlOpts, "-XX:+UseWisp2")
+			tddlOpts = append(tddlOpts, "-XX:+UseWisp2", "-Dio.grpc.netty.shaded.io.netty.transport.noNative=true")
 		}
 		if staticConfig.EnableJvmRemoteDebug {
 			tddlOpts = append(tddlOpts, fmt.Sprintf("-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=%d", debugPort))
@@ -309,10 +309,6 @@ func (e *envFactory) newBasicEnvVarsForCDCEngine(gmsConn *StorageConnection) []c
 		pxcServiceName = e.polardbx.Name
 	}
 
-	toServiceEnvName := func(serviceName string) string {
-		return strings.ToUpper(strings.ReplaceAll(serviceName, "-", "_"))
-	}
-
 	// FIXME CDC currently doesn't support host network, so ports are hard coded.
 	return []corev1.EnvVar{
 		{Name: "switchCloud", Value: "aliyun"},
@@ -328,7 +324,7 @@ func (e *envFactory) newBasicEnvVarsForCDCEngine(gmsConn *StorageConnection) []c
 		{Name: "metaDb_url", Value: fmt.Sprintf("jdbc:mysql://%s:%d/polardbx_meta_db?useSSL=false", gmsConn.Host, gmsConn.Port)},
 		{Name: "metaDb_username", Value: gmsConn.User},
 		{Name: "metaDb_password", Value: gmsConn.Passwd},
-		{Name: "polarx_url", Value: fmt.Sprintf("jdbc:mysql://$(%s_SERVICE_HOST):$(%s_SERVICE_PORT)/__cdc__?useSSL=false", toServiceEnvName(pxcServiceName), toServiceEnvName(pxcServiceName))},
+		{Name: "polarx_url", Value: fmt.Sprintf("jdbc:mysql://%s:%d/__cdc__?useSSL=false", pxcServiceName, 3306)},
 		{Name: "polarx_username", Value: "polardbx_root"},
 		{Name: "polarx_password", ValueFrom: e.newValueFromSecretKey(e.polardbx.Name, "polardbx_root")},
 		{Name: "dnPasswordKey", Value: e.cipher.Key()},

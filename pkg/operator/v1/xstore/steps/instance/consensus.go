@@ -51,7 +51,7 @@ func ReportRoleAndCurrentLeader(rc *xstorev1reconcile.Context, pod *corev1.Pod, 
 	err := rc.ExecuteCommandOn(pod, "engine", cmd, control.ExecOptions{
 		Logger:  logger,
 		Stdout:  stdout,
-		Timeout: 2 * time.Second,
+		Timeout: 10 * time.Second,
 	})
 	if err != nil {
 		return "", "", err

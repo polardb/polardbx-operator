@@ -460,7 +460,7 @@ func (f *objectFactory) newDeployment4CN(group string, mr *matchingRule) (*appsv
 				exporterContainer.Resources = corev1.ResourceRequirements{
 					Limits: corev1.ResourceList{
 						corev1.ResourceCPU:    resource.MustParse("200m"),
-						corev1.ResourceMemory: resource.MustParse("100Mi"),
+						corev1.ResourceMemory: resource.MustParse("300Mi"),
 					},
 				}
 			}
@@ -510,6 +510,8 @@ func (f *objectFactory) newDeployment4CN(group string, mr *matchingRule) (*appsv
 					Finalizers:  []string{polardbxmeta.Finalizer},
 				},
 				Spec: corev1.PodSpec{
+					// TODO: Add a config to control this switch
+					EnableServiceLinks:            pointer.BoolPtr(false),
 					ImagePullSecrets:              template.ImagePullSecrets,
 					Volumes:                       volumeFactory.NewVolumesForCN(),
 					InitContainers:                []corev1.Container{initContainer},
@@ -681,6 +683,8 @@ func (f *objectFactory) newDeployment4CDC(group string, mr *matchingRule) (*apps
 					Finalizers:  []string{polardbxmeta.Finalizer},
 				},
 				Spec: corev1.PodSpec{
+					// TODO: Add a config to control this switch
+					EnableServiceLinks:            pointer.BoolPtr(false),
 					ImagePullSecrets:              template.ImagePullSecrets,
 					Volumes:                       volumeFactory.NewVolumesForCDC(),
 					Containers:                    containers,
