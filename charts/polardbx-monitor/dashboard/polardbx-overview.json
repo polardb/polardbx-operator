@@ -16,7 +16,7 @@
   "editable": true,
   "gnetId": null,
   "graphTooltip": 0,
-  "iteration": 1645601804115,
+  "iteration": 1652766342769,
   "links": [],
   "panels": [
     {
@@ -95,7 +95,7 @@
         },
         {
           "exemplar": true,
-          "expr": "sum(\n    container_memory_working_set_bytes{namespace=\"$namespace\", container=\"engine\"}\n  * on(namespace,pod)\n    group_left() polardbx_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\"}\n)\n/sum(\n  kube_pod_container_resource_limits_memory_bytes{namespace=\"$namespace\", container=\"engine\"}\n* on(namespace,pod)\n  group_left() polardbx_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"cn\"}\n)\n",
+          "expr": "sum(\n    container_memory_working_set_bytes{namespace=\"$namespace\", container=\"engine\", id=~\"^/kubepods.*\"}\n  * on(namespace,pod)\n    group_left() polardbx_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\"}\n)\n/sum(\n  kube_pod_container_resource_limits_memory_bytes{namespace=\"$namespace\", container=\"engine\"}\n* on(namespace,pod)\n  group_left() polardbx_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"cn\"}\n)\n",
           "hide": false,
           "instant": true,
           "interval": "",
@@ -113,7 +113,7 @@
         },
         {
           "exemplar": true,
-          "expr": "sum(\n    container_memory_working_set_bytes{cluster=\"$cluster\", namespace=\"$namespace\", container=\"engine\"}\n  * on(namespace,pod)\n    group_left() (sum (mysql_up{polardbx_name=\"$polardbx\", polardbx_role=\"dn\", namespace=\"$namespace\", xstore_role=\"leader\"} > 0) by (namespace, pod))\n)/\nsum(\n    kube_pod_container_resource_limits_memory_bytes{cluster=\"$cluster\", namespace=\"$namespace\", container=\"engine\"}\n  * on(namespace,pod)\n    group_left() (sum (mysql_up{polardbx_name=\"$polardbx\", polardbx_role=\"dn\", namespace=\"$namespace\", xstore_role=\"leader\"} > 0) by (namespace, pod))\n)",
+          "expr": "sum(\n    container_memory_working_set_bytes{cluster=\"$cluster\", namespace=\"$namespace\", container=\"engine\", id=~\"^/kubepods.*\"}\n  * on(namespace,pod)\n    group_left() (sum (mysql_up{polardbx_name=\"$polardbx\", polardbx_role=\"dn\", namespace=\"$namespace\", xstore_role=\"leader\"} > 0) by (namespace, pod))\n)/\nsum(\n    kube_pod_container_resource_limits_memory_bytes{cluster=\"$cluster\", namespace=\"$namespace\", container=\"engine\"}\n  * on(namespace,pod)\n    group_left() (sum (mysql_up{polardbx_name=\"$polardbx\", polardbx_role=\"dn\", namespace=\"$namespace\", xstore_role=\"leader\"} > 0) by (namespace, pod))\n)",
           "hide": false,
           "interval": "",
           "legendFormat": "MEM (DN)",
@@ -971,7 +971,7 @@
         },
         {
           "exemplar": true,
-          "expr": "sum by (pod) (\n    container_memory_working_set_bytes{namespace=\"$namespace\", container=\"engine\"}\n  * on(namespace,pod)\n    group_left() mysql_up{polardbx_name=\"$polardbx\", polardbx_role=\"gms\", namespace=\"$namespace\", xstore_role=\"leader\"}\n)",
+          "expr": "sum by (pod) (\n    container_memory_working_set_bytes{namespace=\"$namespace\", container=\"engine\", id=~\"^/kubepods.*\"}\n  * on(namespace,pod)\n    group_left() mysql_up{polardbx_name=\"$polardbx\", polardbx_role=\"gms\", namespace=\"$namespace\", xstore_role=\"leader\"}\n)",
           "format": "table",
           "hide": false,
           "instant": true,
@@ -991,7 +991,7 @@
         },
         {
           "exemplar": true,
-          "expr": "sum by (pod) (\n    container_memory_working_set_bytes{namespace=\"$namespace\", container=\"engine\"}\n  * on(namespace,pod)\n    group_left() mysql_up{polardbx_name=\"$polardbx\", polardbx_role=\"gms\", namespace=\"$namespace\", xstore_role=\"leader\"}\n)\n/\nsum by (pod) (\n  kube_pod_container_resource_limits_memory_bytes{namespace=\"$namespace\", container=\"engine\"}\n* on(namespace,pod)\n  group_left() mysql_up{polardbx_name=\"$polardbx\", polardbx_role=\"gms\", namespace=\"$namespace\", xstore_role=\"leader\"}\n)",
+          "expr": "sum by (pod) (\n    container_memory_working_set_bytes{namespace=\"$namespace\", container=\"engine\", id=~\"^/kubepods.*\"}\n  * on(namespace,pod)\n    group_left() mysql_up{polardbx_name=\"$polardbx\", polardbx_role=\"gms\", namespace=\"$namespace\", xstore_role=\"leader\"}\n)\n/\nsum by (pod) (\n  kube_pod_container_resource_limits_memory_bytes{namespace=\"$namespace\", container=\"engine\"}\n* on(namespace,pod)\n  group_left() mysql_up{polardbx_name=\"$polardbx\", polardbx_role=\"gms\", namespace=\"$namespace\", xstore_role=\"leader\"}\n)",
           "format": "table",
           "hide": false,
           "instant": true,
@@ -1351,7 +1351,7 @@
         },
         {
           "exemplar": true,
-          "expr": "sum by (pod) (\n    container_memory_working_set_bytes{namespace=\"$namespace\", container=\"engine\"}\n  * on(namespace,pod)\n    group_left() polardbx_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"cn\"}\n)",
+          "expr": "sum by (pod) (\n    container_memory_working_set_bytes{namespace=\"$namespace\", container=\"engine\", id=~\"^/kubepods.*\"}\n  * on(namespace,pod)\n    group_left() polardbx_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"cn\"}\n)",
           "format": "table",
           "hide": false,
           "instant": true,
@@ -1371,7 +1371,7 @@
         },
         {
           "exemplar": true,
-          "expr": "sum by (pod) (\n    container_memory_working_set_bytes{namespace=\"$namespace\", container=\"engine\"}\n  * on(namespace,pod)\n    group_left() polardbx_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"cn\"}\n)\n/\nsum by (pod) (\n  kube_pod_container_resource_limits_memory_bytes{namespace=\"$namespace\", container=\"engine\"}\n* on(namespace,pod)\n  group_left() polardbx_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"cn\"}\n)",
+          "expr": "sum by (pod) (\n    container_memory_working_set_bytes{namespace=\"$namespace\", container=\"engine\", id=~\"^/kubepods.*\"}\n  * on(namespace,pod)\n    group_left() polardbx_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"cn\"}\n)\n/\nsum by (pod) (\n  kube_pod_container_resource_limits_memory_bytes{namespace=\"$namespace\", container=\"engine\"}\n* on(namespace,pod)\n  group_left() polardbx_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"cn\"}\n)",
           "format": "table",
           "hide": false,
           "instant": true,
@@ -1683,7 +1683,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "sum(container_memory_working_set_bytes{namespace=\"$namespace\", container=\"engine\"}\n  * on(namespace,pod)\ngroup_left() polardbx_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"cn\"})\n",
+          "expr": "sum(container_memory_working_set_bytes{namespace=\"$namespace\", container=\"engine\", id=~\"^/kubepods.*\"}\n  * on(namespace,pod)\ngroup_left() polardbx_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"cn\"})\n",
           "interval": "",
           "legendFormat": "memory",
           "queryType": "randomWalk",
@@ -1763,7 +1763,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "sum(\n    container_memory_working_set_bytes{namespace=\"$namespace\", container=\"engine\"}\n  * on(namespace,pod)\n    group_left() polardbx_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"cn\"}\n)\n/sum(\n  kube_pod_container_resource_limits_memory_bytes{namespace=\"$namespace\", container=\"engine\"}\n* on(namespace,pod)\n  group_left() polardbx_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"cn\"}\n)\n",
+          "expr": "sum(\n    container_memory_working_set_bytes{namespace=\"$namespace\", container=\"engine\", id=~\"^/kubepods.*\"}\n  * on(namespace,pod)\n    group_left() polardbx_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"cn\"}\n)\n/sum(\n  kube_pod_container_resource_limits_memory_bytes{namespace=\"$namespace\", container=\"engine\"}\n* on(namespace,pod)\n  group_left() polardbx_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"cn\"}\n)\n",
           "interval": "",
           "legendFormat": "avg mem %",
           "queryType": "randomWalk",
@@ -2006,7 +2006,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "container_memory_working_set_bytes{namespace=\"$namespace\", container=\"engine\"}\n  * on(namespace,pod)\ngroup_left() polardbx_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"cn\"}\n",
+          "expr": "container_memory_working_set_bytes{namespace=\"$namespace\", container=\"engine\", id=~\"^/kubepods.*\"}\n  * on(namespace,pod)\ngroup_left() polardbx_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"cn\"}\n",
           "interval": "",
           "legendFormat": "{{ pod }}",
           "queryType": "randomWalk",
@@ -2086,7 +2086,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "sum(\n    container_memory_working_set_bytes{namespace=\"$namespace\", container=\"engine\"}\n  * on(namespace,pod)\n    group_left() polardbx_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"cn\"}\n) by (pod)\n/sum(\n  kube_pod_container_resource_limits_memory_bytes{namespace=\"$namespace\", container=\"engine\"}\n* on(namespace,pod)\n  group_left() polardbx_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"cn\"}\n) by (pod)\n",
+          "expr": "sum(\n    container_memory_working_set_bytes{namespace=\"$namespace\", container=\"engine\", id=~\"^/kubepods.*\"}\n  * on(namespace,pod)\n    group_left() polardbx_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"cn\"}\n) by (pod)\n/sum(\n  kube_pod_container_resource_limits_memory_bytes{namespace=\"$namespace\", container=\"engine\"}\n* on(namespace,pod)\n  group_left() polardbx_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"cn\"}\n) by (pod)\n",
           "interval": "",
           "legendFormat": "{{ pod }}",
           "queryType": "randomWalk",
@@ -3151,7 +3151,7 @@
         },
         {
           "exemplar": true,
-          "expr": "sum by (pod) (\n    container_memory_working_set_bytes{namespace=\"$namespace\", container=\"engine\"}\n  * on(namespace,pod)\n    group_left() mysql_up{polardbx_name=\"$polardbx\", polardbx_role=\"dn\", namespace=\"$namespace\", xstore_role=\"leader\"}\n)",
+          "expr": "sum by (pod) (\n    container_memory_working_set_bytes{namespace=\"$namespace\", container=\"engine\", id=~\"^/kubepods.*\"}\n  * on(namespace,pod)\n    group_left() mysql_up{polardbx_name=\"$polardbx\", polardbx_role=\"dn\", namespace=\"$namespace\", xstore_role=\"leader\"}\n)",
           "format": "table",
           "hide": false,
           "instant": true,
@@ -3171,7 +3171,7 @@
         },
         {
           "exemplar": true,
-          "expr": "sum by (pod) (\n    container_memory_working_set_bytes{namespace=\"$namespace\", container=\"engine\"}\n  * on(namespace,pod)\n    group_left() mysql_up{polardbx_name=\"$polardbx\", polardbx_role=\"dn\", namespace=\"$namespace\", xstore_role=\"leader\"}\n)\n/\nsum by (pod) (\n  kube_pod_container_resource_limits_memory_bytes{namespace=\"$namespace\", container=\"engine\"}\n* on(namespace,pod)\n  group_left() mysql_up{polardbx_name=\"$polardbx\", polardbx_role=\"dn\", namespace=\"$namespace\", xstore_role=\"leader\"}\n)",
+          "expr": "sum by (pod) (\n    container_memory_working_set_bytes{namespace=\"$namespace\", container=\"engine\", id=~\"^/kubepods.*\"}\n  * on(namespace,pod)\n    group_left() mysql_up{polardbx_name=\"$polardbx\", polardbx_role=\"dn\", namespace=\"$namespace\", xstore_role=\"leader\"}\n)\n/\nsum by (pod) (\n  kube_pod_container_resource_limits_memory_bytes{namespace=\"$namespace\", container=\"engine\"}\n* on(namespace,pod)\n  group_left() mysql_up{polardbx_name=\"$polardbx\", polardbx_role=\"dn\", namespace=\"$namespace\", xstore_role=\"leader\"}\n)",
           "format": "table",
           "hide": false,
           "instant": true,
@@ -3480,7 +3480,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "sum(container_memory_working_set_bytes{namespace=\"$namespace\", container=\"engine\"}\n* on(namespace,pod)\n  group_left() mysql_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"dn\", xstore_role=\"leader\"})",
+          "expr": "sum(container_memory_working_set_bytes{namespace=\"$namespace\", container=\"engine\", id=~\"^/kubepods.*\"}\n* on(namespace,pod)\n  group_left() mysql_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"dn\", xstore_role=\"leader\"})",
           "interval": "",
           "legendFormat": "memory",
           "queryType": "randomWalk",
@@ -3559,7 +3559,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "sum(container_memory_working_set_bytes{namespace=\"$namespace\", container=\"engine\"}\n* on(namespace,pod)\n  group_left() mysql_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"dn\", xstore_role=\"leader\"})\n/\nsum(kube_pod_container_resource_limits_memory_bytes{namespace=\"$namespace\", container=\"engine\"}\n* on(namespace,pod)\n  group_left() mysql_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"dn\", xstore_role=\"leader\"})",
+          "expr": "sum(container_memory_working_set_bytes{namespace=\"$namespace\", container=\"engine\", id=~\"^/kubepods.*\"}\n* on(namespace,pod)\n  group_left() mysql_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"dn\", xstore_role=\"leader\"})\n/\nsum(kube_pod_container_resource_limits_memory_bytes{namespace=\"$namespace\", container=\"engine\"}\n* on(namespace,pod)\n  group_left() mysql_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"dn\", xstore_role=\"leader\"})",
           "interval": "",
           "legendFormat": "avg mem %",
           "queryType": "randomWalk",
@@ -3797,7 +3797,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "sum(container_memory_working_set_bytes{namespace=\"$namespace\", container=\"engine\"}\n* on(namespace,pod)\n  group_left(xstore_name) mysql_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"dn\", xstore_role=\"leader\"}) by (xstore_name)",
+          "expr": "sum(container_memory_working_set_bytes{namespace=\"$namespace\", container=\"engine\", id=~\"^/kubepods.*\"}\n* on(namespace,pod)\n  group_left(xstore_name) mysql_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"dn\", xstore_role=\"leader\"}) by (xstore_name)",
           "interval": "",
           "legendFormat": "{{ xstore_name }}",
           "queryType": "randomWalk",
@@ -3876,7 +3876,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "sum(container_memory_working_set_bytes{namespace=\"$namespace\", container=\"engine\"}\n* on(namespace,pod)\n  group_left(xstore_name) mysql_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"dn\", xstore_role=\"leader\"}) by (xstore_name)\n/\nsum(kube_pod_container_resource_limits_memory_bytes{namespace=\"$namespace\", container=\"engine\"}\n* on(namespace,pod)\n  group_left(xstore_name) mysql_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"dn\", xstore_role=\"leader\"}) by (xstore_name)",
+          "expr": "sum(container_memory_working_set_bytes{namespace=\"$namespace\", container=\"engine\", id=~\"^/kubepods.*\"}\n* on(namespace,pod)\n  group_left(xstore_name) mysql_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"dn\", xstore_role=\"leader\"}) by (xstore_name)\n/\nsum(kube_pod_container_resource_limits_memory_bytes{namespace=\"$namespace\", container=\"engine\"}\n* on(namespace,pod)\n  group_left(xstore_name) mysql_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"dn\", xstore_role=\"leader\"}) by (xstore_name)",
           "interval": "",
           "legendFormat": "{{ xstore_name }}",
           "queryType": "randomWalk",
@@ -5195,7 +5195,7 @@
         },
         {
           "exemplar": true,
-          "expr": "sum by (pod) (\n    container_memory_working_set_bytes{namespace=\"$namespace\", container=\"engine\"}\n  * on(namespace,pod)\n    group_left() polardbx_cdc_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"cdc\"}\n)",
+          "expr": "sum by (pod) (\n    container_memory_working_set_bytes{namespace=\"$namespace\", container=\"engine\", id=~\"^/kubepods.*\"}\n  * on(namespace,pod)\n    group_left() polardbx_cdc_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"cdc\"}\n)",
           "format": "table",
           "hide": false,
           "instant": true,
@@ -5215,7 +5215,7 @@
         },
         {
           "exemplar": true,
-          "expr": "sum by (pod) (\n    container_memory_working_set_bytes{namespace=\"$namespace\", container=\"engine\"}\n  * on(namespace,pod)\n    group_left() polardbx_cdc_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"cdc\"}\n)\n/\nsum by (pod) (\n  kube_pod_container_resource_limits_memory_bytes{namespace=\"$namespace\", container=\"engine\"}\n* on(namespace,pod)\n  group_left() polardbx_cdc_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"cdc\"}\n)",
+          "expr": "sum by (pod) (\n    container_memory_working_set_bytes{namespace=\"$namespace\", container=\"engine\", id=~\"^/kubepods.*\"}\n  * on(namespace,pod)\n    group_left() polardbx_cdc_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"cdc\"}\n)\n/\nsum by (pod) (\n  kube_pod_container_resource_limits_memory_bytes{namespace=\"$namespace\", container=\"engine\"}\n* on(namespace,pod)\n  group_left() polardbx_cdc_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"cdc\"}\n)",
           "format": "table",
           "hide": false,
           "instant": true,
@@ -5527,7 +5527,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "sum(container_memory_working_set_bytes{namespace=\"$namespace\", container=\"engine\"}\n  * on(namespace,pod)\ngroup_left() polardbx_cdc_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"cdc\"})\n",
+          "expr": "sum(container_memory_working_set_bytes{namespace=\"$namespace\", container=\"engine\", id=~\"^/kubepods.*\"}\n  * on(namespace,pod)\ngroup_left() polardbx_cdc_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"cdc\"})\n",
           "interval": "",
           "legendFormat": "memory",
           "queryType": "randomWalk",
@@ -5607,7 +5607,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "sum(\n    container_memory_working_set_bytes{namespace=\"$namespace\", container=\"engine\"}\n  * on(namespace,pod)\n    group_left() polardbx_cdc_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"cdc\"}\n)\n/sum(\n  kube_pod_container_resource_limits_memory_bytes{namespace=\"$namespace\", container=\"engine\"}\n* on(namespace,pod)\n  group_left() polardbx_cdc_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"cdc\"}\n)\n",
+          "expr": "sum(\n    container_memory_working_set_bytes{namespace=\"$namespace\", container=\"engine\", id=~\"^/kubepods.*\"}\n  * on(namespace,pod)\n    group_left() polardbx_cdc_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"cdc\"}\n)\n/sum(\n  kube_pod_container_resource_limits_memory_bytes{namespace=\"$namespace\", container=\"engine\"}\n* on(namespace,pod)\n  group_left() polardbx_cdc_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"cdc\"}\n)\n",
           "interval": "",
           "legendFormat": "avg mem %",
           "queryType": "randomWalk",
@@ -5850,7 +5850,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "container_memory_working_set_bytes{namespace=\"$namespace\", container=\"engine\"}\n  * on(namespace,pod)\ngroup_left() polardbx_cdc_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"cdc\"}\n",
+          "expr": "container_memory_working_set_bytes{namespace=\"$namespace\", container=\"engine\", id=~\"^/kubepods.*\"}\n  * on(namespace,pod)\ngroup_left() polardbx_cdc_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"cdc\"}\n",
           "interval": "",
           "legendFormat": "{{ pod }}",
           "queryType": "randomWalk",
@@ -5930,7 +5930,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "sum(\n    container_memory_working_set_bytes{namespace=\"$namespace\", container=\"engine\"}\n  * on(namespace,pod)\n    group_left() polardbx_cdc_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"cdc\"}\n) by (pod)\n/sum(\n  kube_pod_container_resource_limits_memory_bytes{namespace=\"$namespace\", container=\"engine\"}\n* on(namespace,pod)\n  group_left() polardbx_cdc_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"cdc\"}\n) by (pod)\n",
+          "expr": "sum(\n    container_memory_working_set_bytes{namespace=\"$namespace\", container=\"engine\", id=~\"^/kubepods.*\"}\n  * on(namespace,pod)\n    group_left() polardbx_cdc_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"cdc\"}\n) by (pod)\n/sum(\n  kube_pod_container_resource_limits_memory_bytes{namespace=\"$namespace\", container=\"engine\"}\n* on(namespace,pod)\n  group_left() polardbx_cdc_up{polardbx_name=\"$polardbx\", namespace=\"$namespace\", polardbx_role=\"cdc\"}\n) by (pod)\n",
           "interval": "",
           "legendFormat": "{{ pod }}",
           "queryType": "randomWalk",
@@ -6149,7 +6149,7 @@
       },
       {
         "current": {
-          "selected": false,
+          "selected": true,
           "text": "prometheus",
           "value": "prometheus"
         },
@@ -6162,6 +6162,7 @@
         "name": "datasource",
         "options": [],
         "query": "prometheus",
+        "queryValue": "",
         "refresh": 1,
         "regex": "",
         "skipUrlSync": false,
@@ -6170,9 +6171,9 @@
       {
         "allValue": null,
         "current": {
-          "selected": false,
-          "text": "vettal",
-          "value": "vettal"
+          "selected": true,
+          "text": "default",
+          "value": "default"
         },
         "datasource": "${datasource}",
         "definition": "label_values(polardbx_up, namespace)",
@@ -6201,9 +6202,9 @@
       {
         "allValue": null,
         "current": {
-          "selected": false,
-          "text": "vettal",
-          "value": "vettal"
+          "selected": true,
+          "text": "pxc-demo",
+          "value": "pxc-demo"
         },
         "datasource": "${datasource}",
         "definition": "label_values(polardbx_up{cluster=\"$cluster\", namespace=\"$namespace\"}, polardbx_name)",
@@ -6239,5 +6240,5 @@
   "timezone": "",
   "title": "PolarDB-X Overview",
   "uid": "EByXvnuGk",
-  "version": 4
+  "version": 2
 }

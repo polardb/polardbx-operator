@@ -226,7 +226,7 @@ class GalaxyEngine(EngineCommon):
 
         override_configs = []
         if os.path.exists(self.file_config_override):
-            override_configs.extend(self.file_config_override)
+            override_configs += [self.file_config_override]
         override_configs += [self.file_config_dynamic, self._system_config()]
 
         mgr.update(template_config_file, overrides=override_configs)

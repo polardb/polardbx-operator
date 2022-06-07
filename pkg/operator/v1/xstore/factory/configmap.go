@@ -17,6 +17,8 @@ limitations under the License.
 package factory
 
 import (
+	"strings"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
@@ -55,6 +57,14 @@ func readValue(rc *reconcile.Context, value *polardbxv1common.Value) (string, er
 	return "", nil
 }
 
+func fakeIniWithDefaultSectionIfNoSectionAtStart(s string, section string) string {
+	s = strings.TrimSpace(s)
+	if strings.HasPrefix(s, "[") {
+		return s
+	}
+	return "[" + section + "]\n" + s
+}
+
 func newConfigDataMap(rc *reconcile.Context, xstore *polardbxv1.XStore) (map[string]string, error) {
 	config := xstore.Status.ObservedConfig
 
@@ -69,10 +79,10 @@ func newConfigDataMap(rc *reconcile.Context, xstore *polardbxv1.XStore) (map[str
 
 	data := make(map[string]string)
 	if len(templateVal) > 0 {
-		data[convention.ConfigMyCnfTemplate] = templateVal
+		data[convention.ConfigMyCnfTemplate] = fakeIniWithDefaultSectionIfNoSectionAtStart(templateVal, "mysqld")
 	}
 	if len(overrideVal) > 0 {
-		data[convention.ConfigMyCnfOverride] = overrideVal
+		data[convention.ConfigMyCnfOverride] = fakeIniWithDefaultSectionIfNoSectionAtStart(overrideVal, "mysqld")
 	}
 	return data, nil
 }

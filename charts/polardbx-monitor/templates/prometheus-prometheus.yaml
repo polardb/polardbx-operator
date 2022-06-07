@@ -25,7 +25,7 @@ spec:
   image: {{ .Values.monitors.prometheus.repo }}{{"/"}}{{ .Values.monitors.prometheus.image }}:{{ .Values.monitors.prometheus.version}}
   {{- with .Values.monitors.prometheus.nodeSelector }}
   nodeSelector:
-  {{ toYaml . | indent 2 }}
+  {{ toYaml . | nindent 4 }}
   {{- end }}
   podMonitorNamespaceSelector: {}
   podMonitorSelector: {}

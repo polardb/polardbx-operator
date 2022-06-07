@@ -11,7 +11,7 @@ spec:
   image: {{ .Values.monitors.alertManager.repo }}{{ "/" }}{{ .Values.monitors.alertManager.image }}:{{ .Values.monitors.alertManager.version }}
   {{- with .Values.monitors.alertManager.nodeSelector }}
   nodeSelector:
-  {{ toYaml . | indent 2 }}
+  {{ toYaml . | nindent 4 }}
   {{- end }}
   replicas: {{ .Values.monitors.alertManager.replicas }}
   securityContext:

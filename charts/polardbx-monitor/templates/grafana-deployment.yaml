@@ -119,7 +119,7 @@ spec:
           readOnly: false
       {{- with .Values.monitors.grafana.nodeSelector }}
       nodeSelector:
-      {{ toYaml . | indent 2 }}
+      {{ toYaml . | nindent 8 }}
       {{- end }}
       securityContext:
         runAsNonRoot: true

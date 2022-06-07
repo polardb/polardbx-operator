@@ -1,5 +1,17 @@
 # Changelog
 
+## 2022-06-07
+
+Release v1.2.2.
+
+This is a bugfix release.
++ Fix DN scale up/down and upgrade issue.
++ Fix grafana memory usage panel when deployed on minikube.
++ Create xstore of DN in parallel.
++ Fix node selector issue for polardbx-monitor.
++ Disable service links in pod spec.
++ Fix overriding my.cnf passing to the script without section.
+
 ## 2022-04-11
 
 Release v1.2.1.

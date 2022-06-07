@@ -18,9 +18,10 @@ package v1
 
 import (
 	"context"
+	"os"
+
 	promv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	"os"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
@@ -29,7 +30,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	polardbxv1 "github.com/alibaba/polardbx-operator/api/v1"
-	clienthelper "github.com/alibaba/polardbx-operator/pkg/k8s/client"
 	"github.com/alibaba/polardbx-operator/pkg/k8s/control"
 	"github.com/alibaba/polardbx-operator/pkg/operator/hint"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/config"
@@ -175,7 +175,7 @@ func Start(ctx context.Context, opts Options) {
 
 	ctrlOpts := controllerOptions{
 		BaseReconcileContext: control.NewBaseReconcileContext(
-			clienthelper.NewClientBypassCache(mgr),
+			mgr.GetClient(),
 			restConfig,
 			clientset,
 			scheme,

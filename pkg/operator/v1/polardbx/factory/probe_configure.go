@@ -47,6 +47,7 @@ func (p *probeConfigure) newProbeWithProber(endpoint string, ports CNPorts) core
 			HTTPHeaders: []corev1.HTTPHeader{
 				{Name: "Probe-Target", Value: probe.TypePolarDBX},
 				{Name: "Probe-Port", Value: strconv.Itoa(ports.AccessPort)},
+				{Name: "Probe-Timeout", Value: "10s"},
 			},
 		},
 	}
@@ -55,18 +56,18 @@ func (p *probeConfigure) newProbeWithProber(endpoint string, ports CNPorts) core
 func (p *probeConfigure) ConfigureForCNEngine(container *corev1.Container, ports CNPorts) {
 	container.StartupProbe = &corev1.Probe{
 		InitialDelaySeconds: 10,
-		TimeoutSeconds:      5,
-		PeriodSeconds:       5,
-		FailureThreshold:    4,
+		TimeoutSeconds:      10,
+		PeriodSeconds:       10,
+		FailureThreshold:    18,
 		Handler:             p.newProbeWithProber("/liveness", ports),
 	}
 	container.LivenessProbe = &corev1.Probe{
-		TimeoutSeconds: 5,
+		TimeoutSeconds: 10,
 		PeriodSeconds:  10,
 		Handler:        p.newProbeWithProber("/liveness", ports),
 	}
 	container.ReadinessProbe = &corev1.Probe{
-		TimeoutSeconds: 5,
+		TimeoutSeconds: 10,
 		PeriodSeconds:  10,
 		Handler:        p.newProbeWithProber("/readiness", ports),
 	}

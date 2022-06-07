@@ -148,24 +148,15 @@ func (p *Planner) prepareExecutionContext() error {
 	if p.selfHeal {
 		topology = p.xstore.Status.ObservedTopology
 	}
-	p.ec.SetTopology(p.xstore.Generation, topology)
-
-	runningGenerations, err := p.runningGenerations()
-	if err != nil {
-		return err
-	}
-	for _, g := range p.ec.TopologyGenerations() {
-		if _, exist := runningGenerations[g]; !exist {
-			p.ec.DeleteTopology(g)
-		}
-	}
+	p.ec.SetTopology(p.ec.Generation, topology)
 
 	// Calculate and update the expected paxos nodes if necessary.
 	p.expectedNodes = p.buildExpectedNodes()
 	p.ec.Expected = p.expectedNodes
 
 	// Refill the running.
-	p.runningNodes, err = p.buildRunningNodes()
+	runningNodes, err := p.buildRunningNodes()
+	p.runningNodes = runningNodes
 	if err != nil {
 		return err
 	}
@@ -236,16 +227,24 @@ func (p *Planner) build() (plan.Plan, error) {
 	for _, expectNode := range p.expectedNodes {
 		runningNode, exists := p.runningNodes[expectNode.Pod]
 		if !exists {
+			stepType := plan.StepTypeUpdate
+			_, volumeExists := p.ec.Volumes[expectNode.Pod]
+			// If volumes exists, does not create a new data replica on another host
+			if !volumeExists {
+				stepType = plan.StepTypeCreate
+			}
+
 			pl.AppendStep(plan.Step{
-				Type:             plan.StepTypeCreate,
+				Type:             stepType,
 				TargetGeneration: expectNode.Generation,
 				Target:           expectNode.Pod,
 				TargetRole:       expectNode.Role,
 				NodeSet:          expectNode.Set,
 				Index:            expectNode.Index,
 			})
+
 		} else if runningNode.Generation != expectNode.Generation {
-			topologyChanged := util.AreNodeSetsEqualInPodTemplate(
+			topologyChanged := !util.AreNodeSetsEqualInPodTemplate(
 				p.ec.GetNodeTemplate(runningNode.Generation, runningNode.Set, runningNode.Index),
 				p.ec.GetNodeTemplate(expectNode.Generation, expectNode.Set, expectNode.Index),
 			)
