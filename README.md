@@ -7,7 +7,7 @@ tasks.
 
 ## Quick Start
 
-Follow the [[Quick Start](./docs/en/deploy/quick-start.md) / [快速开始](./docs/zh_CN/deployment/0-quickstart.md)] guide to start a testing Kubernetes cluster and play with PolarDB-X Operator.
+Follow the [ [Quick Start](./docs/en/deploy/quick-start.md) / [快速开始](https://github.com/ApsaraDB/polardb-x-operator-docs/blob/main/deployment/0-quickstart.md) ] guide to start a testing Kubernetes cluster and play with PolarDB-X Operator.
 
 ## Documentation
 
@@ -15,7 +15,7 @@ Follow the [[Quick Start](./docs/en/deploy/quick-start.md) / [快速开始](./do
 
 Refer to the documentations for more details, such as CRD definitions and operation guides.
 
-+ [简体中文](docs/zh_CN/README.md)
++ [简体中文](https://github.com/ApsaraDB/polardb-x-operator-docs)
 + [English](docs/en/index.md)
 
 ## Roadmap
