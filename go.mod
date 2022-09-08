@@ -17,11 +17,11 @@ require (
 	github.com/golang/protobuf v1.5.2
 	github.com/google/uuid v1.1.2
 	github.com/jlaffaye/ftp v0.0.0-20210307004419-5d4190119067
-	github.com/minio/minio v0.0.0-20210219003537-2dce5d944281
+	github.com/minio/minio v0.0.0-20211119203535-40244994adea
 	github.com/onsi/gomega v1.16.0
 	github.com/pkg/sftp v1.13.2
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.44.1
-	github.com/prometheus/client_golang v1.11.0
+	github.com/prometheus/client_golang v1.13.0
 	github.com/prometheus/client_model v0.2.0
 	github.com/prometheus/common v0.26.0
 	github.com/satori/go.uuid v1.2.0 // indirect
