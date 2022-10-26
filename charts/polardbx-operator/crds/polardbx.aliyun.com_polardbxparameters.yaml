@@ -1,0 +1,257 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.9.0
+  creationTimestamp: null
+  name: polardbxparameters.polardbx.aliyun.com
+spec:
+  group: polardbx.aliyun.com
+  names:
+    kind: PolarDBXParameter
+    listKind: PolarDBXParameterList
+    plural: polardbxparameters
+    shortNames:
+    - pxp
+    - polardbxp
+    - polardbxparameter
+    singular: polardbxparameter
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.phase
+      name: PHASE
+      type: string
+    name: v1
+    schema:
+      openAPIV3Schema:
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            properties:
+              clusterName:
+                type: string
+              nodeType:
+                description: NodeType represents the type of the node parameters runs
+                  on
+                properties:
+                  cn:
+                    properties:
+                      name:
+                        type: string
+                      paramList:
+                        items:
+                          properties:
+                            name:
+                              type: string
+                            value:
+                              type: string
+                          type: object
+                        type: array
+                      restartType:
+                        type: string
+                    type: object
+                  dn:
+                    properties:
+                      name:
+                        type: string
+                      paramList:
+                        items:
+                          properties:
+                            name:
+                              type: string
+                            value:
+                              type: string
+                          type: object
+                        type: array
+                      restartType:
+                        type: string
+                    type: object
+                  gms:
+                    description: If not provided, the operator will use the paramNode
+                      for DN as template for GMS.
+                    properties:
+                      name:
+                        type: string
+                      paramList:
+                        items:
+                          properties:
+                            name:
+                              type: string
+                            value:
+                              type: string
+                          type: object
+                        type: array
+                      restartType:
+                        type: string
+                    type: object
+                type: object
+              templateName:
+                description: TemplateName represents the service name of the template
+                  name. Default is the same as the name.
+                type: string
+            required:
+            - clusterName
+            - nodeType
+            type: object
+          status:
+            properties:
+              parameterSpecSnapshot:
+                description: ParameterSpecSnapshot represents the snapshot of the
+                  parameter.
+                properties:
+                  clusterName:
+                    type: string
+                  nodeType:
+                    description: NodeType represents the type of the node parameters
+                      runs on
+                    properties:
+                      cn:
+                        properties:
+                          name:
+                            type: string
+                          paramList:
+                            items:
+                              properties:
+                                name:
+                                  type: string
+                                value:
+                                  type: string
+                              type: object
+                            type: array
+                          restartType:
+                            type: string
+                        type: object
+                      dn:
+                        properties:
+                          name:
+                            type: string
+                          paramList:
+                            items:
+                              properties:
+                                name:
+                                  type: string
+                                value:
+                                  type: string
+                              type: object
+                            type: array
+                          restartType:
+                            type: string
+                        type: object
+                      gms:
+                        description: If not provided, the operator will use the paramNode
+                          for DN as template for GMS.
+                        properties:
+                          name:
+                            type: string
+                          paramList:
+                            items:
+                              properties:
+                                name:
+                                  type: string
+                                value:
+                                  type: string
+                              type: object
+                            type: array
+                          restartType:
+                            type: string
+                        type: object
+                    type: object
+                  templateName:
+                    description: TemplateName represents the service name of the template
+                      name. Default is the same as the name.
+                    type: string
+                required:
+                - clusterName
+                - nodeType
+                type: object
+              phase:
+                description: Phase is the current phase of the cluster.
+                type: string
+              prevParameterSpecSnapshot:
+                description: PrevParameterSpecSnapshot represents the previous version
+                  snapshot of the parameter.
+                properties:
+                  clusterName:
+                    type: string
+                  nodeType:
+                    description: NodeType represents the type of the node parameters
+                      runs on
+                    properties:
+                      cn:
+                        properties:
+                          name:
+                            type: string
+                          paramList:
+                            items:
+                              properties:
+                                name:
+                                  type: string
+                                value:
+                                  type: string
+                              type: object
+                            type: array
+                          restartType:
+                            type: string
+                        type: object
+                      dn:
+                        properties:
+                          name:
+                            type: string
+                          paramList:
+                            items:
+                              properties:
+                                name:
+                                  type: string
+                                value:
+                                  type: string
+                              type: object
+                            type: array
+                          restartType:
+                            type: string
+                        type: object
+                      gms:
+                        description: If not provided, the operator will use the paramNode
+                          for DN as template for GMS.
+                        properties:
+                          name:
+                            type: string
+                          paramList:
+                            items:
+                              properties:
+                                name:
+                                  type: string
+                                value:
+                                  type: string
+                              type: object
+                            type: array
+                          restartType:
+                            type: string
+                        type: object
+                    type: object
+                  templateName:
+                    description: TemplateName represents the service name of the template
+                      name. Default is the same as the name.
+                    type: string
+                required:
+                - clusterName
+                - nodeType
+                type: object
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

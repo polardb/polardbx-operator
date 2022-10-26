@@ -1,0 +1,94 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: {{ .Release.Namespace }}
+  name: {{ .Values.logstash.name }}
+  labels:
+    app: {{ .Values.logstash.name }}
+    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.logstash.port }}
+      name: {{ .Values.logstash.name }}
+  selector:
+    app: {{ .Values.logstash.name }}
+    
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.logstash.name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ .Values.logstash.name }}
+spec:
+  replicas: {{ .Values.logstash.spec.replicas }}
+  selector:
+    matchLabels:
+      app: {{ .Values.logstash.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.logstash.name }}
+    spec:
+      containers:
+        - name: {{ .Values.logstash.name }}
+          image: {{ .Values.logstash.image.repo }}/{{ .Values.logstash.image.name }}:{{ .Values.logstash.image.version }}
+          ports:
+            - containerPort: {{ .Values.logstash.port }}
+          volumeMounts:
+            - name: config-volume
+              mountPath: /usr/share/logstash/config/
+              readOnly: true
+            - name: pipeline-volume
+              mountPath: /usr/share/logstash/pipeline/
+              readOnly: true
+            - name: timezone
+              mountPath: /etc/localtime
+              readOnly: true
+            - name: logstash-data-volume
+              mountPath: /usr/share/logstash/data/
+            - name: elastic-cert-volume
+              mountPath: /usr/share/logstash/config/certs/
+          resources:
+{{ toYaml .Values.logstash.resources | indent 12}}
+          livenessProbe:
+            tcpSocket:
+              port: {{ .Values.logstash.port }}
+            initialDelaySeconds: {{ .Values.logstash.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.logstash.livenessProbe.periodSeconds }}
+
+      volumes:
+        - name: config-volume
+          configMap:
+            name: {{ .Values.logstash.config.name }}
+        - name: pipeline-volume
+          configMap:
+            name: {{ .Values.logstash.pipeline.configName }}
+        - name: timezone
+          hostPath:
+            path: {{ .Values.logstash.timezone.hostPath }}
+        - name: logstash-data-volume
+          emptyDir: {}
+        - name: elastic-cert-volume
+          secret:
+            secretName:  {{ .Values.logstash.elastic.certsSecretName }}
+      
+
+      {{- with .Values.logstash.nodeSelector }}
+      nodeSelector:
+{{ toYaml . | indent 8 }}
+      {{- end }}
+      {{- with .Values.logstash.affinity }}
+      affinity:
+{{ toYaml . | indent 8 }}
+      {{- end }}
+      {{- with .Values.logstash.tolerations }}
+      tolerations:
+{{ toYaml . | indent 8 }}
+      {{- end }}

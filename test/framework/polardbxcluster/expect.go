@@ -17,17 +17,30 @@ limitations under the License.
 package polardbxcluster
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"fmt"
-	v1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	"path/filepath"
+	"strings"
 	"time"
+
+	"github.com/alibaba/polardbx-operator/test/framework/polardbxparameter"
+
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
+
+	"k8s.io/client-go/util/homedir"
+
+	polardbxmeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/meta"
+	v1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 
 	"github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	polardbxv1 "github.com/alibaba/polardbx-operator/api/v1"
@@ -384,7 +397,7 @@ func (e *Expectation) ExpectServicesOk() {
 
 	gomega.Expect(common.GetObjectsFromObjectListByLabels(services, map[string]string{
 		"polardbx/role": "cn",
-	})).To(gomega.HaveLen(2), "must be 2 services for role CN")
+	})).To(gomega.HaveLen(1), "must be 1 services for role CN")
 	mainSvcObj := common.GetObjectFromObjectList(services, expectServiceName)
 	gomega.Expect(mainSvcObj).NotTo(gomega.BeNil(), "read-write service not found")
 	mainService := mainSvcObj.(*corev1.Service)
@@ -498,7 +511,7 @@ func (e *Expectation) ExpectCNDeploymentsOk() {
 
 	nodeSelectors := e.obj.Spec.Topology.Rules.Selectors
 	cnRules := e.obj.Spec.Topology.Rules.Components.CN
-	replicas := e.obj.Spec.Topology.Nodes.CN.Replicas
+	replicas := *e.obj.Spec.Topology.Nodes.CN.Replicas
 	template := e.obj.Spec.Topology.Nodes.CN.Template
 
 	if replicas == 0 {
@@ -735,19 +748,46 @@ func (e *Expectation) ExpectPodsOk() {
 	gomega.Expect(podsByRole).To(gomega.HaveLen(4), "must be pods with 4 roles (when running)")
 
 	framework.ExpectHaveKeys(podsByRole, "cn", "dn", "gms", "cdc")
+
 	gomega.Expect(podsByRole["cn"]).To(gomega.HaveLen(1), "must be 1 cn pod")
 	gomega.Expect(podsByRole["cdc"]).To(gomega.HaveLen(1), "must be 1 cdc pod")
 	gomega.Expect(podsByRole["dn"]).To(gomega.HaveLen(1), "must be 1 dn pod")
 	gomega.Expect(podsByRole["gms"]).To(gomega.HaveLen(1), "must be 1 gms pod")
 }
 
-func (e *Expectation) ExpectSubResourcesOk() {
+func (e *Expectation) ExpectPodsWithPaxosModeOk() {
+	labels := map[string]string{
+		"polardbx/name": e.obj.Name,
+	}
+	ns := e.obj.Namespace
+
+	var podList corev1.PodList
+	framework.ExpectNoError(e.c.List(e.ctx, &podList, client.InNamespace(ns), client.MatchingLabels(labels)))
+	pods := podList.Items
+	gomega.Expect(pods).NotTo(gomega.BeEmpty(), "no pods found")
+	podsByRole := common.MapObjectsFromObjectListByLabel(pods, "polardbx/role")
+
+	gomega.Expect(podsByRole).To(gomega.HaveLen(4), "must be pods with 4 roles (when running)")
+
+	framework.ExpectHaveKeys(podsByRole, "cn", "dn", "gms", "cdc")
+
+	gomega.Expect(podsByRole["cn"]).To(gomega.HaveLen(1), "must be 1 cn pod")
+	gomega.Expect(podsByRole["cdc"]).To(gomega.HaveLen(1), "must be 1 cdc pod")
+	gomega.Expect(podsByRole["dn"]).To(gomega.HaveLen(3), "must be 3 dn pod")
+	gomega.Expect(podsByRole["gms"]).To(gomega.HaveLen(3), "must be 3 gms pod")
+}
+
+func (e *Expectation) ExpectSubResourcesOk(withPaxosMode bool) {
 	e.ExpectServicesOk()
 	e.ExpectConfigMapsOk()
 	e.ExpectSecretsOk()
 	e.ExpectDeploymentsOk()
 	e.ExpectXStoresOk()
-	e.ExpectPodsOk()
+	if withPaxosMode {
+		e.ExpectPodsWithPaxosModeOk()
+	} else {
+		e.ExpectPodsOk()
+	}
 }
 
 func (e *Expectation) ExpectGenerationCatchUp() {
@@ -812,12 +852,234 @@ func (e *Expectation) ExpectServiceMonitorsOK() {
 
 }
 
-func (e *Expectation) ExpectAllOk() {
+//goland:noinspection SqlDialectInspection,SqlNoDataSourceInspection
+func (e *Expectation) ExpectCNParameterPersistenceOk(expectedParams map[string]string) {
+	if len(expectedParams) == 0 {
+		return
+	}
+
+	localPort := local.AcquireLocalPort()
+	defer local.ReleaseLocalPort(localPort)
+
+	ctx, cancel := context.WithCancel(e.ctx)
+	defer cancel()
+
+	err := e.startGmsPortForward(ctx, localPort)
+	common.ExpectNoError(err, "failed to start port-forward")
+
+	// Wait 10 second for port-forward to work.
+	err = wait.PollImmediate(100*time.Millisecond, 10*time.Second, func() (done bool, err error) {
+		childCtx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+		defer cancel()
+		err = network.TestTcpConnectivity(childCtx, "localhost", uint16(localPort))
+		if err != nil {
+			return false, nil
+		}
+		return true, nil
+	})
+	common.ExpectNoError(err, "not connectable")
+
+	// Expect root to connect localhost
+	db, err := database.OpenMySQLDB(&database.MySQLDataSource{
+		Host:     "localhost",
+		Port:     localPort,
+		Username: "root",
+		Database: "polardbx_meta_db",
+		Timeout:  2,
+	})
+	common.ExpectNoError(err, "failed to connect to gms")
+	defer database.DeferClose(db)
+
+	rs, err := db.QueryContext(ctx, "select * from inst_config where inst_id = ?", e.obj.Name)
+	common.ExpectNoError(err, "failed to query dynamic configs")
+	defer database.DeferClose(rs)
+
+	var key, val string
+	dest := map[string]interface{}{
+		"param_key": &key,
+		"param_val": &val,
+	}
+	nowConfigs := make(map[string]string)
+	for rs.Next() {
+		err = database.Scan(rs, dest, database.ScanOpt{CaseInsensitive: true})
+		common.ExpectNoError(err, "error when scan config table")
+		nowConfigs[key] = val
+	}
+
+	// Test if now contains the expected
+	for k, v := range expectedParams {
+		gomega.Expect(nowConfigs).To(gomega.HaveKeyWithValue(k, v), "config not found or match")
+	}
+}
+
+var (
+	KubeQPS            = float32(5.000000)
+	KubeBurst          = 10
+	AcceptContentTypes = "application/json"
+	ContentType        = "application/json"
+)
+
+func setKubeConfig(config *rest.Config) {
+	config.QPS = KubeQPS
+	config.Burst = KubeBurst
+	config.ContentType = ContentType
+	config.AcceptContentTypes = AcceptContentTypes
+	config.UserAgent = rest.DefaultKubernetesUserAgent()
+}
+
+//goland:noinspection SqlDialectInspection,SqlNoDataSourceInspection
+func (e *Expectation) ExpectDNParameterPersistenceOk(expectedParams map[string]string, dynamic bool) {
+	if len(expectedParams) == 0 {
+		return
+	}
+
+	localPort := local.AcquireLocalPort()
+	defer local.ReleaseLocalPort(localPort)
+
+	home := homedir.HomeDir()
+	kubeconfig := filepath.Join(home, ".kube", "config")
+
+	cfg, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+	if err != nil {
+		common.ExpectNoError(err, "could not get config")
+	}
+
+	setKubeConfig(cfg)
+
+	//cfg, err := rest.InClusterConfig()
+	//common.ExpectNoError(err, "not connectable")
+
+	clientset, err := kubernetes.NewForConfig(cfg)
+	common.ExpectNoError(err, "not connectable")
+
+	labels := map[string]string{
+		"polardbx/name": e.obj.Name,
+		"polardbx/role": polardbxmeta.RoleDN,
+	}
+	ns := e.obj.Namespace
+
+	var podList corev1.PodList
+	framework.ExpectNoError(e.c.List(e.ctx, &podList, client.InNamespace(ns), client.MatchingLabels(labels)))
+	pods := podList.Items
+	gomega.Expect(pods).NotTo(gomega.BeEmpty(), "no pods found")
+
+	if dynamic {
+		for _, pod := range pods {
+			err := polardbxparameter.WaitForMyConfOverrideUpdates(clientset, cfg, pod, ns, 5*time.Minute, expectedParams)
+			framework.ExpectNoError(err, "failed to wait for my.cnf.override updates")
+			time.Sleep(10 * time.Second) // wait for running phase
+		}
+	}
+
+	for _, pod := range pods {
+		stdout, stderr := new(bytes.Buffer), new(bytes.Buffer)
+		err := polardbxparameter.ExecCmd(clientset, cfg, &pod, ns, "cat /data/mysql/conf/my.cnf", nil, stdout, stderr)
+		common.ExpectNoError(err, "err in executing command")
+
+		configs := strings.Split(strings.ReplaceAll(stdout.String(), " ", ""), "\n")
+
+		nowConfigs := make(map[string]string)
+		for _, config := range configs {
+			if config == "" || config[0] == '[' {
+				continue
+			}
+			kv := strings.Split(config, "=")
+			if len(kv) == 2 {
+				nowConfigs[kv[0]] = kv[1]
+			}
+		}
+		// Test if now contains the expected
+		for k, v := range expectedParams {
+			gomega.Expect(nowConfigs).To(gomega.HaveKeyWithValue(k, v), "config not found or match")
+		}
+	}
+}
+
+func (e *Expectation) ExpectRestartOk(c client.Client, name, namespace string, timeout time.Duration) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	var polardbxcluster polardbxv1.PolarDBXCluster
+
+	//wait until restarting started
+	err := wait.PollImmediate(poll, timeout, func() (bool, error) {
+		err := c.Get(ctx, types.NamespacedName{
+			Namespace: namespace,
+			Name:      name,
+		}, &polardbxcluster)
+		if err != nil {
+			return true, err // stop wait with error
+		}
+
+		var dn, gms polardbxv1.XStore
+		dnName := convention.NewDNName(&polardbxcluster, 0)
+		err = c.Get(ctx, types.NamespacedName{
+			Namespace: namespace,
+			Name:      dnName,
+		}, &dn)
+		if err != nil {
+			return true, err // stop wait with error
+		}
+		gmsName := convention.NewGMSName(&polardbxcluster)
+		err = c.Get(ctx, types.NamespacedName{
+			Namespace: namespace,
+			Name:      gmsName,
+		}, &gms)
+		if err != nil {
+			return true, err // stop wait with error
+		}
+
+		if polardbxcluster.Status.Phase == polardbxv1polardbx.PhaseRestarting ||
+			dn.Status.Phase == polardbxv1xstore.PhaseRestarting || gms.Status.Phase == polardbxv1xstore.PhaseRestarting {
+			return true, nil
+		}
+		return false, nil
+	})
+
+	// wait until restarting finished
+	err = wait.PollImmediate(poll, timeout, func() (bool, error) {
+		err := c.Get(ctx, types.NamespacedName{
+			Namespace: namespace,
+			Name:      name,
+		}, &polardbxcluster)
+		if err != nil {
+			return true, err // stop wait with error
+		}
+		updated := true
+		updated = updated && len(polardbxcluster.Status.RestartingPods.ToDeletePod) == 0 && polardbxcluster.Status.RestartingPods.LastDeletedPod == ""
+		for i := 0; i < int(polardbxcluster.Spec.Topology.Nodes.DN.Replicas); i++ {
+			dnName := convention.NewDNName(&polardbxcluster, i)
+			var xstore polardbxv1.XStore
+			err := c.Get(ctx, types.NamespacedName{
+				Namespace: namespace,
+				Name:      dnName,
+			}, &xstore)
+			if err != nil {
+				return true, err // stop wait with error
+			}
+			updated = updated && len(xstore.Status.RestartingPods.ToDeletePod) == 0 && xstore.Status.RestartingPods.LastDelectedPod == ""
+		}
+		gmsName := convention.NewGMSName(&polardbxcluster)
+		var xstore polardbxv1.XStore
+		err = c.Get(ctx, types.NamespacedName{
+			Namespace: namespace,
+			Name:      gmsName,
+		}, &xstore)
+		if err != nil {
+			return true, err // stop wait with error
+		}
+		updated = updated && len(xstore.Status.RestartingPods.ToDeletePod) == 0 && xstore.Status.RestartingPods.LastDelectedPod == ""
+		return updated, nil
+	})
+	common.ExpectNoError(err, "not connectable")
+
+}
+
+func (e *Expectation) ExpectAllOk(withPaxosMode bool) {
 	e.ExpectRunning()
 	e.ExpectGenerationCatchUp()
 	e.ExpectObservableStatusUpdated()
 
-	e.ExpectSubResourcesOk()
+	e.ExpectSubResourcesOk(withPaxosMode)
 	e.ExpectAccessible()
 	e.ExpectSecurityTLSOk()
 	e.ExpectAccountsOk()

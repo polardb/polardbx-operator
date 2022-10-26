@@ -84,14 +84,19 @@ func (f *objectFactory) NewReadOnlyService() (*corev1.Service, error) {
 		serviceName = polardbx.Name
 	}
 
+	serviceType := polardbx.Spec.ServiceType
+	if len(serviceType) == 0 {
+		serviceType = corev1.ServiceTypeNodePort
+	}
+
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      serviceName + "-ro",
+			Name:      serviceName,
 			Namespace: f.rc.Namespace(),
 			Labels:    convention.ConstLabelsForCN(polardbx, polardbxmeta.CNTypeRO),
 		},
 		Spec: corev1.ServiceSpec{
-			Type:     corev1.ServiceTypeNodePort,
+			Type:     serviceType,
 			Selector: convention.ConstLabelsForCN(polardbx, polardbxmeta.CNTypeRO),
 			Ports:    f.newServicePorts(polardbx),
 		},

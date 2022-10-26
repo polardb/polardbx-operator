@@ -27,6 +27,23 @@ import (
 	"github.com/alibaba/polardbx-operator/pkg/util/ssl"
 )
 
+func (f *objectFactory) NewSecretFromPolarDBX(secret *corev1.Secret) (*corev1.Secret, error) {
+	polardbx := f.rc.MustGetPolarDBX()
+
+	data := make(map[string][]byte)
+	for user, passwd := range secret.Data {
+		data[user] = passwd
+	}
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      convention.NewSecretName(polardbx, convention.SecretTypeAccount),
+			Namespace: polardbx.Namespace,
+			Labels:    convention.ConstLabels(polardbx),
+		},
+		Data: data,
+	}, nil
+}
+
 func (f *objectFactory) NewSecret() (*corev1.Secret, error) {
 	polardbx, err := f.rc.GetPolarDBX()
 	if err != nil {

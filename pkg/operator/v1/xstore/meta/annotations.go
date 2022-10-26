@@ -36,3 +36,7 @@ const (
 const (
 	AnnotationGuideRand = "xstore/guide.rand"
 )
+
+const (
+	AnnotationRebuildFromPod = "xstore/rebuild_from_pod"
+)

@@ -18,6 +18,12 @@ package instance
 
 import (
 	"bytes"
+	"fmt"
+	polarxv1 "github.com/alibaba/polardbx-operator/api/v1"
+	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/plugin/common/channel"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"strconv"
 	"strings"
 	"time"
 
@@ -32,8 +38,125 @@ import (
 	xstoreexec "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/command"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/convention"
 	xstoremeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/meta"
+	commonsteps "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/plugin/common/steps"
 	xstorev1reconcile "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/reconcile"
 )
+
+const (
+	SlaveSqlRunningYes      string  = "Yes"
+	ReplicationDelaySeconds float64 = 1800 //half an hour
+)
+
+type ShowSlaveStatusResult struct {
+	RelayLogFile         string
+	RelayLogPos          int64
+	SlaveIORunning       string
+	SlaveSQLRunning      string
+	SalveSqlRunningState string
+	SecondsBehindMaster  float64
+}
+
+func ShowSlaveStatus(rc *xstorev1reconcile.Context, pod *corev1.Pod, logger logr.Logger) (*ShowSlaveStatusResult, error) {
+	// Setup buffer and start a report role command.
+	stdout := &bytes.Buffer{}
+	cmd := xstoreexec.NewCanonicalCommandBuilder().Consensus().ShowSlaveStatus().Build()
+	err := rc.ExecuteCommandOn(pod, "engine", cmd, control.ExecOptions{
+		Logger:  logger,
+		Stdout:  stdout,
+		Timeout: 10 * time.Second,
+	})
+	if err != nil {
+		return nil, err
+	}
+	parsedResult, err := xstoreexec.ParseCommandResultGenerally(stdout.String())
+	if err != nil {
+		return nil, err
+	}
+	if len(parsedResult) == 0 {
+		return nil, fmt.Errorf("failed to get show slave status")
+	}
+	oneParsedResult := parsedResult[0]
+	relayLogPos, err := strconv.ParseInt(strings.TrimSpace(oneParsedResult["relay_log_pos"].(string)), 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	secondsBehindMaster, err := strconv.ParseFloat(strings.TrimSpace(oneParsedResult["seconds_behind_master"].(string)), 64)
+	if err != nil {
+		return nil, err
+	}
+	showSlaveStatusResult := ShowSlaveStatusResult{
+		RelayLogFile:         strings.TrimSpace(oneParsedResult["relay_log_file"].(string)),
+		RelayLogPos:          relayLogPos,
+		SlaveIORunning:       strings.TrimSpace(oneParsedResult["slave_io_running"].(string)),
+		SlaveSQLRunning:      strings.TrimSpace(oneParsedResult["slave_sql_running"].(string)),
+		SalveSqlRunningState: strings.TrimSpace(oneParsedResult["slave_sql_running_state"].(string)),
+		SecondsBehindMaster:  secondsBehindMaster,
+	}
+	return &showSlaveStatusResult, nil
+}
+
+type ConsensusLocalInfo struct {
+	Pod          string
+	Addr         string
+	ServerId     string
+	Role         string
+	LeaderPod    string
+	LeaderAddr   string
+	CurrentTerm  string
+	LastLogIndex string
+	AppliedIndex string
+	CommitIndex  string
+}
+
+func ShowThis(rc *xstorev1reconcile.Context, pod *corev1.Pod, logger logr.Logger, full bool) (*ConsensusLocalInfo, error) {
+	// Setup buffer and start a report role command.
+	stdout := &bytes.Buffer{}
+	cmd := xstoreexec.NewCanonicalCommandBuilder().Consensus().This(full).Build()
+	err := rc.ExecuteCommandOn(pod, "engine", cmd, control.ExecOptions{
+		Logger:  logger,
+		Stdout:  stdout,
+		Timeout: 10 * time.Second,
+	})
+	if err != nil {
+		return nil, err
+	}
+	parsedResult, err := xstoreexec.ParseCommandResultGenerally(stdout.String())
+	if err != nil {
+		return nil, err
+	}
+	if len(parsedResult) == 0 {
+		return nil, fmt.Errorf("failed to get show slave status")
+	}
+	oneParsedResult := parsedResult[0]
+	var getStringValue = func(m map[string]interface{}, key string) string {
+		val, ok := m[key]
+		if ok {
+			return val.(string)
+		}
+		return ""
+	}
+	if full {
+		return &ConsensusLocalInfo{
+			Pod:          getStringValue(oneParsedResult, "pod"),
+			Addr:         getStringValue(oneParsedResult, "addr"),
+			ServerId:     getStringValue(oneParsedResult, "server_id"),
+			Role:         getStringValue(oneParsedResult, "role"),
+			LeaderPod:    getStringValue(oneParsedResult, "leader_pod"),
+			LeaderAddr:   getStringValue(oneParsedResult, "leader_addr"),
+			CurrentTerm:  getStringValue(oneParsedResult, "current_term"),
+			LastLogIndex: getStringValue(oneParsedResult, "last_log_index"),
+			AppliedIndex: getStringValue(oneParsedResult, "applied_index"),
+			CommitIndex:  getStringValue(oneParsedResult, "commit_index"),
+		}, nil
+	}
+	return &ConsensusLocalInfo{
+		Pod:        getStringValue(oneParsedResult, "pod"),
+		Addr:       getStringValue(oneParsedResult, "addr"),
+		Role:       getStringValue(oneParsedResult, "role"),
+		LeaderPod:  getStringValue(oneParsedResult, "leader_pod"),
+		LeaderAddr: getStringValue(oneParsedResult, "leader_addr"),
+	}, nil
+}
 
 func parseConsensusReportRoleResult(s string) (string, string) {
 	lines := strings.Split(s, "\n")
@@ -61,6 +184,31 @@ func ReportRoleAndCurrentLeader(rc *xstorev1reconcile.Context, pod *corev1.Pod, 
 	role, leaderPod := parseConsensusReportRoleResult(stdout.String())
 	logger.Info("Be aware of pod's role and current leader.", "pod", pod.Name, "role", role, "leader-pod", leaderPod)
 	return role, leaderPod, nil
+}
+
+func SetPodElectionWeight(rc *xstorev1reconcile.Context, leaderPod *corev1.Pod, logger logr.Logger, weight int, pods []string) ([]int, error) {
+	cmd := xstoreexec.NewCanonicalCommandBuilder().
+		Consensus().
+		ConfigureElectionWeight(weight, pods...).
+		Build()
+	stdout := &bytes.Buffer{}
+	err := rc.ExecuteCommandOn(leaderPod, "engine", cmd, control.ExecOptions{
+		Logger:  logger,
+		Stdout:  stdout,
+		Timeout: 10 * time.Second,
+	})
+	if err != nil {
+		return nil, err
+	}
+	result := make([]int, 0)
+	for _, val := range strings.Split(stdout.String(), ",") {
+		parsedWeighted, err := strconv.ParseInt(strings.TrimSpace(val), 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, int(parsedWeighted))
+	}
+	return result, nil
 }
 
 func TryReconcileLabels(rc *xstorev1reconcile.Context, pods []corev1.Pod, leaderPod string, logger logr.Logger) {
@@ -181,6 +329,7 @@ var ReconcileConsensusRoleLabels = xstorev1reconcile.NewStepBinder("ReconcileCon
 		}
 
 		flow.Logger().Info("Try detecting leader and reconciling the labels...")
+
 		currentLeader, leaderSwitched := TryDetectLeaderAndTryReconcileLabels(rc, pods, flow.Logger())
 
 		if len(currentLeader) == 0 {
@@ -224,11 +373,11 @@ var WaitUntilLeaderElected = xstorev1reconcile.NewStepBinder("WaitUntilLeaderEle
 	func(rc *xstorev1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
 		leaderPod, err := rc.TryGetXStoreLeaderPod()
 		if err != nil {
-			return flow.Error(err, "Unable to get leader pod.")
+			return flow.RetryErr(err, "Unable to get leader pod.")
 		}
 
 		if leaderPod == nil {
-			return flow.Wait("Leader not found, keep waiting...")
+			return flow.RetryAfter(10*time.Second, "Leader not found, keep waiting...")
 		}
 
 		return flow.Continue("Leader found.", "leader-pod", leaderPod.Name)
@@ -239,7 +388,115 @@ var AddLearnerNodesToClusterOnLeader = xstorev1reconcile.NewStepBinder("AddLearn
 	func(rc *xstorev1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
 		pods, err := rc.GetXStorePods()
 		if err != nil {
-			return flow.Error(err, "Unable to get xstore pods.")
+			return flow.Error(err, "Unable to get readonly xstore pods")
+		}
+
+		learnerPods := k8shelper.FilterPodsBy(pods, xstoremeta.IsPodRoleLearner)
+
+		// No learner pods.
+		if len(learnerPods) == 0 {
+			return flow.Pass()
+		}
+
+		learnerNodes := commonsteps.TransformPodsIntoNodes(rc.Namespace(), learnerPods)
+
+		leaderPod, err := rc.TryGetXStoreLeaderPod()
+		if err != nil {
+			return flow.RetryErr(err, "Unable to get leader pod.")
+		}
+
+		if leaderPod == nil {
+			return flow.RetryAfter(10*time.Second, "Leader not found, keep waiting...")
+		}
+		sharedCm, err := rc.GetXStoreConfigMap(convention.ConfigMapTypeShared)
+		if err != nil {
+			return flow.Error(err, "Unable to get shared config map.")
+		}
+
+		sharedChannel, err := commonsteps.ParseChannelFromConfigMap(sharedCm)
+		if err != nil {
+			return flow.Error(err, "Unable to parse shared channel from config map.")
+		}
+		nodeMap := map[string]channel.Node{}
+		for _, node := range sharedChannel.Nodes {
+			nodeMap[node.Pod] = node
+		}
+		for _, learnerNode := range learnerNodes {
+			node, ok := nodeMap[learnerNode.Pod]
+			if !ok {
+				return flow.RetryErr(fmt.Errorf("%s", "failed to get node in the shared channel"), "PodName", learnerNode.Pod)
+			}
+			cmd := xstoreexec.NewCanonicalCommandBuilder().Consensus().AddLearner(fmt.Sprintf("%s:%d", node.Host, node.Port)).Build()
+
+			err := rc.ExecuteCommandOn(leaderPod, convention.ContainerEngine, cmd, control.ExecOptions{
+				Logger:  flow.Logger(),
+				Timeout: 2 * time.Second,
+			})
+
+			if err != nil {
+				return flow.RetryErr(err, "Unable to add learner node.", "pod", learnerNode.Pod, "leader", leaderPod.Name)
+			}
+		}
+
+		return flow.Continue("Learner nodes added.")
+	},
+)
+
+func newXStoreFollowerName(xStoreName string) string {
+	return xStoreName + "-xf"
+}
+
+var RestoreToLearner = xstorev1reconcile.NewStepBinder("RestoreToLearner",
+	func(rc *xstorev1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+		//check xStore follower task exists
+		xfName := newXStoreFollowerName(rc.Name())
+		objKey := types.NamespacedName{
+			Namespace: rc.Namespace(),
+			Name:      xfName,
+		}
+		xf := polarxv1.XStoreFollower{}
+		err := rc.Client().Get(rc.Context(), objKey, &xf)
+		if err != nil && !strings.Contains(err.Error(), "not found") {
+			return flow.RetryErr(err, "failed to get xf", "xfName", xfName)
+		}
+		if err != nil && strings.Contains(err.Error(), "not found") {
+			pods, err := rc.GetXStorePods()
+			if err != nil {
+				return flow.RetryErr(err, "Failed to get pods")
+			}
+			xf := &polarxv1.XStoreFollower{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: rc.Namespace(),
+					Name:      xfName,
+				},
+				Spec: polarxv1.XStoreFollowerSpec{
+					Local:         true,
+					XStoreName:    rc.MustGetPrimaryXStore().Name,
+					TargetPodName: pods[0].Name,
+				},
+			}
+			err = rc.SetControllerRefAndCreate(xf)
+			if err != nil {
+				return flow.RetryErr(err, "failed to create xstore follower")
+			}
+			return flow.Retry("just retry")
+		}
+		if xf.Status.Phase != polardbxv1xstore.FollowerPhaseSuccess {
+			return flow.Retry("wait for the xf to be success phase", "xfName", xf.Name)
+		}
+		err = rc.Client().Delete(rc.Context(), &xf)
+		if err != nil {
+			return flow.RetryErr(err, "failed to delete xf", "xfName", xf.Name)
+		}
+		return flow.Continue("RestoreToLearner success.")
+	},
+)
+
+var DropLearnerOnLeader = xstorev1reconcile.NewStepBinder("DropLearnerOnLeader",
+	func(rc *xstorev1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+		pods, err := rc.GetXStorePods()
+		if err != nil {
+			return flow.Continue("Unable to get readonly xstore pods")
 		}
 
 		learnerPods := k8shelper.FilterPodsBy(pods, xstoremeta.IsPodRoleLearner)
@@ -251,29 +508,41 @@ var AddLearnerNodesToClusterOnLeader = xstorev1reconcile.NewStepBinder("AddLearn
 
 		leaderPod, err := rc.TryGetXStoreLeaderPod()
 		if err != nil {
-			return flow.Error(err, "Unable to get leader pod.")
+			return flow.Continue("Unable to get leader pod.")
 		}
 
 		if leaderPod == nil {
-			return flow.Wait("Leader not found, keep waiting...")
+			return flow.Continue("Leader not found")
 		}
 
-		for _, learnerPod := range learnerPods {
-			cmd := xstoreexec.NewCanonicalCommandBuilder().
-				Consensus().
-				AddNode(learnerPod.Name, xstoremeta.RoleLearner).
-				Build()
+		sharedCm, err := rc.GetXStoreConfigMap(convention.ConfigMapTypeShared)
+		if err != nil {
+			return flow.Error(err, "Unable to get shared config map.")
+		}
 
+		sharedChannel, err := commonsteps.ParseChannelFromConfigMap(sharedCm)
+		if err != nil {
+			return flow.Error(err, "Unable to parse shared channel from config map.")
+		}
+		nodeMap := map[string]channel.Node{}
+		for _, node := range sharedChannel.Nodes {
+			nodeMap[node.Pod] = node
+		}
+		for _, learnerPod := range learnerPods {
+			node, ok := nodeMap[learnerPod.Name]
+			if !ok {
+				return flow.RetryErr(fmt.Errorf("%s", "failed to get node in the shared channel"), "PodName", learnerPod.Name)
+			}
+			cmd := xstoreexec.NewCanonicalCommandBuilder().Consensus().DropLearner(fmt.Sprintf("%s:%d", node.Host, node.Port)).Build()
 			err := rc.ExecuteCommandOn(leaderPod, convention.ContainerEngine, cmd, control.ExecOptions{
 				Logger:  flow.Logger(),
 				Timeout: 2 * time.Second,
 			})
-
 			if err != nil {
-				return flow.Error(err, "Unable to add learner node.", "pod", learnerPod.Name)
+				continue
 			}
 		}
 
-		return flow.Continue("Learner nodes added.")
+		return flow.Continue("Learner nodes deleted.")
 	},
 )

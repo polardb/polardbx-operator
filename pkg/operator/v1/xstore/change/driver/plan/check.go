@@ -45,11 +45,14 @@ func statusMapToNodeMap(status map[string]model.PaxosNodeStatus) map[string]mode
 func (step *Step) applyInner(node *model.PaxosNode) *model.PaxosNode {
 	if node != nil {
 		*node = model.PaxosNode{
-			Pod:        step.Target,
-			Role:       step.TargetRole,
-			Generation: step.TargetGeneration,
-			Set:        step.NodeSet,
-			Index:      step.Index,
+			PaxosInnerNode: model.PaxosInnerNode{
+				Pod:        step.Target,
+				Role:       step.TargetRole,
+				Generation: step.TargetGeneration,
+				Set:        step.NodeSet,
+				Index:      step.Index,
+			},
+			RebuildConfig: map[string]interface{}{},
 		}
 	}
 
@@ -84,7 +87,7 @@ func matches(a, b map[string]model.PaxosNode) bool {
 		if !ok {
 			return false
 		}
-		if v != vb {
+		if v.PaxosInnerNode != vb.PaxosInnerNode {
 			return false
 		}
 	}

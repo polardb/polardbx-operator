@@ -2,3 +2,4 @@ click==7.1.2
 jsons==1.4.0
 PyMySQL==1.0.2
 typish==1.9.1
+oss2==2.15.0

@@ -20,6 +20,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/alibaba/polardbx-operator/pkg/operator/hint"
+
 	"github.com/go-logr/logr"
 	"golang.org/x/time/rate"
 	appsv1 "k8s.io/api/apps/v1"
@@ -38,7 +40,6 @@ import (
 	polardbxv1polardbx "github.com/alibaba/polardbx-operator/api/v1/polardbx"
 	"github.com/alibaba/polardbx-operator/pkg/debug"
 	"github.com/alibaba/polardbx-operator/pkg/k8s/control"
-	"github.com/alibaba/polardbx-operator/pkg/operator/hint"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/config"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/helper"
 	polardbxmeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/meta"
@@ -50,13 +51,13 @@ import (
 	gmssteps "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/steps/instance/gms"
 	guidesteps "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/steps/instance/guide"
 	rebalancesteps "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/steps/instance/rebalance"
+	restartsteps "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/steps/instance/restart"
 )
 
 type PolarDBXReconciler struct {
 	BaseRc *control.BaseReconcileContext
 	Logger logr.Logger
 	config.LoaderFactory
-
 	MaxConcurrency int
 }
 
@@ -91,6 +92,8 @@ func (r *PolarDBXReconciler) Reconcile(ctx context.Context, request reconcile.Re
 func (r *PolarDBXReconciler) newReconcileTask(rc *polardbxreconcile.Context, polardbx *polardbxv1.PolarDBXCluster, log logr.Logger) *control.Task {
 	task := control.NewTask()
 
+	readonly := polardbx.Spec.Readonly
+
 	defer commonsteps.PersistentStatus(task, true)
 	defer commonsteps.PersistentPolarDBXCluster(task, true)
 	defer commonsteps.UpdateDisplayReplicas(task, true)
@@ -120,6 +123,7 @@ func (r *PolarDBXReconciler) newReconcileTask(rc *polardbxreconcile.Context, pol
 	case polardbxv1polardbx.PhaseNew:
 		guidesteps.ManipulateSpecAccordingToGuides(task)
 		finalizersteps.SetupGuardFinalizer(task)
+		commonsteps.InitializePolardbxLabel(task)
 		commonsteps.GenerateRandInStatus(task)
 		commonsteps.InitializeServiceName(task)
 		commonsteps.TransferPhaseTo(polardbxv1polardbx.PhasePending, true)(task)
@@ -130,6 +134,7 @@ func (r *PolarDBXReconciler) newReconcileTask(rc *polardbxreconcile.Context, pol
 		instancesteps.CreateSecretsIfNotFound(task)
 		instancesteps.CreateServicesIfNotFound(task)
 		instancesteps.CreateConfigMapsIfNotFound(task)
+		commonsteps.InitializeParameterTemplate(task)
 
 		control.Branch(polardbx.Spec.Restore != nil,
 			commonsteps.TransferPhaseTo(polardbxv1polardbx.PhaseRestoring, true),
@@ -139,6 +144,10 @@ func (r *PolarDBXReconciler) newReconcileTask(rc *polardbxreconcile.Context, pol
 	case polardbxv1polardbx.PhaseCreating, polardbxv1polardbx.PhaseRestoring:
 		// Update every time.
 		commonsteps.UpdateSnapshotAndObservedGeneration(task)
+		instancesteps.SyncDnReplicasAndCheckControllerRef(task)
+
+		// Create readonly polardbx in InitReadonly list
+		instancesteps.CreateOrReconcileReadonlyPolardbx(task)
 
 		// Create GMS and DNs.
 		instancesteps.CreateOrReconcileGMS(task)
@@ -151,8 +160,10 @@ func (r *PolarDBXReconciler) newReconcileTask(rc *polardbxreconcile.Context, pol
 				gmssteps.InitializeSchemas,
 				gmssteps.RestoreSchemas,
 			),
-			gmssteps.CreateAccounts,
-			gmssteps.SyncDynamicConfigs(true),
+			control.When(!readonly,
+				gmssteps.CreateAccounts,
+				gmssteps.SyncDynamicConfigs(true),
+			),
 		)(task)
 
 		// When all DNs' are ready, enable them in GMS.
@@ -169,6 +180,9 @@ func (r *PolarDBXReconciler) newReconcileTask(rc *polardbxreconcile.Context, pol
 
 		// Then all the stateless components.
 		control.Block(
+			control.When(readonly,
+				instancesteps.WaitUntilPrimaryCNDeploymentsRolledOut,
+			),
 			instancesteps.CreateOrReconcileCNs,
 			instancesteps.CreateOrReconcileCDCs,
 			instancesteps.WaitUntilCNDeploymentsRolledOut,
@@ -186,6 +200,12 @@ func (r *PolarDBXReconciler) newReconcileTask(rc *polardbxreconcile.Context, pol
 	case polardbxv1polardbx.PhaseRunning, polardbxv1polardbx.PhaseLocked:
 		// Schedule after 10 seconds.
 		defer control.ScheduleAfter(10*time.Second)(task, true)
+
+		// Restart polardbx when restart parameters changed
+		control.When(rc.GetPolarDBXRestarting(),
+			restartsteps.GetRestartingPods,
+			commonsteps.TransferPhaseTo(polardbxv1polardbx.PhaseRestarting, true),
+		)(task)
 
 		// Recalculate the storage size and sync dynamic configs.
 		control.Block(
@@ -213,13 +233,19 @@ func (r *PolarDBXReconciler) newReconcileTask(rc *polardbxreconcile.Context, pol
 		// Always reconcile the stateless components (mainly for rebuilt).
 		instancesteps.CreateOrReconcileCNs(task)
 		instancesteps.CreateOrReconcileCDCs(task)
+		instancesteps.CreateFileStorage(task)
+
+		//sync cn label to pod without rebuild pod
+		instancesteps.TrySyncCnLabelToPodsDirectly(task)
 
 		// Update snapshot and observed generation.
 		commonsteps.UpdateSnapshotAndObservedGeneration(task)
+		instancesteps.SyncDnReplicasAndCheckControllerRef(task)
 	case polardbxv1polardbx.PhaseUpgrading:
 		// Update storage size and configs.
 		control.Block(
 			commonsteps.UpdateDisplayStorageSize,
+			instancesteps.SyncDnReplicasAndCheckControllerRef,
 			// gmssteps.SyncDynamicConfigs(false),
 		)(task)
 
@@ -233,9 +259,14 @@ func (r *PolarDBXReconciler) newReconcileTask(rc *polardbxreconcile.Context, pol
 
 			control.Block(
 				// GMS, update & wait
-				instancesteps.CreateOrReconcileGMS,
-				instancesteps.WaitUntilGMSReady,
+				control.When(!readonly,
+					instancesteps.CreateOrReconcileGMS,
+					instancesteps.WaitUntilGMSReady,
+				),
 
+				control.When(readonly,
+					instancesteps.WaitUntilPrimaryCNDeploymentsRolledOut,
+				),
 				instancesteps.CreateOrReconcileCNs,
 				instancesteps.CreateOrReconcileCDCs,
 				// Only add or update, never remove.
@@ -259,7 +290,6 @@ func (r *PolarDBXReconciler) newReconcileTask(rc *polardbxreconcile.Context, pol
 			// Wait terminated CN/CDCs to be finalized in GMS to avoid DDL problems.
 			instancesteps.WaitUntilCNPodsStable(task)
 			instancesteps.WaitUntilCDCPodsStable(task)
-
 			// Start to rebalance data after DN stores are reconciled if necessary.
 			rebalancesteps.StartRebalanceTask(task)
 
@@ -291,6 +321,7 @@ func (r *PolarDBXReconciler) newReconcileTask(rc *polardbxreconcile.Context, pol
 			commonsteps.TransferPhaseTo(polardbxv1polardbx.PhaseRunning, true)(task)
 		}
 	case polardbxv1polardbx.PhaseDeleting:
+		finalizersteps.CleanGMS(task)
 		// Block until other finalizers are removed.
 		finalizersteps.BlockBeforeOtherSystemsFinalized(task)
 
@@ -300,7 +331,16 @@ func (r *PolarDBXReconciler) newReconcileTask(rc *polardbxreconcile.Context, pol
 
 		// Remove guard finalizers to let self can be removed.
 		finalizersteps.RemoveGuardFinalizer(task)
+	case polardbxv1polardbx.PhaseRestarting:
+		// Restart CN by deleting pods
+		control.Branch(
+			restartsteps.IsRollingRestart(polardbx),
+			restartsteps.RollingRestartPods,
+			restartsteps.RestartingPods,
+		)(task)
 
+		restartsteps.ClosePolarDBXRestartPhase(task)
+		commonsteps.TransferPhaseTo(polardbxv1polardbx.PhaseRunning, true)(task)
 	case polardbxv1polardbx.PhaseFailed:
 	case polardbxv1polardbx.PhaseUnknown:
 
@@ -357,6 +397,8 @@ func (r *PolarDBXReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&polardbxv1.XStore{}).
 		// Watches owned Deployments.
 		Owns(&appsv1.Deployment{}).
+		// Watches owned Parameters
+		Owns(&polardbxv1.PolarDBXParameter{}).
 		// Watches deleted or failed CN/CDC Pods.
 		Watches(
 			&source.Kind{Type: &corev1.Pod{}},

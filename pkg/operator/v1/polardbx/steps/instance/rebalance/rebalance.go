@@ -48,6 +48,11 @@ func (t *DataRebalanceTask) startRebalanceClusterForScaleOut(rc *polardbxv1recon
 	return groupMgr.RebalanceCluster(t.To)
 }
 
+func (t *DataRebalanceTask) startReadonlyTask(rc *polardbxv1reconcile.Context) (string, error) {
+	t.From = t.To
+	return "readonlyPlan", nil
+}
+
 func (t *DataRebalanceTask) startDrainNodes(rc *polardbxv1reconcile.Context) (string, error) {
 	polardbx := rc.MustGetPolarDBX()
 	groupMgr, err := rc.GetPolarDBXGroupManager()
@@ -72,7 +77,9 @@ func (t *DataRebalanceTask) Started() bool {
 }
 
 func (t *DataRebalanceTask) Start(rc *polardbxv1reconcile.Context) (string, error) {
-	if t.From == t.To {
+	if rc.MustGetPolarDBX().Spec.Readonly {
+		return t.startReadonlyTask(rc)
+	} else if t.From == t.To {
 		return "", nil
 	} else if t.From < t.To { // Scale out
 		if !featuregate.AutoDataRebalance.Enabled() {
@@ -93,6 +100,8 @@ func (t *DataRebalanceTask) areScaleInDrainedNodesOffline(rc *polardbxv1reconcil
 }
 
 func (t *DataRebalanceTask) getScaleInProgressByCountingDrainedNodes(rc *polardbxv1reconcile.Context) (int, error) {
+	polardbx := rc.MustGetPolarDBX()
+	readonly := polardbx.Spec.Readonly
 	gmsMgr, err := rc.GetPolarDBXGMSManager()
 	if err != nil {
 		return 0, err
@@ -104,7 +113,11 @@ func (t *DataRebalanceTask) getScaleInProgressByCountingDrainedNodes(rc *polardb
 		return 100, nil
 	}
 
-	storageNodes, err := gmsMgr.ListStorageNodes(gms.StorageKindMaster)
+	storageKind := gms.StorageKindMaster
+	if readonly {
+		storageKind = gms.StorageKindSlave
+	}
+	storageNodes, err := gmsMgr.ListStorageNodes(storageKind)
 	if err != nil {
 		return 0, err
 	}
@@ -193,6 +206,7 @@ var PrepareRebalanceTaskContext = polardbxv1reconcile.NewStepBinder("PrepareReba
 
 		// Get target DN replicas
 		polardbx := rc.MustGetPolarDBX()
+		readonly := polardbx.Spec.Readonly
 		toReplicas := int(polardbx.Status.SpecSnapshot.Topology.Nodes.DN.Replicas)
 
 		// Compare current
@@ -200,7 +214,11 @@ var PrepareRebalanceTaskContext = polardbxv1reconcile.NewStepBinder("PrepareReba
 		if err != nil {
 			return flow.Error(err, "Unable to get manager of GMS.")
 		}
-		storageNodes, err := gmsMgr.ListStorageNodes(gms.StorageKindMaster)
+		storageKind := gms.StorageKindMaster
+		if readonly {
+			storageKind = gms.StorageKindSlave
+		}
+		storageNodes, err := gmsMgr.ListStorageNodes(storageKind)
 		if err != nil {
 			return flow.Error(err, "Unable to list storages of DNs.")
 		}
@@ -401,7 +419,7 @@ var EnsureTrailingDNsAreDrainedOrBlock = polardbxv1reconcile.NewStepBinder(
 		polardbx := rc.MustGetPolarDBX()
 		cdcNodeSpec := polardbx.Status.SpecSnapshot.Topology.Nodes.CDC
 		if featuregate.WaitDrainedNodeToBeOffline.Enabled() ||
-			(cdcNodeSpec != nil && cdcNodeSpec.Replicas > 0) {
+			(cdcNodeSpec != nil && (cdcNodeSpec.Replicas+cdcNodeSpec.XReplicas) > 0) {
 			offline, err := rebalanceTask.areScaleInDrainedNodesOffline(rc)
 			if err != nil {
 				return flow.Error(err, "Unable to determine offline status from GMS.")

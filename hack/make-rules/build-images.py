@@ -62,7 +62,7 @@ def build_image_for(build_env: lib.BuildEnv, target: lib.BuildTarget, repo, tag)
     image_build_path = os.path.join(build_env.root_dir, target.image_build_path) \
         if target.image_build_path else build_env.root_dir
 
-    print('[%s] Building image %s...' % (target.target, image_name))
+    print('[%s] Building image %s... @ %s' % (target.target, image_name, image_build_path))
 
     subprocess.check_call([
         'docker', 'build', '--network', 'host',

@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"github.com/alibaba/polardbx-operator/pkg/operator/hint"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -33,7 +34,6 @@ import (
 
 	polardbxv1 "github.com/alibaba/polardbx-operator/api/v1"
 	"github.com/alibaba/polardbx-operator/pkg/k8s/control"
-	"github.com/alibaba/polardbx-operator/pkg/operator/hint"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/config"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/plugin"
 	xstorev1reconcile "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/reconcile"
@@ -90,9 +90,9 @@ func (r *XStoreReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: r.MaxConcurrency,
 			RateLimiter: workqueue.NewMaxOfRateLimiter(
-				workqueue.NewItemExponentialFailureRateLimiter(5*time.Millisecond, 300*time.Second),
-				// 10 qps, 100 bucket size.  This is only for retry speed. It's only the overall factor (not per item).
-				&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
+				workqueue.NewItemExponentialFailureRateLimiter(5*time.Millisecond, 60*time.Second),
+				// 60 qps, 100 bucket size.  This is only for retry speed. It's only the overall factor (not per item).
+				&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(60), 100)},
 			),
 		}).
 		For(&polardbxv1.XStore{}).

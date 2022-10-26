@@ -22,6 +22,8 @@ type Config interface {
 	Store() StoreConfig
 	Scheduler() SchedulerConfig
 	Security() SecurityConfig
+	Oss() OssConfig
+	Nfs() NfsConfig
 }
 
 type SecurityConfig interface {
@@ -51,6 +53,20 @@ type StoreConfig interface {
 
 	HostPathTools() string
 	HostPathDataVolumeRoot() string
+	HostPathLogVolumeRoot() string
+	HostPathFilestreamVolumeRoot() string
 
 	HostPathFileServiceEndpoint() string
+}
+
+type OssConfig interface {
+	Endpoint() string
+	Bucket() string
+	AccessKey() string
+	AccessSecret() string
+}
+
+type NfsConfig interface {
+	Path() string
+	Server() string
 }

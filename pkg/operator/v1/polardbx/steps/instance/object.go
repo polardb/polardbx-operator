@@ -17,9 +17,16 @@ limitations under the License.
 package instance
 
 import (
+	"fmt"
+	"k8s.io/apimachinery/pkg/types"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sort"
+	"strconv"
 	"sync"
 	"sync/atomic"
+	"time"
+
+	xstoremeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/meta"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -43,21 +50,37 @@ import (
 
 var CreateSecretsIfNotFound = polardbxv1reconcile.NewStepBinder("CreateSecretsIfNotFound",
 	func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+		polarDBX := rc.MustGetPolarDBX()
 		accountSecret, err := rc.GetPolarDBXSecret(convention.SecretTypeAccount)
 		if client.IgnoreNotFound(err) != nil {
 			return flow.Error(err, "Unable to get account secret.")
 		}
 		if accountSecret == nil {
-			accountSecret, err = factory.NewObjectFactory(rc).NewSecret()
-			if err != nil {
-				return flow.Error(err, "Unable to new account secret.")
-			}
-			err = rc.SetControllerRefAndCreate(accountSecret)
-			if err != nil {
-				return flow.Error(err, "Unable to create account secret.")
+			if polarDBX.Spec.Restore != nil {
+				secret, err := rc.GetPolarDBXSecretForRestore()
+				if err != nil {
+					return flow.Error(err, "Unable to get old secret for restore")
+				}
+				accountSecret, err = factory.NewObjectFactory(rc).NewSecretFromPolarDBX(secret)
+				if err != nil {
+					return flow.Error(err, "Unable to new account secret while restoring.")
+				}
+				err = rc.SetControllerRefAndCreate(accountSecret)
+				if err != nil {
+					return flow.Error(err, "Unable to create account secret while restoring.")
+				}
+			} else {
+				accountSecret, err = factory.NewObjectFactory(rc).NewSecret()
+				if err != nil {
+					return flow.Error(err, "Unable to new account secret.")
+				}
+				err = rc.SetControllerRefAndCreate(accountSecret)
+				if err != nil {
+					return flow.Error(err, "Unable to create account secret.")
+				}
+
 			}
 		}
-
 		keySecret, err := rc.GetPolarDBXSecret(convention.SecretTypeSecurity)
 		if client.IgnoreNotFound(err) != nil {
 			return flow.Error(err, "Unable to get encode key secret.")
@@ -72,7 +95,6 @@ var CreateSecretsIfNotFound = polardbxv1reconcile.NewStepBinder("CreateSecretsIf
 				return flow.Error(err, "Unable to create encode key secret.")
 			}
 		}
-
 		return flow.Pass()
 	},
 )
@@ -81,11 +103,20 @@ var CreateServicesIfNotFound = polardbxv1reconcile.NewStepBinder("CreateServices
 	func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
 		objectFactory := factory.NewObjectFactory(rc)
 
-		for _, serviceType := range []convention.ServiceType{
-			convention.ServiceTypeReadWrite,
+		polardbx := rc.MustGetPolarDBX()
+
+		serviceTypes := []convention.ServiceType{
 			convention.ServiceTypeReadOnly,
-			convention.ServiceTypeCDCMetrics,
-		} {
+		}
+
+		if !polardbx.Spec.Readonly {
+			serviceTypes = []convention.ServiceType{
+				convention.ServiceTypeCDCMetrics,
+				convention.ServiceTypeReadWrite,
+			}
+		}
+
+		for _, serviceType := range serviceTypes {
 			service, err := rc.GetPolarDBXService(serviceType)
 			if client.IgnoreNotFound(err) != nil {
 				return flow.Error(err, "Unable to get service", "service-type", serviceType)
@@ -152,6 +183,10 @@ var CreateOrReconcileGMS = polardbxv1reconcile.NewStepBinder("CreateOrReconcileG
 	func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
 		polardbx := rc.MustGetPolarDBX()
 
+		if polardbx.Spec.Readonly {
+			return flow.Continue("Readonly pxc, skip.")
+		}
+
 		if polardbx.Spec.ShareGMS {
 			return flow.Continue("GMS shared, skip.")
 		}
@@ -160,7 +195,6 @@ var CreateOrReconcileGMS = polardbxv1reconcile.NewStepBinder("CreateOrReconcileG
 		if client.IgnoreNotFound(err) != nil {
 			return flow.Continue("Unable to get xstore of GMS.")
 		}
-
 		if gmsStore == nil {
 			// Only valid when creating/restoring... Consider cluster is broken when
 			// GMS not found in other phases, so transfer the phase into failed.
@@ -216,9 +250,113 @@ var CreateOrReconcileGMS = polardbxv1reconcile.NewStepBinder("CreateOrReconcileG
 	},
 )
 
+var SyncDnReplicasAndCheckControllerRef = polardbxv1reconcile.NewStepBinder("SyncDnReplicasAndCheckControllerRef",
+	func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+		polardbx := rc.MustGetPolarDBX()
+		if !polardbx.Spec.Readonly {
+			return flow.Pass()
+		}
+
+		primaryPolardbx, err := rc.GetPrimaryPolarDBX()
+		if err != nil {
+			return flow.RetryErr(err, "Failed to get primary pxc.")
+		}
+
+		shouldUpdatePolardbx := false
+
+		if err = k8shelper.CheckControllerReference(polardbx, primaryPolardbx); err != nil {
+			err = ctrl.SetControllerReference(primaryPolardbx, polardbx, rc.Scheme())
+			if err != nil {
+				return flow.Error(err, "Failed to set controller ref: %w")
+			}
+			shouldUpdatePolardbx = true
+		}
+
+		primaryDnReplicas := primaryPolardbx.Spec.Topology.Nodes.DN.Replicas
+
+		if polardbx.Spec.Topology.Nodes.DN.Replicas != primaryDnReplicas {
+			polardbx.Spec.Topology.Nodes.DN.Replicas = primaryDnReplicas
+			shouldUpdatePolardbx = true
+		}
+
+		if shouldUpdatePolardbx {
+			err = rc.Client().Update(rc.Context(), polardbx)
+
+			if err != nil {
+				return flow.Error(err, "Failed to update dn replicas.")
+			} else {
+				return flow.Continue("DN replicas updated.")
+			}
+		}
+		return flow.Pass()
+	},
+)
+
+var CreateOrReconcileReadonlyPolardbx = polardbxv1reconcile.NewStepBinder("CreateOrReconcileReadonlyPolardbx",
+	func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+		polardbx := rc.MustGetPolarDBX()
+		if polardbx.Spec.Readonly {
+			return flow.Pass()
+		}
+
+		objectFactory := factory.NewObjectFactory(rc)
+		wg := &sync.WaitGroup{}
+		readonlyPolardbxList := polardbx.Spec.InitReadonly
+		errs := make([]error, len(readonlyPolardbxList))
+		var errCnt uint32
+
+		for i, readonlyInst := range readonlyPolardbxList {
+			newReadonlyPolardbx, err := objectFactory.NewReadonlyPolardbx(readonlyInst)
+
+			readonlyName := readonlyInst.Name
+
+			if err != nil {
+				return flow.Error(err, "Unable to new readonly pxc.", "name", readonlyName)
+			}
+
+			key := types.NamespacedName{
+				Namespace: polardbx.Namespace,
+				Name:      polardbx.Name + "-" + readonlyName,
+			}
+
+			if rc.CheckPolarDBXExist(key) {
+				// Dismiss existed pxc
+				continue
+			} else {
+				wg.Add(1)
+				logger, idx := flow.Logger(), i
+				go func() {
+					defer wg.Done()
+					err = rc.SetControllerRefAndCreate(newReadonlyPolardbx)
+					if err != nil {
+						logger.Error(err, "Unable to create readonly pxc.", "name", readonlyName)
+						errs[idx] = err
+						atomic.AddUint32(&errCnt, 1)
+					}
+				}()
+			}
+		}
+
+		wg.Wait()
+		if errCnt > 0 {
+			var firstErr error
+			for _, err := range errs {
+				if err != nil {
+					firstErr = err
+					break
+				}
+			}
+			return flow.Error(firstErr, "Unable to create or reconcile readonly pxc.", "error-cnt", errCnt)
+		}
+
+		return flow.Pass()
+	},
+)
+
 var CreateOrReconcileDNs = polardbxv1reconcile.NewStepBinder("CreateOrReconcileDNs",
 	func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
 		polardbx := rc.MustGetPolarDBX()
+		readonly := polardbx.Spec.Readonly
 		topology := polardbx.Status.SpecSnapshot.Topology
 		observedGeneration := polardbx.Status.ObservedGeneration
 		replicas := int(topology.Nodes.DN.Replicas)
@@ -289,21 +427,27 @@ var CreateOrReconcileDNs = polardbxv1reconcile.NewStepBinder("CreateOrReconcileD
 						return flow.Error(err, "Unable to new xstore of DN.", "index", i)
 					}
 
-					convention.CopyMetadataForUpdate(&newDnStore.ObjectMeta, &observedDnStore.ObjectMeta, observedGeneration)
+					newDnStoreHash := newDnStore.Labels[xstoremeta.LabelHash]
+					observedDnStoreHash := observedDnStore.Labels[xstoremeta.LabelHash]
+					if newDnStoreHash != observedDnStoreHash {
+						convention.CopyMetadataForUpdate(&newDnStore.ObjectMeta, &observedDnStore.ObjectMeta, observedGeneration)
+						newDnStore.SetLabels(k8shelper.PatchLabels(newDnStore.Labels, map[string]string{
+							xstoremeta.LabelHash: newDnStoreHash,
+						}))
+						wg.Add(1)
+						logger, idx := flow.Logger(), i
+						go func() {
+							defer wg.Done()
+							err = rc.Client().Update(rc.Context(), newDnStore)
+							if err != nil {
+								logger.Error(err, "Unable to update xstore of DN.", "index", i)
+								errs[idx] = err
+								atomic.AddUint32(&errCnt, 1)
+							}
+						}()
+						anyChanged = true
+					}
 
-					wg.Add(1)
-					logger, idx := flow.Logger(), i
-					go func() {
-						defer wg.Done()
-						err = rc.Client().Update(rc.Context(), newDnStore)
-						if err != nil {
-							logger.Error(err, "Unable to update xstore of DN.", "index", i)
-							errs[idx] = err
-							atomic.AddUint32(&errCnt, 1)
-						}
-					}()
-
-					anyChanged = true
 				}
 			}
 		}
@@ -334,10 +478,14 @@ var CreateOrReconcileDNs = polardbxv1reconcile.NewStepBinder("CreateOrReconcileD
 			}
 
 			storageNodeIds := make(map[string]int)
-			if initialized, err := mgr.IsMetaDBInitialized(); err != nil {
+			if initialized, err := mgr.IsMetaDBInitialized(polardbx.Name); err != nil {
 				return flow.Error(err, "Unable to determine if GMS is initialized.")
 			} else if initialized {
-				storageNodes, err := mgr.ListStorageNodes(gms.StorageKindMaster)
+				storageKind := gms.StorageKindMaster
+				if readonly {
+					storageKind = gms.StorageKindSlave
+				}
+				storageNodes, err := mgr.ListStorageNodes(storageKind)
 				if err != nil {
 					return flow.Error(err, "Unable to list storage nodes in GMS.")
 				}
@@ -422,8 +570,14 @@ func reconcileGroupedDeployments(rc *polardbxv1reconcile.Context, flow control.F
 
 	var deployments map[string]appsv1.Deployment
 	if role == polardbxmeta.RoleCN {
+		if !rc.HasCNs() {
+			return flow.Pass()
+		}
 		deployments, err = factory.NewObjectFactory(rc).NewDeployments4CN()
 	} else {
+		if polardbx.Spec.Readonly {
+			return flow.Pass()
+		}
 		deployments, err = factory.NewObjectFactory(rc).NewDeployments4CDC()
 	}
 	if err != nil {
@@ -451,15 +605,21 @@ func reconcileGroupedDeployments(rc *polardbxv1reconcile.Context, flow control.F
 				}
 				anyChanged = true
 			} else {
-				convention.CopyMetadataForUpdate(&newDeployment.ObjectMeta, &observedDeployment.ObjectMeta,
-					observedGeneration)
-				err := rc.Client().Update(rc.Context(), &newDeployment)
-				if err != nil {
-					return flow.Error(err, "Unable to update deployment.",
-						"deployment", observedDeployment.Name)
+				newDeploymentLabelHash := newDeployment.Labels[polardbxmeta.LabelHash]
+				if newDeploymentLabelHash != observedDeployment.Labels[polardbxmeta.LabelHash] {
+					convention.CopyMetadataForUpdate(&newDeployment.ObjectMeta, &observedDeployment.ObjectMeta, observedGeneration)
+					newDeployment.SetLabels(k8shelper.PatchLabels(newDeployment.Labels, map[string]string{
+						polardbxmeta.LabelHash: newDeploymentLabelHash,
+					}))
+					err := rc.Client().Update(rc.Context(), &newDeployment)
+					if err != nil {
+						return flow.Error(err, "Unable to update deployment.",
+							"deployment", observedDeployment.Name)
+					}
+					anyChanged = true
 				}
-				anyChanged = true
 			}
+
 		}
 	}
 
@@ -483,6 +643,37 @@ func reconcileGroupedDeployments(rc *polardbxv1reconcile.Context, flow control.F
 
 	return flow.Pass()
 }
+
+var CreateFileStorage = polardbxv1reconcile.NewStepBinder("CreateFileStorage",
+	func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+		polardbx := rc.MustGetPolarDBX()
+		groupManager, err := rc.GetPolarDBXGroupManager()
+		if err != nil {
+			return flow.Error(err, "Failed to get CN group manager.")
+		}
+
+		fileStorageInfoList, err := groupManager.ListFileStorage()
+		if err != nil {
+			return flow.Error(err, "Failed to get file storage list")
+		}
+
+		config := rc.Config()
+
+		for _, info := range polardbx.Spec.Config.CN.ColdDataFileStorage {
+			//  check if the filestorage already existed
+			if info.CheckEngineExists(fileStorageInfoList) {
+				continue
+			}
+
+			// create the file storage
+			err = groupManager.CreateFileStorage(info, config)
+			if err != nil {
+				return flow.Error(err, fmt.Sprintf("Failed to create file storage: %s.", info.Engine))
+			}
+		}
+		return flow.Pass()
+	},
+)
 
 var CreateOrReconcileCNs = polardbxv1reconcile.NewStepBinder("CreateOrReconcileCNs",
 	func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
@@ -583,6 +774,20 @@ var WaitUntilCNDeploymentsRolledOut = polardbxv1reconcile.NewStepBinder("WaitUnt
 	},
 )
 
+var WaitUntilPrimaryCNDeploymentsRolledOut = polardbxv1reconcile.NewStepBinder("WaitUntilPrimaryCNDeploymentsRolledOut",
+	func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+		cnDeployments, err := rc.GetPrimaryDeploymentMap(polardbxmeta.RoleCN)
+		if err != nil {
+			return flow.Error(err, "Unable to get deployments of primary CN.")
+		}
+
+		if len(cnDeployments) > 0 && areDeploymentsRolledOut(cnDeployments) {
+			return flow.Continue("Deployments of primary CN  are rolled out.")
+		}
+		return flow.RetryAfter(5*time.Second, "Some deployment of primary CN is rolling.")
+	},
+)
+
 var WaitUntilCNPodsStable = polardbxv1reconcile.NewStepBinder("WaitUntilCNPodsStable",
 	func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
 		polardbx := rc.MustGetPolarDBX()
@@ -597,7 +802,7 @@ var WaitUntilCNPodsStable = polardbxv1reconcile.NewStepBinder("WaitUntilCNPodsSt
 		})
 
 		cnTemplate := &polardbx.Status.SpecSnapshot.Topology.Nodes.CN
-		if len(unFinalizedPodsSize) == int(cnTemplate.Replicas) {
+		if len(unFinalizedPodsSize) == int(*cnTemplate.Replicas) {
 			return flow.Pass()
 		}
 		return flow.Wait("Wait until some pod to be finalized.")
@@ -607,6 +812,10 @@ var WaitUntilCNPodsStable = polardbxv1reconcile.NewStepBinder("WaitUntilCNPodsSt
 var WaitUntilCDCPodsStable = polardbxv1reconcile.NewStepBinder("WaitUntilCDCPodsStable",
 	func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
 		polardbx := rc.MustGetPolarDBX()
+
+		if polardbx.Spec.Readonly {
+			return flow.Pass()
+		}
 
 		cdcPods, err := rc.GetPods(polardbxmeta.RoleCDC)
 		if err != nil {
@@ -620,7 +829,7 @@ var WaitUntilCDCPodsStable = polardbxv1reconcile.NewStepBinder("WaitUntilCDCPods
 		cdcTemplate := polardbx.Status.SpecSnapshot.Topology.Nodes.CDC
 		cdcReplicas := 0
 		if cdcTemplate != nil {
-			cdcReplicas = int(cdcTemplate.Replicas)
+			cdcReplicas = int(cdcTemplate.Replicas + cdcTemplate.XReplicas)
 		}
 		if len(unFinalizedPodsSize) == cdcReplicas {
 			return flow.Pass()
@@ -640,5 +849,26 @@ var WaitUntilCDCDeploymentsRolledOut = polardbxv1reconcile.NewStepBinder("WaitUn
 			return flow.Continue("Deployments of CDC are rolled out.")
 		}
 		return flow.Wait("Some deployment of CDC is rolling.")
+	},
+)
+
+var TrySyncCnLabelToPodsDirectly = polardbxv1reconcile.NewStepBinder("TrySyncCnLabelToPodsDirectly",
+	func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+		changedCount := 0
+		cnPods, err := rc.GetPods(polardbxmeta.RoleCN)
+		if err != nil {
+			return flow.Error(err, "Failed to Get Cn Pods")
+		}
+		for _, pod := range cnPods {
+			if pod.Labels[polardbxmeta.LabelAuditLog] != strconv.FormatBool(rc.MustGetPolarDBX().Spec.Config.CN.EnableAuditLog) {
+				pod.SetLabels(k8shelper.PatchLabels(pod.Labels, map[string]string{
+					polardbxmeta.LabelAuditLog: strconv.FormatBool(rc.MustGetPolarDBX().Spec.Config.CN.EnableAuditLog),
+				}))
+				if err := rc.Client().Update(rc.Context(), &pod); err != nil {
+					return flow.RetryErr(err, "Failed to Update pod for polardbx/enableAuditLog")
+				}
+			}
+		}
+		return flow.Continue(" CN Deployment labels are synced", "count", changedCount)
 	},
 )

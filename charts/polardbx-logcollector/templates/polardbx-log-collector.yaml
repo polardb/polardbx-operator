@@ -1,0 +1,11 @@
+apiVersion: polardbx.aliyun.com/v1
+kind: PolarDBXLogCollector
+metadata:
+  name: {{ .Values.logCollector.name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ .Values.logCollector.name }}
+spec:
+  fileBeatName: {{ .Values.filebeat.name }}
+  logStashName: {{ .Values.logstash.name }}
+  

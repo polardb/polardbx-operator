@@ -102,6 +102,19 @@ func (b *nullCommandBuilder) Consensus() *commandConsensusBuilder {
 	}
 }
 
+func (b *commandConsensusBuilder) This(full bool) *CommandBuilder {
+	b.args = append(b.args, "this")
+	if full {
+		b.args = append(b.args, "--full")
+	}
+	return b.end()
+}
+
+func (b *commandConsensusBuilder) ShowSlaveStatus() *CommandBuilder {
+	b.args = append(b.args, "slave-status")
+	return b.end()
+}
+
 func (b *commandConsensusBuilder) ReportRole(withLeader bool) *CommandBuilder {
 	b.args = append(b.args, "role")
 	if withLeader {
@@ -123,6 +136,16 @@ func (b *commandConsensusBuilder) PurgeLogs(local, force bool) *CommandBuilder {
 
 func (b *commandConsensusBuilder) SetLeader(pod string) *CommandBuilder {
 	b.args = append(b.args, "change-leader", "--node", pod)
+	return b.end()
+}
+
+func (b *commandConsensusBuilder) AddLearner(pod string) *CommandBuilder {
+	b.args = append(b.args, "add-learner", pod)
+	return b.end()
+}
+
+func (b *commandConsensusBuilder) DropLearner(pod string) *CommandBuilder {
+	b.args = append(b.args, "drop-learner", pod)
 	return b.end()
 }
 
@@ -199,6 +222,12 @@ func (b *nullCommandBuilder) Ping() *CommandBuilder {
 	return b.end()
 }
 
+func (b *nullCommandBuilder) MyConfig() *CommandBuilder {
+	b.script = path.Join(b.root, "cli.py")
+	b.args = append(b.args, "myconfig", "update")
+	return b.end()
+}
+
 type commandConfigBuilder struct {
 	*commandBuilder
 }
@@ -254,7 +283,139 @@ func (b *nullCommandBuilder) Engine() *commandEngineBuilder {
 	}
 }
 
+func (b *commandEngineBuilder) SetGlobal(variables map[string]string) *CommandBuilder {
+	b.args = append(b.args, "parameter")
+	for k, v := range variables {
+		b.args = append(b.args, "--key", k, "--value", v)
+	}
+	return b.end()
+}
+
 func (b *commandEngineBuilder) Version() *CommandBuilder {
 	b.args = append(b.args, "version")
+	return b.end()
+}
+
+type commandProcessBuilder struct {
+	*commandBuilder
+}
+
+func (b *nullCommandBuilder) Process() *commandProcessBuilder {
+	b.script = path.Join(b.root, "cli.py")
+	b.args = append(b.args, "process")
+	return &commandProcessBuilder{
+		commandBuilder: (*commandBuilder)(b),
+	}
+}
+
+func (b *commandProcessBuilder) KillAllMyProcess() *CommandBuilder {
+	b.args = append(b.args, "kill_all_mysql")
+	return b.end()
+}
+
+type commandBackupBuilder struct {
+	*commandBuilder
+}
+
+func (b *nullCommandBuilder) Backup() *commandBackupBuilder {
+	b.script = path.Join(b.root, "cli.py")
+	b.args = append(b.args, "backup")
+	return &commandBackupBuilder{
+		commandBuilder: (*commandBuilder)(b),
+	}
+}
+
+func (b *commandBackupBuilder) StartBackup(backupContext, jobName string) *CommandBuilder {
+	b.args = append(b.args, "start", "--backup_context", backupContext, "-j", jobName)
+	return b.end()
+}
+
+type commandRestoreBuilder struct {
+	*commandBuilder
+}
+
+func (b *nullCommandBuilder) Restore() *commandRestoreBuilder {
+	b.script = path.Join(b.root, "cli.py")
+	b.args = append(b.args, "restore")
+	return &commandRestoreBuilder{
+		commandBuilder: (*commandBuilder)(b),
+	}
+}
+
+func (b *commandRestoreBuilder) StartRestore(restoreContext string) *CommandBuilder {
+	b.args = append(b.args, "start", "--restore_context", restoreContext)
+	return b.end()
+}
+
+type commandRecoverBuilder struct {
+	*commandBuilder
+}
+
+func (b *nullCommandBuilder) Recover() *commandRecoverBuilder {
+	b.script = path.Join(b.root, "cli.py")
+	b.args = append(b.args, "recover")
+	return &commandRecoverBuilder{
+		commandBuilder: (*commandBuilder)(b),
+	}
+}
+
+func (b *commandRecoverBuilder) StartRecover(restoreContext, targetPod, pwd string) *CommandBuilder {
+	b.args = append(b.args, "start", "--restore_context", restoreContext, "-tp", targetPod, "-p", pwd)
+	return b.end()
+}
+
+type commandBinlogBackupBuilder struct {
+	*commandBuilder
+}
+
+func (b *nullCommandBuilder) BinlogBackup() *commandBinlogBackupBuilder {
+	b.script = path.Join(b.root, "cli.py")
+	b.args = append(b.args, "binlogbackup")
+	return &commandBinlogBackupBuilder{
+		commandBuilder: (*commandBuilder)(b),
+	}
+}
+
+func (b *commandBinlogBackupBuilder) StartBinlogBackup(backupContext, commitIndex, xstoreName, isGMS string) *CommandBuilder {
+	b.args = append(b.args, "start", "--backup_context", backupContext, "-si", commitIndex, "-g", isGMS, "-xs", xstoreName)
+	return b.end()
+}
+
+type commandCollectBuilder struct {
+	*commandBuilder
+}
+
+func (b *nullCommandBuilder) Collect() *commandCollectBuilder {
+	b.script = path.Join(b.root, "cli.py")
+	b.args = append(b.args, "collect")
+	return &commandCollectBuilder{
+		commandBuilder: (*commandBuilder)(b),
+	}
+}
+
+func (b *commandCollectBuilder) StartCollect(backupContext, heartBeatName string) *CommandBuilder {
+	b.args = append(b.args, "start", "--backup_context", backupContext, "-hb", heartBeatName)
+	return b.end()
+}
+
+func (b *commandCollectBuilder) UploadOffset(offset, path, storageName, sink string) *CommandBuilder {
+	b.args = append(b.args, "upload_offset", "-o", offset, "-p", path, "--storage_name", storageName, "--sink", sink)
+	return b.end()
+}
+
+type commandSeekCpBuilder struct {
+	*commandBuilder
+}
+
+func (b *nullCommandBuilder) Seekcp() *commandSeekCpBuilder {
+	b.script = path.Join(b.root, "cli.py")
+	b.args = append(b.args, "seekcp")
+	return &commandSeekCpBuilder{
+		commandBuilder: (*commandBuilder)(b),
+	}
+}
+
+func (b *commandSeekCpBuilder) StartSeekcp(seekcpContext string) *CommandBuilder {
+	b.args = append(b.args, "start", "--seekcp_context", seekcpContext)
 	return b.end()
 }

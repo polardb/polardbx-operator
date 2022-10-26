@@ -36,21 +36,22 @@ import (
 const metadbDatabaseName = "polardbx_meta_db"
 
 type Env struct {
-	InstanceID      string `json:"instance_id"`
-	InstanceType    string `json:"instance_type"`
-	PodId           string `json:"pod_id"`
-	LocalIP         string `json:"local_ip"`
-	ServerPort      int    `json:"server_port"`
-	HtapPort        int    `json:"htap_port"`
-	MgrPort         int    `json:"mgr_port"`
-	MppPort         int    `json:"mpp_port"`
-	CpuCore         int    `json:"cpu_core"`
-	MemSize         int64  `json:"mem_size"`
-	MetaDBHost      string `json:"metadb_host"`
-	MetaDBPort      int    `json:"metadb_port"`
-	MetaDBUser      string `json:"metadb_user"`
-	MetaDBEncPasswd string `json:"metadb_enc_passwd"`
-	EncKey          string `json:"enc_key"`
+	InstanceID        string `json:"instance_id"`
+	InstanceType      string `json:"instance_type"`
+	PrimaryInstanceID string `json:"primary_instance_id"`
+	PodId             string `json:"pod_id"`
+	LocalIP           string `json:"local_ip"`
+	ServerPort        int    `json:"server_port"`
+	HtapPort          int    `json:"htap_port"`
+	MgrPort           int    `json:"mgr_port"`
+	MppPort           int    `json:"mpp_port"`
+	CpuCore           int    `json:"cpu_core"`
+	MemSize           int64  `json:"mem_size"`
+	MetaDBHost        string `json:"metadb_host"`
+	MetaDBPort        int    `json:"metadb_port"`
+	MetaDBUser        string `json:"metadb_user"`
+	MetaDBEncPasswd   string `json:"metadb_enc_passwd"`
+	EncKey            string `json:"enc_key"`
 }
 
 func (env *Env) lookupInt64Env(key string) (int64, error) {
@@ -129,6 +130,10 @@ func (env *Env) Load() error {
 		return errors.New("env 'instanceType' not found")
 	}
 
+	if env.PrimaryInstanceID, exists = os.LookupEnv("primaryInstanceId"); !exists {
+		env.PrimaryInstanceID = env.InstanceID
+	}
+
 	if env.ServerPort, err = env.lookupIntEnv("serverPort"); err != nil {
 		return err
 	}
@@ -204,6 +209,8 @@ func Do() {
 		env.ServerPort, env.HtapPort, env.MgrPort, env.MppPort, 0, env.CpuCore, env.MemSize, env.PodId)
 	notifyStmt := fmt.Sprintf(`UPDATE config_listener SET op_version = op_version + 1 WHERE data_id = 'polardbx.server.info.%s'`, env.InstanceID)
 
+	notifyStmtForPrimary := fmt.Sprintf(`UPDATE config_listener SET op_version = op_version + 1 WHERE data_id = 'polardbx.server.info.%s'`, env.PrimaryInstanceID)
+
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -219,6 +226,11 @@ func Do() {
 	}
 
 	if _, err := tx.ExecContext(ctx, notifyStmt); err != nil {
+		fmt.Println("Error when updating config listener: " + err.Error())
+		os.Exit(-1)
+	}
+
+	if _, err := tx.ExecContext(ctx, notifyStmtForPrimary); err != nil {
 		fmt.Println("Error when updating config listener: " + err.Error())
 		os.Exit(-1)
 	}

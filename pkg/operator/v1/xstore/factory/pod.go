@@ -238,6 +238,15 @@ func NewPod(rc *reconcile.Context, xstore *polardbxv1.XStore, nodeSet *polardbxv
 					),
 					Env:             k8shelper.PatchEnvs(SystemEnvs(), envs[convention.ContainerEngine]),
 					SecurityContext: k8shelper.NewSecurityContext(rc.Config().Store().ContainerPrivileged()),
+					Lifecycle: &corev1.Lifecycle{
+						PreStop: &corev1.Handler{
+							Exec: &corev1.ExecAction{
+								Command: []string{
+									"/tools/xstore/current/venv/bin/python3", "/tools/xstore/current/cli.py", "engine", "shutdown",
+								},
+							},
+						},
+					},
 				},
 				{
 					Name:         convention.ContainerExporter,

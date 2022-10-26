@@ -25,12 +25,21 @@ type HostPathVolume struct {
 	// Pod if the volume is bound to some pod.
 	Pod string `json:"pod,omitempty"`
 
-	// HostPath of the file/dir.
+	//Data  HostPath of the file/dir.
 	HostPath string `json:"hostPath,omitempty"`
+
+	//Log HostPath of the file/dir
+	LogHostPath string `json:"logHostPath,omitempty"`
 
 	// Type of the host path.
 	Type corev1.HostPathType `json:"type,omitempty"`
 
 	// Size of the volume.
 	Size int64 `json:"size,omitempty"`
+
+	// Size of the log volume.
+	LogSize int64 `json:"logSize,omitempty"`
+
+	// Size of the data volume.
+	DataSize int64 `json:"dataSize,omitempty"`
 }

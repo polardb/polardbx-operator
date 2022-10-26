@@ -20,16 +20,17 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/alibaba/polardbx-operator/pkg/hpfs"
+	"github.com/alibaba/polardbx-operator/pkg/hpfs/discovery"
+	"github.com/alibaba/polardbx-operator/pkg/hpfs/filestream"
+	"github.com/alibaba/polardbx-operator/pkg/hpfs/local"
+	"github.com/alibaba/polardbx-operator/pkg/hpfs/proto"
+	"github.com/alibaba/polardbx-operator/pkg/hpfs/task"
+	"github.com/prometheus/common/log"
 	"net"
 	"os"
 	"strconv"
 	"strings"
-
-	"github.com/alibaba/polardbx-operator/pkg/hpfs"
-	"github.com/alibaba/polardbx-operator/pkg/hpfs/discovery"
-	"github.com/alibaba/polardbx-operator/pkg/hpfs/local"
-	"github.com/alibaba/polardbx-operator/pkg/hpfs/proto"
-	"github.com/alibaba/polardbx-operator/pkg/hpfs/task"
 
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
@@ -38,6 +39,7 @@ import (
 )
 
 var (
+	//hdfs
 	debug        bool
 	debugHosts   string
 	hostName     string
@@ -47,6 +49,20 @@ var (
 	k8sNamespace string
 	k8sSelector  string
 	lockFile     string
+)
+
+var (
+	// filestream server
+	filestreamServerPort int
+	filestreamRootPath   string
+)
+
+var (
+	//flow control
+	flowControlMinFlow    float64
+	flowControlMaxFlow    float64
+	flowControlTotalFLow  float64
+	flowControlBufferSize int
 )
 
 func init() {
@@ -59,6 +75,12 @@ func init() {
 	flag.StringVar(&k8sNamespace, "k8s-namespace", "default", "Specify namespace to discovery hpfs services.")
 	flag.StringVar(&k8sSelector, "k8s-selector", "", "Specify label selector to discovery hpfs services.")
 	flag.StringVar(&lockFile, "lock-file", "", "Used to do file lock to ensure exclusivity.")
+	flag.IntVar(&filestreamServerPort, "fss-port", 6643, "Port for file stream server")
+	flag.StringVar(&filestreamRootPath, "fss-root-path", "", "Root path for storing uploaded files")
+	flag.Float64Var(&flowControlMinFlow, "fc-min-flow", float64(1<<20), "min flow speed, unit: bytes/s")
+	flag.Float64Var(&flowControlMaxFlow, "fc-max-flow", float64((1<<20)*20), "max flow speed, unit: bytes/s")
+	flag.Float64Var(&flowControlTotalFLow, "fc-total-flow", float64((1<<20)*50), "total flow speed, unit: bytes/s")
+	flag.IntVar(&flowControlBufferSize, "fc-buffer-size", (1<<20)*2, "transfer buffer size, unit: bytes")
 	flag.Parse()
 
 	if len(hostName) == 0 {
@@ -166,6 +188,18 @@ func startHpfs() {
 	}
 }
 
+func startFileStreamServer() {
+	go func() {
+		log.Info("Start filestream server")
+		fileServer := filestream.NewFileServer("0.0.0.0", filestreamServerPort, filestreamRootPath, filestream.GlobalFlowControl)
+		err := fileServer.Start()
+		if err != nil {
+			log.Error(err, "Failed to start file server")
+			os.Exit(1)
+		}
+	}()
+}
+
 func main() {
 	log := zap.New(zap.UseDevMode(true))
 
@@ -181,6 +215,17 @@ func main() {
 	}
 
 	log.Info("starting grpc service...")
+	//init flow control
+	flowControl := filestream.NewFlowControl(filestream.FlowControlConfig{
+		MaxFlow:    flowControlMaxFlow,
+		TotalFlow:  flowControlTotalFLow,
+		MinFlow:    flowControlMinFlow,
+		BufferSize: flowControlBufferSize,
+	})
+	flowControl.Start()
+	filestream.GlobalFlowControl = flowControl
+	//start file stream server
+	startFileStreamServer()
 	// Start hpfs.
 	startHpfs()
 }

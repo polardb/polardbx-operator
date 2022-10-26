@@ -19,18 +19,42 @@ package lifecycle
 import (
 	"time"
 
-	"github.com/onsi/ginkgo"
+	polardbxv1polardbx "github.com/alibaba/polardbx-operator/api/v1/polardbx"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+
+	"github.com/onsi/ginkgo"
 	"k8s.io/apimachinery/pkg/types"
 
-	polardbxv1polardbx "github.com/alibaba/polardbx-operator/api/v1/polardbx"
 	"github.com/alibaba/polardbx-operator/test/framework"
 	pxcframework "github.com/alibaba/polardbx-operator/test/framework/polardbxcluster"
 )
 
 var _ = ginkgo.Describe("[PolarDBXCluster] [Lifecycle:Create]", func() {
 	f := framework.NewDefaultFramework(framework.TestContext)
+	//f.Namespace = "development"
+	ginkgo.It("should polardbx cluster with paxos be in running in ten minutes after creation and sub-resources set", func() {
+		obj := pxcframework.NewPolarDBXCluster(
+			"e2e-test-quick-start-paxos",
+			f.Namespace,
+			pxcframework.ProtocolVersion(5),
+			pxcframework.TopologyModeGuide("quick-start-paxos"),
+		)
+
+		// Always run clean up to make sure objects are cleaned.
+		defer DeletePolarDBXClusterAndWaitUntilItDisappear(f, obj, 1*time.Minute)
+
+		// Do create and verify.
+		CreatePolarDBXClusterAndWaitUntilRunningOrFail(f, obj, 10*time.Minute)
+
+		// Update object.
+		framework.ExpectNoError(f.Client.Get(f.Ctx, types.NamespacedName{
+			Name: obj.Name, Namespace: f.Namespace,
+		}, obj))
+
+		// Expect all ok in running.
+		pxcframework.NewExpectation(f, obj).ExpectAllOk(true)
+	})
 
 	ginkgo.It("should polardbx cluster be in running in ten minutes after creation and sub-resources set", func() {
 		obj := pxcframework.NewPolarDBXCluster(
@@ -52,7 +76,7 @@ var _ = ginkgo.Describe("[PolarDBXCluster] [Lifecycle:Create]", func() {
 		}, obj))
 
 		// Expect all ok in running.
-		pxcframework.NewExpectation(f, obj).ExpectAllOk()
+		pxcframework.NewExpectation(f, obj).ExpectAllOk(false)
 	})
 
 	ginkgo.It("should service names and type be as expected", func() {

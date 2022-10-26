@@ -19,6 +19,7 @@ package xstore
 import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 
 	"github.com/alibaba/polardbx-operator/api/v1/common"
 )
@@ -33,7 +34,12 @@ type ControllerConfig struct {
 
 	// DiskQuota is the limit of data current node can use. This is a soft limit.
 	// +optional
-	DiskQuota *resource.Quantity `json:"diskQuota,omitempty"`
+	DiskQuota         *resource.Quantity `json:"diskQuota,omitempty"`
+	LogDataSeparation bool               `json:"logDataSeparation,omitempty"`
+
+	// +kubebuilder:default=1
+	// +kubebuilder:validation:Enum=1;2;"1";"2";""
+	RpcProtocolVersion intstr.IntOrString `json:"RPCProtocolVersion,omitempty"`
 }
 
 type Config struct {

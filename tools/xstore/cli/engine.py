@@ -32,3 +32,54 @@ def version():
 
 
 engine_group.add_command(version)
+
+
+@click.command(name='parameter')
+@click.option('-k', '--key', required=True, type=str)
+@click.option('-v', '--value', required=True, type=str)
+def set_global(key, value):
+    with global_mgr.new_connection() as conn:
+        with conn.cursor() as cur:
+            cmd = "SET GLOBAL " + key + " = " + value
+            cur.execute(cmd)
+        conn.commit()
+
+
+engine_group.add_command(set_global)
+
+
+@click.command(name='set_engine_enable')
+@click.option('--enable', is_flag=True)
+@click.option('--disable', is_flag=True)
+def set_engine_enable(enable, disable):
+    if enable:
+        global_mgr.engine().set_enable_engine(True)
+    if disable:
+        global_mgr.engine().set_enable_engine(False)
+
+
+engine_group.add_command(set_engine_enable)
+
+
+@click.command(name='reset_meta')
+@click.option('--learner', is_flag=True)
+@click.option('--recover-index-filepath', type=str)
+def reset_meta(learner, recover_index_filepath):
+    if recover_index_filepath is not None:
+        global_mgr.engine().set_recover_index_filepath(recover_index_filepath)
+    if learner:
+        global_mgr.engine().handle_indicate('reset-cluster-info-to-learner')
+    else:
+        global_mgr.engine().handle_indicate('reset-cluster-info')
+
+
+engine_group.add_command(reset_meta)
+
+
+@click.command(name='shutdown')
+def shutdown():
+    global_mgr.engine().shutdown()
+    pass
+
+
+engine_group.add_command(shutdown)

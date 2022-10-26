@@ -16,7 +16,9 @@ limitations under the License.
 
 package helper
 
-import corev1 "k8s.io/api/core/v1"
+import (
+	corev1 "k8s.io/api/core/v1"
+)
 
 func IsPodRunning(pod *corev1.Pod) bool {
 	return pod != nil && pod.Status.Phase == corev1.PodRunning
@@ -41,6 +43,15 @@ func IsPodReady(pod *corev1.Pod) bool {
 		}
 	}
 
+	return true
+}
+
+func IsAllPodsReady(pods []corev1.Pod) bool {
+	for _, pod := range pods {
+		if !IsPodReady(&pod) {
+			return false
+		}
+	}
 	return true
 }
 

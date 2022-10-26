@@ -28,16 +28,17 @@ type Phase string
 
 // Valid phases.
 const (
-	PhaseNew       Phase = ""
-	PhasePending   Phase = "Pending"
-	PhaseCreating  Phase = "Creating"
-	PhaseRunning   Phase = "Running"
-	PhaseLocked    Phase = "Locked"
-	PhaseUpgrading Phase = "Upgrading"
-	PhaseRestoring Phase = "Restoring"
-	PhaseDeleting  Phase = "Deleting"
-	PhaseFailed    Phase = "Failed"
-	PhaseUnknown   Phase = "Unknown"
+	PhaseNew        Phase = ""
+	PhasePending    Phase = "Pending"
+	PhaseCreating   Phase = "Creating"
+	PhaseRunning    Phase = "Running"
+	PhaseLocked     Phase = "Locked"
+	PhaseUpgrading  Phase = "Upgrading"
+	PhaseRestoring  Phase = "Restoring"
+	PhaseDeleting   Phase = "Deleting"
+	PhaseFailed     Phase = "Failed"
+	PhaseRestarting Phase = "Restarting"
+	PhaseUnknown    Phase = "Unknown"
 )
 
 // Stage defines the operating stage of the cluster.
@@ -144,7 +145,7 @@ type ClusterReplicasStatus struct {
 	GMS ReplicasStatus `json:"gms,omitempty"`
 
 	// CN defines the replica status for CN.
-	CN ReplicasStatus `json:"cn,omitempty"`
+	CN *ReplicasStatus `json:"cn,omitempty"`
 
 	// DN defines the replica status for DN.
 	DN ReplicasStatus `json:"dn,omitempty"`
@@ -160,4 +161,13 @@ const (
 	MonitorStatusCreating   MonitorStatus = "Creating"
 	MonitorStatusMonitoring MonitorStatus = "Monitoring"
 	MonitorStatusUpdating   MonitorStatus = "Updating"
+)
+
+type ParameterPhase string
+
+const (
+	ParameterStatusNew       ParameterPhase = ""
+	ParameterStatusCreating  ParameterPhase = "Creating"
+	ParameterStatusRunning   ParameterPhase = "Running"
+	ParameterStatusModifying ParameterPhase = "Modifying"
 )

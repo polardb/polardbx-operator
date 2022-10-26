@@ -21,6 +21,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/alibaba/polardbx-operator/api/v1/polardbx"
+	"github.com/alibaba/polardbx-operator/pkg/operator/v1/config"
 	"runtime"
 	"strconv"
 	"strings"
@@ -78,6 +80,7 @@ func (s *DDLPlanStatus) IsSuccess() bool {
 type GroupManager interface {
 	ListSchemas() ([]string, error)
 	CreateSchema(schema string, createTables ...string) error
+	CreateTable(schema string, createTables string) error
 	ListAllGroups() (map[string][]Group, error)
 	ListGroups(schema string) ([]Group, error)
 	CountStorages() (int, error)
@@ -89,7 +92,15 @@ type GroupManager interface {
 	ShowDDL(jobId string) (*DDLStatus, error)
 	ShowDDLResult(jobId string) (*DDLResult, error)
 	ShowDDLPlanStatus(planId string) (*DDLPlanStatus, error)
+	SetGlobalVariables(map[string]string) error
 	Close() error
+	GetBinlogOffset() (string, error)
+	GetTrans(column string, table string) (map[string]bool, error)
+	IsTransCommited(column string, table string) error
+	SendHeartBeat(sname string) error
+	ListFileStorage() ([]polardbx.FileStorageInfo, error)
+	CreateFileStorage(info polardbx.FileStorageInfo, config config.Config) error
+	DropFileStorage(fileStorageName string) error
 }
 
 type groupManager struct {
@@ -99,6 +110,42 @@ type groupManager struct {
 	db         *sql.DB
 
 	caseInsensitive bool
+}
+
+func (m *groupManager) CreateTable(schema string, createTable string) error {
+	conn, err := m.getConn(schema)
+	if err != nil {
+		return err
+	}
+	defer dbutil.DeferClose(conn)
+
+	_, err = conn.ExecContext(m.ctx, createTable)
+	return err
+
+}
+
+func (m *groupManager) SendHeartBeat(sname string) error {
+	conn, err := m.getConn("")
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	retryLimits := 10
+	retry := 0
+	for retry < retryLimits {
+		tx, err := conn.BeginTx(m.ctx, &sql.TxOptions{})
+		now := time.Now()
+		_, err = tx.ExecContext(m.ctx, fmt.Sprintf("replace into `__cdc__`.`__cdc_heartbeat__`(id, sname, gmt_modified) values(%d, %s, '%s')", now.Unix(), sname, now.Format("2006-01-02 15:04:05")))
+		if err != nil {
+			tx.Rollback()
+		} else {
+			tx.Commit()
+			break
+		}
+		retry++
+	}
+	return err
 }
 
 //goland:noinspection SqlDialectInspection,SqlNoDataSourceInspection
@@ -543,6 +590,92 @@ func (m *groupManager) Close() error {
 	return nil
 }
 
+func (m *groupManager) ListFileStorage() ([]polardbx.FileStorageInfo, error) {
+	var fileStorageInfoList []polardbx.FileStorageInfo
+	conn, err := m.getConn("")
+	if err != nil {
+		return nil, err
+	}
+	defer dbutil.DeferClose(conn)
+
+	// Select all file storage info
+	selectStmt := `SELECT engine, external_endpoint, file_uri, access_key_id, access_key_secret FROM metadb.file_storage_info`
+
+	rs, err := conn.QueryContext(m.ctx, selectStmt)
+	if err != nil {
+		return nil, err
+	}
+	defer dbutil.DeferClose(rs)
+
+	var engine, endpoint, fileUri, accessKeyId, accessKeySecret string
+
+	for rs.Next() {
+		err = rs.Scan(&engine, &endpoint, &fileUri, &accessKeyId, &accessKeySecret)
+		if err != nil {
+			return nil, err
+		}
+		fileStorageInfoList = append(fileStorageInfoList, polardbx.FileStorageInfo{
+			Engine: engine,
+			//endpoint,
+			//fileUri,
+			//accessKeyId,
+			//accessKeySecret,
+		})
+	}
+
+	return fileStorageInfoList, nil
+}
+
+func (m *groupManager) CreateFileStorage(info polardbx.FileStorageInfo, config config.Config) error {
+	conn, err := m.getConn("")
+	if err != nil {
+		return err
+	}
+	defer dbutil.DeferClose(conn)
+
+	stmt := ""
+	fileUri := ""
+	endpoint := ""
+	accessKeyId := ""
+	accessKeySecret := ""
+	switch info.GetEngineType() {
+	case polardbx.EngineTypeOss:
+		ossConfig := config.Oss()
+		endpoint = ossConfig.Endpoint()
+		fileUri = fmt.Sprintf("oss://%s", ossConfig.Bucket())
+		accessKeyId = ossConfig.AccessKey()
+		accessKeySecret = ossConfig.AccessSecret()
+		stmt = fmt.Sprintf("create filestorage oss with ('file_uri' = '%s', 'endpoint'='%s', 'access_key_id'='%s', 'access_key_secret'='%s')", fileUri, endpoint, accessKeyId, accessKeySecret)
+	case polardbx.EngineTypeLocalDisk:
+		fileUri = "file:///home/admin/drds-server/cold-data"
+		stmt = fmt.Sprintf("create filestorage local_disk with ('file_uri' = '%s')", fileUri)
+	default:
+		return errors.New(fmt.Sprintf("Unsupported file storage type: %s", info.Engine))
+	}
+
+	// Execute the statements
+	if _, err = conn.ExecContext(m.ctx, stmt); err != nil {
+		return errors.New("unable to create file storage " + info.Engine + ": " + err.Error())
+	}
+	return nil
+}
+
+func (m *groupManager) DropFileStorage(fileStorageName string) error {
+	conn, err := m.getConn("")
+	if err != nil {
+		return err
+	}
+	defer dbutil.DeferClose(conn)
+	// Generate drop file storage statement
+	stmt := fmt.Sprintf("drop filestorage %s", fileStorageName)
+
+	// Execute the statements
+	if _, err = conn.ExecContext(m.ctx, stmt); err != nil {
+		return errors.New("unable to drop file storage " + fileStorageName + ": " + err.Error())
+	}
+	return nil
+}
+
 func (m *groupManager) getCnVersion() (string, error) {
 	db, err := m.getDB()
 	if err != nil {
@@ -602,6 +735,102 @@ func (m *groupManager) GetClusterVersion() (string, error) {
 	}
 
 	return fmt.Sprintf("%s/%s", cnVer, dnVer), nil
+}
+
+func (m *groupManager) GetBinlogOffset() (string, error) {
+	db, err := m.getDB()
+	if err != nil {
+		return "", err
+	}
+	rs, err := db.Query(fmt.Sprint("show master status"))
+	if err != nil {
+		return "", err
+	}
+	defer dbutil.DeferClose(rs)
+
+	if !rs.Next() {
+		return "", errors.New("no rows returned")
+	}
+	var file_name, file_size, binlog_do_db, binlog_ignore_db, executed_gtid_set string
+
+	err = rs.Scan(&file_name, &file_size, &binlog_do_db, &binlog_ignore_db, &executed_gtid_set)
+	if err != nil {
+		return "", nil
+	}
+	ans := file_name + ":" + file_size
+	return ans, nil
+}
+
+func (m *groupManager) GetTrans(columnName string, tableName string) (map[string]bool, error) {
+	conn, err := m.getConn("information_schema")
+	if err != nil {
+		return nil, err
+	}
+	rs, err := conn.QueryContext(m.ctx, fmt.Sprintf("SELECT %s FROM %s", columnName, tableName))
+	if err != nil {
+		return nil, err
+	}
+	defer dbutil.DeferClose(rs)
+
+	var transId string
+	transIdSet := make(map[string]bool)
+	for rs.Next() {
+		err = rs.Scan(&transId)
+		transIdSet[transId] = true
+	}
+	if err != nil {
+		return nil, err
+	}
+	return transIdSet, nil
+}
+
+func (m *groupManager) IsTransCommited(columnName string, tableName string) error {
+	transIdSet, err := m.GetTrans(columnName, tableName)
+	if transIdSet == nil || len(transIdSet) == 0 {
+		return nil
+	}
+	conn, err := m.getConn("information_schema")
+	if err != nil {
+		return nil
+	}
+	for {
+		rs, err := conn.QueryContext(m.ctx, fmt.Sprintf("SELECT %s FROM %s", columnName, tableName))
+		if err != nil {
+			return err
+		}
+		var transId string
+		for rs.Next() {
+			err = rs.Scan(&transId)
+			if transIdSet[transId] {
+				break
+			}
+		}
+		err = rs.Close()
+		if err != nil {
+			return err
+		}
+		if !rs.Next() {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+	return nil
+}
+
+func (m *groupManager) SetGlobalVariables(variables map[string]string) error {
+	db, err := m.getDB()
+	if err != nil {
+		return err
+	}
+
+	for k, v := range variables {
+		_, err = db.ExecContext(m.ctx, fmt.Sprintf("SET GLOBAL %s = %s", k, v))
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func NewGroupManagerWithDB(ctx context.Context, db *sql.DB, caseInsensitive bool) GroupManager {

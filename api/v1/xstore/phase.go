@@ -20,17 +20,18 @@ type Phase string
 
 // Valid phases of xstore.
 const (
-	PhaseNew       Phase = ""
-	PhasePending   Phase = "Pending"
-	PhaseCreating  Phase = "Creating"
-	PhaseRunning   Phase = "Running"
-	PhaseLocked    Phase = "Locked"
-	PhaseUpgrading Phase = "Upgrading"
-	PhaseRestoring Phase = "Restoring"
-	PhaseRepairing Phase = "Repairing"
-	PhaseDeleting  Phase = "Deleting"
-	PhaseFailed    Phase = "Failed"
-	PhaseUnknown   Phase = "Unknown"
+	PhaseNew        Phase = ""
+	PhasePending    Phase = "Pending"
+	PhaseCreating   Phase = "Creating"
+	PhaseRunning    Phase = "Running"
+	PhaseLocked     Phase = "Locked"
+	PhaseUpgrading  Phase = "Upgrading"
+	PhaseRestoring  Phase = "Restoring"
+	PhaseRepairing  Phase = "Repairing"
+	PhaseDeleting   Phase = "Deleting"
+	PhaseFailed     Phase = "Failed"
+	PhaseRestarting Phase = "Restarting"
+	PhaseUnknown    Phase = "Unknown"
 )
 
 type Stage string
@@ -40,4 +41,5 @@ const (
 	StageEmpty   Stage = ""
 	StageLocking Stage = "Locking"
 	StageClean   Stage = "Clean"
+	StageUpdate  Stage = "Update"
 )

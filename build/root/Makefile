@@ -23,6 +23,8 @@ define ALL_HELP_INFO
 #   make all
 #   make all TARGET=cmd/hpfs
 endef
+export ALL_HELP_INFO
+
 .PHONY: target
 all: target
 
@@ -185,3 +187,4 @@ helm-package:
 	@mkdir -p target/charts
 	@helm package charts/polardbx-operator -d target/charts
 	@helm package charts/polardbx-monitor -d target/charts
+	@helm package charts/polardbx-logcollector -d target/charts

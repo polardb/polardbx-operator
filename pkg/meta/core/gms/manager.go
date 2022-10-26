@@ -31,8 +31,9 @@ type ClusterKind int32
 
 // These are valid cluster kinds
 const (
-	MasterCluster   ClusterKind = 0
-	ReadOnlyCluster ClusterKind = 1
+	MasterCluster       ClusterKind = 0
+	ReadOnlyCluster     ClusterKind = 1
+	HtapReadOnlyCluster ClusterKind = 2
 )
 
 func (k ClusterKind) String() string {
@@ -173,10 +174,23 @@ const (
 	StorageKindMetaDB StorageKind = 2
 )
 
+type VipType int32
+
+const (
+	IsNotVip VipType = 0
+	IsVip    VipType = 1
+)
+
 // StorageNodeInfo defines the basic information for storage node.
 type StorageNodeInfo struct {
 	// Id is the unique identity for storage node.
 	Id string `json:"id"`
+
+	// MasterId is the unique identity for master storage node
+	MasterId string `json:"masterId"`
+
+	// ClusterId is the unique identity for the PolarDBX instance
+	ClusterId string `json:"clusterId"`
 
 	// Host is host or ip of the storage node.
 	Host string `json:"host"`
@@ -211,6 +225,9 @@ type StorageNodeInfo struct {
 	// MemSize indicates the memory size the storage node uses.
 	MemSize int64 `json:"memSize"`
 
+	// IsVip indicates the storage is vip or not, 1 means vip, 0 means not vip
+	IsVip VipType `json:"isVip"`
+
 	// Extra define the extra messages.
 	Extra string `json:"extra,omitempty"`
 }
@@ -224,16 +241,21 @@ type CdcNodeInfo struct {
 
 // Manager defines a set of methods for manage the PolarDBX cluster.
 type Manager interface {
-	IsMetaDBInitialized() (bool, error)
+	IsMetaDBExisted() (bool, error)
 
-	// InitializeMetaDB initializes the metadb. It's essential for creating a PolarDBX cluster.
-	InitializeMetaDB() error
+	IsMetaDBInitialized(clusterId string) (bool, error)
+
+	// InitializeMetaDBSchema initializes the metadb. It's essential for creating a PolarDBX cluster.
+	InitializeMetaDBSchema() error
+
+	// InitializeMetaDBInfo initialize the config listener and quarantine config in metadb
+	InitializeMetaDBInfo(readonly bool) error
 
 	// IsGmsSchemaRestored return the status if the schema is restored.
 	IsGmsSchemaRestored() (bool, error)
 
 	// RestoreSchemas restores the schemas in metadb.
-	RestoreSchemas(fromPxcCluster string) error
+	RestoreSchemas(fromPxcCluster, fromPxcHash, PxcHash string) error
 
 	// EnableComputeNodes enables the specified compute server nodes by setting
 	// the metadb.
@@ -242,6 +264,9 @@ type Manager interface {
 	// DisableComputeNodes disables the specified compute server nodes by setting
 	// the metadb.
 	DisableComputeNodes(computeNodes ...ComputeNodeInfo) error
+
+	// DisableAllComputeNodes disables all storage nodes that belongs to the cluster
+	DisableAllComputeNodes(primaryPolardbxName string) error
 
 	// DeleteComputeNodes deletes the specified compute server nodes by setting
 	// the metadb.
@@ -261,6 +286,9 @@ type Manager interface {
 	// DisableStorageNodes disables the specified storage nodes by removing the corresponding
 	// records from metadb.
 	DisableStorageNodes(storageNodes ...StorageNodeInfo) error
+
+	// DisableAllStorageNodes disables all storage nodes that belongs to the cluster
+	DisableAllStorageNodes(primaryPolardbxName string) error
 
 	// ListStorageNodes lists all storage nodes.
 	ListStorageNodes(kind StorageKind) ([]StorageNodeInfo, error)
@@ -295,6 +323,9 @@ type Manager interface {
 
 	// GetK8sTopology gets the k8s topology from GMS.
 	GetK8sTopology() (*K8sTopology, error)
+
+	// SetGlobalVariables sets the global variables for GMS.
+	SetGlobalVariables(key, value string) error
 
 	// Lock locks the cluster, idempotent
 	Lock() error

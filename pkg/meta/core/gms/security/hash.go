@@ -18,7 +18,9 @@ package security
 
 import (
 	"crypto/sha1"
+	"encoding/json"
 	"fmt"
+	"hash/fnv"
 )
 
 // Sha1Hash performs the SHA-1 hash algorithm and returns the
@@ -34,10 +36,33 @@ func Sha1Hash(s string) (string, error) {
 	return fmt.Sprintf("%x", h.Sum(nil)), nil
 }
 
+func Sha1HashBytes(data []byte) (string, error) {
+	h := sha1.New()
+	_, err := h.Write(data)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", h.Sum(nil)), nil
+}
+
 func MustSha1Hash(s string) string {
 	hash, err := Sha1Hash(s)
 	if err != nil {
 		panic(err)
 	}
 	return hash
+}
+
+func Hash(s string) uint64 {
+	h := fnv.New64a()
+	h.Write([]byte(s))
+	return h.Sum64()
+}
+
+func HashObj(object interface{}) (string, error) {
+	if data, err := json.Marshal(object); err == nil {
+		return Sha1HashBytes(data)
+	} else {
+		return "", err
+	}
 }

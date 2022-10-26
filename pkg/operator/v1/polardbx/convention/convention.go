@@ -17,9 +17,12 @@ limitations under the License.
 package convention
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
+
+	"github.com/alibaba/polardbx-operator/pkg/meta/core/gms/security"
 
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -58,7 +61,7 @@ func NewServiceName(polardbx *polardbxv1.PolarDBXCluster, serviceType ServiceTyp
 	case ServiceTypeReadWrite:
 		return polardbxServiceName
 	case ServiceTypeReadOnly:
-		return polardbxServiceName + "-ro"
+		return polardbxServiceName
 	case ServiceTypeMetrics:
 		return polardbxServiceName + "-metrics"
 	case ServiceTypeCDCMetrics:
@@ -110,6 +113,10 @@ const (
 
 func NewConfigMapName(polardbx *polardbxv1.PolarDBXCluster, cmType ConfigMapType) string {
 	return fmt.Sprintf("%s-%s-%s", polardbx.Name, polardbx.Status.Rand, cmType)
+}
+
+func NewConfigMapNameForBackup(polardbxBackup *polardbxv1.PolarDBXBackup, cmType ConfigMapType) string {
+	return fmt.Sprintf("%s-%s", polardbxBackup.Name, cmType)
 }
 
 // Conventions for containers.
@@ -232,7 +239,27 @@ func GetGenerationLabelValue(object client.Object) (int64, error) {
 
 func CopyMetadataForUpdate(dest, src *metav1.ObjectMeta, generation int64) {
 	src.DeepCopyInto(dest)
+	UpdateGenerationLabel(dest, generation)
+}
+
+func UpdateGenerationLabel(dest *metav1.ObjectMeta, generation int64) {
 	dest.Labels = k8shelper.PatchLabels(dest.Labels, map[string]string{
 		polardbxmeta.LabelGeneration: strconv.FormatInt(generation, 10),
 	})
+}
+
+func AddLabelHash(labelHashName string, object client.Object) {
+	var hashStr string
+	var hashErr error
+	if data, err := json.Marshal(object); err == nil {
+		hashStr, hashErr = security.Sha1HashBytes(data)
+		if hashErr == nil {
+			labels := object.GetLabels()
+			if labels == nil {
+				labels = map[string]string{}
+			}
+			labels[labelHashName] = hashStr
+			object.SetLabels(labels)
+		}
+	}
 }

@@ -17,6 +17,8 @@ limitations under the License.
 package common
 
 import (
+	k8shelper "github.com/alibaba/polardbx-operator/pkg/k8s/helper"
+	polardbxmeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/meta"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	polardbxv1polardbx "github.com/alibaba/polardbx-operator/api/v1/polardbx"
@@ -56,6 +58,39 @@ var InitializeServiceName = polardbxv1reconcile.NewStepBinder("InitializeService
 			polardbx.Spec.ServiceName = polardbx.Name
 			rc.MarkPolarDBXChanged()
 		}
+		return flow.Pass()
+	},
+)
+
+var InitializePolardbxLabel = polardbxv1reconcile.NewStepBinder("InitializePolardbxLabel",
+	func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+		polardbx := rc.MustGetPolarDBX()
+		if polardbx.Spec.Readonly {
+			polardbx.SetLabels(
+				k8shelper.PatchLabels(
+					polardbx.Labels,
+					map[string]string{
+						polardbxmeta.LabelType:        polardbxmeta.TypeReadonly,
+						polardbxmeta.LabelPrimaryName: polardbx.Spec.PrimaryCluster,
+					},
+				),
+			)
+		} else {
+			polardbx.SetLabels(
+				k8shelper.PatchLabels(
+					polardbx.Labels,
+					map[string]string{
+						polardbxmeta.LabelType: polardbxmeta.TypeMaster,
+					},
+				),
+			)
+		}
+		err := rc.Client().Update(rc.Context(), polardbx)
+
+		if err != nil {
+			return flow.Error(err, "Failed to init polardbx label.")
+		}
+
 		return flow.Pass()
 	},
 )

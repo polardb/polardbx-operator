@@ -59,12 +59,54 @@ var CreateAccounts = xstorev1reconcile.NewStepBinder("CreateAccounts",
 				// give it a chance to retry.
 				if k8shelper.IsExitError(err) {
 					flow.Logger().Error(err, "Failed to create account.")
-					return flow.Wait("Failed to create account.", "leader-pod", leaderPod.Name)
+					return flow.Retry("Failed to create account.", "leader-pod", leaderPod.Name)
 				}
 				return flow.Error(err, "Unable to create account.", "leader-pod", leaderPod.Name)
 			}
 		}
 
 		return flow.Continue("All accounts are created.")
+	},
+)
+
+var ResetAdminPassword = xstorev1reconcile.NewStepBinder("ResetAdminPassword",
+	func(rc *xstorev1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+		leaderPod, err := rc.TryGetXStoreLeaderPod()
+		if err != nil {
+			return flow.Error(err, "Unable to get leader pod.")
+		}
+
+		// Branch leader not found, just wait for 5 seconds and retry again.
+		if leaderPod == nil {
+			return flow.RetryAfter(5*time.Second, "Leader not found, wait 5 seconds and retry...")
+		}
+
+		secret, err := rc.GetXStoreSecret()
+		if err != nil {
+			return flow.Error(err, "Unable to get secret.")
+		}
+
+		// Create accounts one-by-one
+		for user, passwd := range secret.Data {
+			cmd := xstoreexec.NewCanonicalCommandBuilder().
+				Account().Reset(user, string(passwd)).
+				Build()
+
+			err := rc.ExecuteCommandOn(leaderPod, "engine", cmd, control.ExecOptions{
+				Logger: flow.Logger(),
+			})
+
+			if err != nil {
+				// Branch it's an exit error (which means commands already executed and returned),
+				// give it a chance to retry.
+				if k8shelper.IsExitError(err) {
+					flow.Logger().Error(err, "Failed to reset admin account's password.")
+					return flow.Wait("Failed to reset admin account's password.", "leader-pod", leaderPod.Name)
+				}
+				return flow.Error(err, "Unable to execute account reset tool.", "leader-pod", leaderPod.Name)
+			}
+		}
+
+		return flow.Continue("Succeeds to reset admin account's password.")
 	},
 )

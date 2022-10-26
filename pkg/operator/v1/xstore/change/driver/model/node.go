@@ -17,6 +17,7 @@ limitations under the License.
 package model
 
 import (
+	_map "github.com/alibaba/polardbx-operator/pkg/util/map"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -33,8 +34,7 @@ type PaxosVolume struct {
 	Role     string `json:"role,omitempty"`
 }
 
-// PaxosNode records the node information of the paxos node.
-type PaxosNode struct {
+type PaxosInnerNode struct {
 	Pod        string `json:"pod,omitempty"`
 	Role       string `json:"role,omitempty"`
 	Generation int64  `json:"generation,omitempty"`
@@ -42,10 +42,21 @@ type PaxosNode struct {
 	Index      int    `json:"index,omitempty"`
 }
 
+// PaxosNode records the node information of the paxos node.
+type PaxosNode struct {
+	PaxosInnerNode
+	RebuildConfig map[string]interface{} `json:"config,omitempty"`
+}
+
+func (p *PaxosNode) DeepEquals(pNode *PaxosNode) bool {
+	return p.PaxosInnerNode == pNode.PaxosInnerNode && _map.Equals(&p.RebuildConfig, &pNode.RebuildConfig)
+}
+
 type PaxosNodeStatus struct {
-	PaxosNode `json:",inline"`
-	Host      string `json:"host,omitempty"`
-	Volume    string `json:"volume,omitempty"`
+	PaxosNode  `json:",inline"`
+	Host       string `json:"host,omitempty"`
+	Volume     string `json:"volume,omitempty"`
+	XStoreRole string `json:"xStoreRole,omitempty"`
 }
 
 func (s *PaxosNodeStatus) FromPod(pod *corev1.Pod) error {
@@ -63,6 +74,15 @@ func (s *PaxosNodeStatus) FromPod(pod *corev1.Pod) error {
 	}
 	s.Host = pod.Spec.NodeName
 	s.Volume = "" // TODO
+	if s.RebuildConfig == nil {
+		s.RebuildConfig = make(map[string]interface{})
+	}
+	if configHash, ok := pod.Labels[xstoremeta.LabelConfigHash]; ok {
+		s.RebuildConfig[xstoremeta.LabelConfigHash] = configHash
+	}
+	if xStoreRole, ok := pod.Labels[xstoremeta.LabelRole]; ok {
+		s.XStoreRole = xStoreRole
+	}
 	return nil
 }
 

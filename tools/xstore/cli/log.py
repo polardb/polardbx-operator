@@ -17,6 +17,7 @@ import click
 import pymysql
 
 from .common import global_mgr
+from core.context import k8s
 
 
 def fetchall_with_lowercase_fieldnames(cursor: pymysql.cursors.Cursor):
@@ -48,12 +49,24 @@ def log_group():
     pass
 
 
+def can_purge_logs():
+    podInfo = k8s.PodInfo()
+    annotations = podInfo.annotations()
+    annotation_key = "xstore/rebuild_from_pod"
+    if annotation_key in annotations and annotations[annotation_key] == "on":
+        return False
+    return True
+
+
 def purge_binary_logs(left):
     """
     Purge binary logs with native MySQL SQL interface.
     :param left:
     :return:
     """
+    if can_purge_logs():
+        print('purge log is disabled now. please refer rebuild task')
+        return
     with global_mgr.new_connection() as conn:
         with conn.cursor() as cur:
             cur.execute('show binary logs')

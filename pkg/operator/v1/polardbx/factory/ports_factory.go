@@ -17,10 +17,9 @@ limitations under the License.
 package factory
 
 import (
-	"k8s.io/apimachinery/pkg/util/rand"
-
 	polardbxv1 "github.com/alibaba/polardbx-operator/api/v1"
 	polardbxv1reconcile "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/reconcile"
+	"k8s.io/apimachinery/pkg/util/rand"
 )
 
 type CNPorts struct {
@@ -40,7 +39,7 @@ type CDCPorts struct {
 }
 
 type PortsFactory interface {
-	NewPortsForCNEngine() CNPorts
+	NewPortsForCNEngine(mustStaticPorts bool) CNPorts
 	NewPortsForCDCEngine() CDCPorts
 }
 
@@ -49,11 +48,11 @@ type portsFactory struct {
 	polardbx *polardbxv1.PolarDBXCluster
 }
 
-func (f *portsFactory) NewPortsForCNEngine() CNPorts {
+func (f *portsFactory) NewPortsForCNEngine(mustStaticPorts bool) CNPorts {
 	topology := f.polardbx.Status.SpecSnapshot.Topology
 	template := topology.Nodes.CN.Template
 
-	if template.HostNetwork {
+	if template.HostNetwork && !mustStaticPorts {
 		accessPort := (rand.IntnRange(3000, 13000) / 8) * 8
 		return CNPorts{
 			AccessPort:  accessPort,

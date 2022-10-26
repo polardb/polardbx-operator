@@ -17,6 +17,7 @@ limitations under the License.
 package instance
 
 import (
+	xstoremeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/meta"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -40,6 +41,26 @@ func PurgeLogsTemplate(d time.Duration) control.BindFunc {
 		func(rc *xstorev1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
 			xstore := rc.MustGetXStore()
 
+			// if Purge binlog Locked
+			if xstore.Labels[xstoremeta.LabelBinlogPurgeLock] == xstoremeta.BinlogPurgeLock {
+				flow.Pass()
+			}
+
+			// avoid duplicated purge request from learner
+			if xstore.Spec.Readonly {
+				return flow.Pass()
+			}
+
+			creatingLearners, err := rc.CountCreatingLearners()
+
+			if err != nil {
+				flow.Logger().Error(err, "failed to count creating learners.")
+			}
+
+			if creatingLearners > 0 {
+				return flow.Continue("There are still learner creating, purge cancelled.")
+			}
+
 			timeToPurge := xstore.Status.LastLogPurgeTime.IsZero() || // It's the first time.
 				xstore.Status.LastLogPurgeTime.Add(d).Before(time.Now()) // A duration of given interval has elapsed since last purge.
 
@@ -57,7 +78,7 @@ func PurgeLogsTemplate(d time.Duration) control.BindFunc {
 				return flow.Wait("No leader pod found, must wait for another reconciliation.")
 			}
 
-			purgeCmd := command.NewCanonicalCommandBuilder().Log().Purge(false, false).Build()
+			purgeCmd := command.NewCanonicalCommandBuilder().Consensus().PurgeLogs(false, false).Build()
 			err = rc.ExecuteCommandOn(leaderPod, convention.ContainerEngine, purgeCmd, control.ExecOptions{
 				Logger:  flow.Logger(),
 				Timeout: 2 * time.Second,

@@ -36,19 +36,31 @@ import (
 	xstorev1reconcile "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/reconcile"
 )
 
+type PodVolumeHostPath struct {
+	DataHostPath string `json:"data_host_path"`
+	LogHostPath  string `json:"log_host_path"`
+}
+
 func podHostPathVolumeBaseDir(xstore *polardbxv1.XStore, config config.Config) string {
 	return path.Join(config.Store().HostPathDataVolumeRoot(), xstore.Namespace)
 }
 
+func podHostPathVolumeLogBaseDir(xstore *polardbxv1.XStore, config config.Config) string {
+	return path.Join(config.Store().HostPathLogVolumeRoot(), xstore.Namespace)
+}
+
 // preparePodVolumeBindings returns a pod and random host path volume path map.
-func preparePodVolumeBindings(xstore *polardbxv1.XStore, config config.Config) map[string]string {
+func preparePodVolumeBindings(xstore *polardbxv1.XStore, config config.Config) map[string]*PodVolumeHostPath {
 	topology := xstore.Spec.Topology
 
-	podVolumeBindings := make(map[string]string)
+	podVolumeBindings := make(map[string]*PodVolumeHostPath)
 	for _, nodeSet := range topology.NodeSets {
 		for i := 0; i < int(nodeSet.Replicas); i++ {
 			podName := convention.NewPodName(xstore, &nodeSet, i)
-			podVolumeBindings[podName] = path.Join(podHostPathVolumeBaseDir(xstore, config), podName)
+			podVolumeBindings[podName] = &PodVolumeHostPath{
+				DataHostPath: path.Join(podHostPathVolumeBaseDir(xstore, config), podName),
+				LogHostPath:  path.Join(podHostPathVolumeLogBaseDir(xstore, config), podName),
+			}
 		}
 	}
 	return podVolumeBindings
@@ -62,9 +74,10 @@ var PrepareHostPathVolumes = xstorev1reconcile.NewStepBinder("PrepareHostPathVol
 		volumes := make(map[string]*polardbxv1xstore.HostPathVolume)
 		for pod, vPath := range podVolumes {
 			volumes[pod] = &polardbxv1xstore.HostPathVolume{
-				Pod:      pod,
-				HostPath: vPath,
-				Type:     corev1.HostPathDirectory,
+				Pod:         pod,
+				HostPath:    vPath.DataHostPath,
+				LogHostPath: vPath.LogHostPath,
+				Type:        corev1.HostPathDirectory,
 			}
 		}
 		xstore.Status.BoundVolumes = volumes
@@ -95,30 +108,59 @@ var BindHostPathVolumesToHost = xstorev1reconcile.NewStepBinder("BindHostPathVol
 )
 
 func DeleteHostPathVolume(ctx context.Context, hpfsClient hpfs.HpfsServiceClient, vol *polardbxv1xstore.HostPathVolume) error {
+	hostPathFuncs := [...]func(vol *polardbxv1xstore.HostPathVolume) string{
+		func(vol *polardbxv1xstore.HostPathVolume) string {
+			return vol.HostPath
+		}, func(vol *polardbxv1xstore.HostPathVolume) string {
+			return vol.LogHostPath
+		},
+	}
 	switch vol.Type {
 	case corev1.HostPathFile:
-		resp, err := hpfsClient.RemoveFile(ctx, &hpfs.RemoveFileRequest{
-			Host:    &hpfs.Host{NodeName: vol.Host},
-			Options: &hpfs.RemoveOptions{Recursive: true, IgnoreIfNotExists: true},
-			Path:    vol.HostPath,
-		})
-		if err != nil {
-			return err
+		removeFileFunc := func(hostPathFunc func(*polardbxv1xstore.HostPathVolume) string) error {
+			if hostPathFunc(vol) == "" {
+				return nil
+			}
+			resp, err := hpfsClient.RemoveFile(ctx, &hpfs.RemoveFileRequest{
+				Host:    &hpfs.Host{NodeName: vol.Host},
+				Options: &hpfs.RemoveOptions{Recursive: true, IgnoreIfNotExists: true},
+				Path:    hostPathFunc(vol),
+			})
+			if err != nil {
+				return err
+			}
+			if resp.Status.Code != hpfs.Status_OK {
+				return errors.New("status not ok: " + resp.Status.Code.String())
+			}
+			return nil
 		}
-		if resp.Status.Code != hpfs.Status_OK {
-			return errors.New("status not ok: " + resp.Status.Code.String())
+		for _, hostPathFunc := range hostPathFuncs {
+			if err := removeFileFunc(hostPathFunc); err != nil {
+				return err
+			}
 		}
 	case corev1.HostPathDirectory:
-		resp, err := hpfsClient.RemoveDirectory(ctx, &hpfs.RemoveDirectoryRequest{
-			Host:    &hpfs.Host{NodeName: vol.Host},
-			Options: &hpfs.RemoveOptions{Recursive: true, IgnoreIfNotExists: true},
-			Path:    vol.HostPath,
-		})
-		if err != nil {
-			return err
+		removeDirectoryFunc := func(hostPathFunc func(*polardbxv1xstore.HostPathVolume) string) error {
+			if hostPathFunc(vol) == "" {
+				return nil
+			}
+			resp, err := hpfsClient.RemoveDirectory(ctx, &hpfs.RemoveDirectoryRequest{
+				Host:    &hpfs.Host{NodeName: vol.Host},
+				Options: &hpfs.RemoveOptions{Recursive: true, IgnoreIfNotExists: true},
+				Path:    hostPathFunc(vol),
+			})
+			if err != nil {
+				return err
+			}
+			if resp.Status.Code != hpfs.Status_OK {
+				return errors.New("status not ok: " + resp.Status.Code.String())
+			}
+			return nil
 		}
-		if resp.Status.Code != hpfs.Status_OK {
-			return errors.New("status not ok: " + resp.Status.Code.String())
+		for _, hostPathFunc := range hostPathFuncs {
+			if err := removeDirectoryFunc(hostPathFunc); err != nil {
+				return err
+			}
 		}
 	default: // Unrecognized, do nothing
 	}
@@ -172,7 +214,7 @@ var DeleteHostPathVolumes = xstorev1reconcile.NewStepBinder("DeleteHostPathVolum
 			err := DeleteHostPathVolume(rc.Context(), hpfsClient, vol)
 			if err != nil {
 				return flow.Error(err, "Unable to remove host path volume.", "vol.pod", podName,
-					"vol.host", vol.Host, "vol.type", vol.Type, "vol.path", vol.HostPath)
+					"vol.host", vol.Host, "vol.type", vol.Type, "vol.path", vol.HostPath, "vol.LogHostPath", vol.LogHostPath)
 			}
 		}
 
@@ -207,19 +249,40 @@ func UpdateHostPathVolumeSizesTemplate(d time.Duration) control.BindFunc {
 				if vol == nil || len(vol.Host) == 0 || len(vol.HostPath) == 0 {
 					continue
 				}
-
-				resp, err := hpfsClient.ShowDiskUsage(ctx, &hpfs.ShowDiskUsageRequest{
-					Host: &hpfs.Host{NodeName: vol.Host},
-					Path: vol.HostPath,
+				//anonymous function for show disk usage
+				showDiskUsageFunc := func(vol *polardbxv1xstore.HostPathVolume, fGetHostPath func(vol *polardbxv1xstore.HostPathVolume) string, fSetSize func(vol *polardbxv1xstore.HostPathVolume, size int64)) {
+					resp, err := hpfsClient.ShowDiskUsage(ctx, &hpfs.ShowDiskUsageRequest{
+						Host: &hpfs.Host{NodeName: vol.Host},
+						Path: fGetHostPath(vol),
+					})
+					if err != nil {
+						flow.Logger().Error(err, "Unable to get disk usage.", "vol.pod", pod, "vol.host",
+							vol.Host, "vol.path", fGetHostPath(vol))
+					} else if resp.Status.Code != hpfs.Status_OK {
+						flow.Logger().Error(errors.New("status not ok: "+resp.Status.Code.String()), "Failed to get disk usage.",
+							"vol.pod", pod, "vol.host", vol.Host, "vol.path", fGetHostPath(vol))
+					} else {
+						fSetSize(vol, int64(resp.Size))
+					}
+				}
+				//show disk usage of data dir
+				showDiskUsageFunc(vol, func(vol *polardbxv1xstore.HostPathVolume) string {
+					return vol.HostPath
+				}, func(vol *polardbxv1xstore.HostPathVolume, size int64) {
+					vol.DataSize = size
+					//update the total size
+					vol.Size = vol.DataSize + vol.LogSize
 				})
-				if err != nil {
-					flow.Logger().Error(err, "Unable to get disk usage.", "vol.pod", pod, "vol.host",
-						vol.Host, "vol.path", vol.HostPath)
-				} else if resp.Status.Code != hpfs.Status_OK {
-					flow.Logger().Error(errors.New("status not ok: "+resp.Status.Code.String()), "Failed to get disk usage.",
-						"vol.pod", pod, "vol.host", vol.Host, "vol.path", vol.HostPath)
-				} else {
-					vol.Size = int64(resp.Size)
+				//check if LogDataSeparation config of the xstore is open
+				if xstore.Spec.Config.Dynamic.LogDataSeparation {
+					//show disk usage of log dir
+					showDiskUsageFunc(vol, func(vol *polardbxv1xstore.HostPathVolume) string {
+						return vol.LogHostPath
+					}, func(vol *polardbxv1xstore.HostPathVolume, size int64) {
+						vol.LogSize = size
+						//update the total size
+						vol.Size = vol.DataSize + vol.LogSize
+					})
 				}
 			}
 

@@ -18,6 +18,9 @@ package gms
 
 import (
 	"fmt"
+	"github.com/alibaba/polardbx-operator/pkg/util/network"
+	corev1 "k8s.io/api/core/v1"
+	"time"
 
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -36,20 +39,36 @@ import (
 
 var InitializeSchemas = polardbxreconcile.NewStepBinder("InitializeSchemas",
 	func(rc *polardbxreconcile.Context, flow control.Flow) (reconcile.Result, error) {
+		polardbx := rc.MustGetPolarDBX()
 		mgr, err := rc.GetPolarDBXGMSManager()
 		if err != nil {
 			return flow.Error(err, "Unable to get GMS manager.")
 		}
 
-		initialized, err := mgr.IsMetaDBInitialized()
+		existed, err := mgr.IsMetaDBExisted()
+		if err != nil {
+			return flow.Error(err, "Unable to determine the status of GMS schemas.")
+		}
+
+		if !existed {
+			if polardbx.Spec.Readonly {
+				return flow.RetryAfter(10*time.Second, "Wait for master cluster to create metadb schema")
+			}
+			err = mgr.InitializeMetaDBSchema()
+			if err != nil {
+				return flow.Error(err, "Unable to initialize GMS schemas.")
+			}
+		}
+
+		initialized, err := mgr.IsMetaDBInitialized(polardbx.Name)
 		if err != nil {
 			return flow.Error(err, "Unable to determine the status of GMS schemas.")
 		}
 
 		if !initialized {
-			err = mgr.InitializeMetaDB()
+			err = mgr.InitializeMetaDBInfo(polardbx.Spec.Readonly)
 			if err != nil {
-				return flow.Error(err, "Unable to initialize GMS schemas.")
+				return flow.Error(err, "Unable to initialize GMS info.")
 			}
 		}
 
@@ -59,6 +78,11 @@ var InitializeSchemas = polardbxreconcile.NewStepBinder("InitializeSchemas",
 
 var RestoreSchemas = polardbxreconcile.NewStepBinder("RestoreSchemas",
 	func(rc *polardbxreconcile.Context, flow control.Flow) (reconcile.Result, error) {
+		polarDBX := rc.MustGetPolarDBX()
+		oldPXCHash, oldPXCName, err := rc.GetXStoreNameForOldPXC()
+		if err != nil {
+			return flow.Error(err, "Get oldXStoreName Failed")
+		}
 		mgr, err := rc.GetPolarDBXGMSManager()
 		if err != nil {
 			return flow.Error(err, "Unable to get GMS manager.")
@@ -70,10 +94,11 @@ var RestoreSchemas = polardbxreconcile.NewStepBinder("RestoreSchemas",
 		}
 
 		if !restored {
-			err = mgr.RestoreSchemas( /*TODO*/ "fake")
+			err = mgr.RestoreSchemas(oldPXCName, oldPXCHash, polarDBX.Status.Rand)
 			if err != nil {
 				return flow.Error(err, "Unable to restore GMS schemas.")
 			}
+			flow.Logger().Info("restore GMS schemas success")
 		}
 
 		return flow.Continue("GMS schemas restored.")
@@ -168,6 +193,15 @@ func SyncDynamicConfigs(force bool) control.BindFunc {
 		configs := polardbx.Spec.Config.CN.Dynamic
 		targetDynamicConfigs := gms.ConvertIntOrStringMapToStringMap(configs)
 
+		// Initialize template parameters
+		if polardbx.Spec.ParameterTemplate.Name != "" {
+			parameter := rc.MustGetPolarDBXParameterTemplate(polardbx.Spec.ParameterTemplate.Name)
+			params := parameter.Spec.NodeType.CN.ParamList
+			for _, param := range params {
+				targetDynamicConfigs[param.Name] = param.DefaultValue
+			}
+		}
+
 		toUpdateDynamicConfigs := dictutil.DiffStringMap(targetDynamicConfigs, observedConfigs)
 		if len(toUpdateDynamicConfigs) > 0 {
 			flow.Logger().Info("Syncing dynamic configs...")
@@ -181,8 +215,7 @@ func SyncDynamicConfigs(force bool) control.BindFunc {
 	})
 }
 
-func transformIntoStorageInfos(rc *polardbxreconcile.Context, xstores []*polardbxv1.XStore) ([]gms.StorageNodeInfo, error) {
-	polardbx := rc.MustGetPolarDBX()
+func transformIntoStorageInfos(rc *polardbxreconcile.Context, polardbx *polardbxv1.PolarDBXCluster, xstores []*polardbxv1.XStore) ([]gms.StorageNodeInfo, error) {
 	topology := polardbx.Status.SpecSnapshot.Topology
 	cpuLimit := topology.Nodes.DN.Template.Resources.Limits.Cpu().Value()
 	memSize := topology.Nodes.DN.Template.Resources.Limits.Memory().Value()
@@ -190,18 +223,35 @@ func transformIntoStorageInfos(rc *polardbxreconcile.Context, xstores []*polardb
 	storageInfos := make([]gms.StorageNodeInfo, 0, len(xstores))
 
 	for _, xstore := range xstores {
-		rwService, err := rc.GetService(xstoreconvention.NewServiceName(xstore, xstoreconvention.ServiceTypeReadWrite))
-		if err != nil {
-			return nil, fmt.Errorf("unable to get read-write service of xstore " + xstore.Name)
+		readonly := xstore.Spec.Readonly
+		var service *corev1.Service
+		var err error
+
+		if readonly {
+			service, err = rc.GetService(xstoreconvention.NewServiceName(xstore, xstoreconvention.ServiceTypeReadOnly))
+			if err != nil {
+				return nil, fmt.Errorf("unable to get readonly service of xstore " + xstore.Name)
+			}
+		} else {
+			service, err = rc.GetService(xstoreconvention.NewServiceName(xstore, xstoreconvention.ServiceTypeReadWrite))
+			if err != nil {
+				return nil, fmt.Errorf("unable to get read-write service of xstore " + xstore.Name)
+			}
 		}
 
-		accountSecret, err := rc.GetSecret(xstoreconvention.NewSecretName(xstore))
+		secretName := xstoreconvention.NewSecretName(xstore)
+
+		if xstore.Spec.Readonly {
+			secretName = xstore.Spec.PrimaryXStore
+		}
+
+		accountSecret, err := rc.GetSecret(secretName)
 		if err != nil {
 			return nil, fmt.Errorf("unable to get account secret of xstore " + xstore.Name)
 		}
 
-		accessPort := k8shelper.MustGetPortFromService(rwService, xstoreconvention.PortAccess).Port
-		xProtocolPort, privateServicePort := int32(-1), k8shelper.GetPortFromService(rwService, "polarx")
+		accessPort := k8shelper.MustGetPortFromService(service, xstoreconvention.PortAccess).Port
+		xProtocolPort, privateServicePort := int32(-1), k8shelper.GetPortFromService(service, "polarx")
 		if privateServicePort != nil {
 			xProtocolPort = privateServicePort.Port
 		}
@@ -211,19 +261,54 @@ func transformIntoStorageInfos(rc *polardbxreconcile.Context, xstores []*polardb
 			return nil, err
 		}
 
+		masterInstId, storageKind := xstore.Name, gms.StorageKindMaster
+
+		if readonly {
+			masterInstId, storageKind = xstore.Spec.PrimaryXStore, gms.StorageKindSlave
+		}
+
 		storageInfos = append(storageInfos, gms.StorageNodeInfo{
 			Id:            xstore.Name,
-			Host:          k8shelper.GetServiceDNSRecordWithSvc(rwService, true),
+			MasterId:      masterInstId,
+			ClusterId:     polardbx.Name,
+			Host:          k8shelper.GetServiceDNSRecordWithSvc(service, true),
 			Port:          accessPort,
 			XProtocolPort: xProtocolPort,
 			User:          xstoreconvention.SuperAccount,
 			Passwd:        string(accountSecret.Data[xstoreconvention.SuperAccount]),
 			Type:          storageType,
-			Kind:          gms.StorageKindMaster,
+			Kind:          storageKind,
 			MaxConn:       (1 << 16) - 1,
 			CpuCore:       int32(cpuLimit),
 			MemSize:       memSize,
+			IsVip:         gms.IsVip,
 		})
+
+		// Add readonly pod cluster ip service, since CN will not fetch it
+		if readonly {
+			nodeSets := xstore.Spec.Topology.NodeSets
+			for index, nodeSet := range nodeSets {
+				podName := xstoreconvention.NewPodName(xstore, &nodeSet, index)
+				containerPort := int32(xstore.Status.PodPorts[podName].ToMap()[convention.PortAccess])
+				xPort := network.GetXPort(containerPort)
+				storageInfos = append(storageInfos, gms.StorageNodeInfo{
+					Id:            xstore.Name,
+					MasterId:      masterInstId,
+					ClusterId:     polardbx.Name,
+					Host:          xstoreconvention.NewClusterIpServiceName(podName),
+					Port:          containerPort,
+					XProtocolPort: xPort,
+					User:          xstoreconvention.SuperAccount,
+					Passwd:        string(accountSecret.Data[xstoreconvention.SuperAccount]),
+					Type:          storageType,
+					Kind:          storageKind,
+					MaxConn:       (1 << 16) - 1,
+					CpuCore:       int32(cpuLimit),
+					MemSize:       memSize,
+					IsVip:         gms.IsNotVip,
+				})
+			}
+		}
 	}
 
 	return storageInfos, nil
@@ -240,7 +325,7 @@ var EnableDNs = polardbxreconcile.NewStepBinder("EnableDNs",
 			return flow.Error(err, "Unable to get xstores of DN.")
 		}
 
-		storageInfos, err := transformIntoStorageInfos(rc, dnStores[:replicas])
+		storageInfos, err := transformIntoStorageInfos(rc, polardbx, dnStores[:replicas])
 		if err != nil {
 			return flow.Error(err, "Unable to transform xstores into storage infos.")
 		}
@@ -281,7 +366,7 @@ var DisableTrailingDNs = polardbxreconcile.NewStepBinder("DisableTrailingDNs",
 			return flow.Pass()
 		}
 
-		storageInfos, err := transformIntoStorageInfos(rc, trailingStores)
+		storageInfos, err := transformIntoStorageInfos(rc, polardbx, trailingStores)
 		if err != nil {
 			return flow.Error(err, "Unable to transform xstores into storage infos.")
 		}

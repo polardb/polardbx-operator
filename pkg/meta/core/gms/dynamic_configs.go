@@ -75,7 +75,7 @@ func itoa64(x *int64, defaultVal int64) string {
 	return fmt.Sprintf("%d", *x)
 }
 
-func strOrDefault(s, defaultVal string) string {
+func StrOrDefault(s, defaultVal string) string {
 	if len(s) == 0 {
 		return defaultVal
 	}

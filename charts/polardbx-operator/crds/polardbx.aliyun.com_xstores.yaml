@@ -1,10 +1,9 @@
-
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.7.0
+    controller-gen.kubebuilder.io/version: v0.9.0
   creationTimestamp: null
   name: xstores.polardbx.aliyun.com
 spec:
@@ -69,6 +68,18 @@ spec:
                 properties:
                   controller:
                     properties:
+                      RPCProtocolVersion:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        default: 1
+                        enum:
+                        - 1
+                        - 2
+                        - "1"
+                        - "2"
+                        - ""
+                        x-kubernetes-int-or-string: true
                       diskQuota:
                         anyOf:
                         - type: integer
@@ -77,6 +88,8 @@ spec:
                           use. This is a soft limit.
                         pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                         x-kubernetes-int-or-string: true
+                      logDataSeparation:
+                        type: boolean
                       logPurgeInterval:
                         type: string
                     type: object
@@ -138,6 +151,22 @@ spec:
                 default: galaxy
                 description: Engine is the engine used by xstore. Default is "galaxy".
                 type: string
+              parameterTemplate:
+                description: ParameterTemplate defines the template of parameters
+                  used by cn/dn/gms.
+                properties:
+                  name:
+                    description: Parameter template
+                    type: string
+                type: object
+              primaryCluster:
+                description: PrimaryCluster is the name of primary cluster of the
+                  readonly cluster
+                type: string
+              primaryXStore:
+                description: PrimaryXStore is the name of primary XStore of the readonly
+                  xstore
+                type: string
               privileges:
                 description: Privileges defines the accounts that will be created
                   and maintained automatically by the controller.
@@ -157,6 +186,41 @@ spec:
                       type: string
                   type: object
                 type: array
+              readonly:
+                default: false
+                description: Readonly demonstrates whether the xstore is readonly.
+                  Default is false
+                type: boolean
+              restore:
+                description: Restore defines the spec of restore.
+                properties:
+                  backupset:
+                    description: BackupSet defines the source of backup set
+                    type: string
+                  from:
+                    description: From defines the source information, either backup
+                      sets, snapshot or an running cluster.
+                    properties:
+                      backupSelector:
+                        additionalProperties:
+                          type: string
+                        description: BackupSelector defines the selector for the backups
+                          to be selected. Optional.
+                        type: object
+                      clusterName:
+                        description: XStoreName defines the the xstore name that this
+                          xstore is restored from. Optional.
+                        type: string
+                    type: object
+                  time:
+                    description: Time defines the specified time of the restored data,
+                      in the format of 'yyyy-MM-dd HH:mm:ss'. Required.
+                    type: string
+                  timezone:
+                    description: TimeZone defines the specified time zone of the restore
+                      time. Default is the location of current cluster.
+                    type: string
+                type: object
               serviceLabels:
                 additionalProperties:
                   type: string
@@ -2472,13 +2536,24 @@ spec:
               boundVolumes:
                 additionalProperties:
                   properties:
+                    dataSize:
+                      description: Size of the data volume.
+                      format: int64
+                      type: integer
                     host:
                       description: Host or node name if the volume is bound to some
                         node.
                       type: string
                     hostPath:
-                      description: HostPath of the file/dir.
+                      description: Data  HostPath of the file/dir.
                       type: string
+                    logHostPath:
+                      description: Log HostPath of the file/dir
+                      type: string
+                    logSize:
+                      description: Size of the log volume.
+                      format: int64
+                      type: integer
                     pod:
                       description: Pod if the volume is bound to some pod.
                       type: string
@@ -2545,6 +2620,18 @@ spec:
                 properties:
                   controller:
                     properties:
+                      RPCProtocolVersion:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        default: 1
+                        enum:
+                        - 1
+                        - 2
+                        - "1"
+                        - "2"
+                        - ""
+                        x-kubernetes-int-or-string: true
                       diskQuota:
                         anyOf:
                         - type: integer
@@ -2553,6 +2640,8 @@ spec:
                           use. This is a soft limit.
                         pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                         x-kubernetes-int-or-string: true
+                      logDataSeparation:
+                        type: boolean
                       logPurgeInterval:
                         type: string
                     type: object
@@ -4901,6 +4990,9 @@ spec:
                         type: object
                     type: object
                 type: object
+              parameterName:
+                description: ParameterName
+                type: string
               phase:
                 description: Phase is the current phase of the xstore.
                 type: string
@@ -4922,6 +5014,22 @@ spec:
               readyStatus:
                 description: ReadyStatus represents the status of ready pods.
                 type: string
+              restarting:
+                description: Restarting represents if pods need restart
+                type: boolean
+              restartingPods:
+                description: RestartingPods represents pods need to restart
+                properties:
+                  lastDeletedPod:
+                    type: string
+                  toDeletePod:
+                    items:
+                      type: string
+                    type: array
+                type: object
+              restartingType:
+                description: Restarting represents pods restarting type
+                type: string
               stage:
                 description: Stage is the current stage in phase of the xstore.
                 type: string
@@ -4933,15 +5041,13 @@ spec:
                 description: TotalPods represents the total number of pods.
                 format: int32
                 type: integer
+              updateConfigMap:
+                description: UpdateConfigMap represents update cm.cnf.override in
+                  config map
+                type: boolean
             type: object
         type: object
     served: true
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []

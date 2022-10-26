@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name:  {{ .Values.filebeat.name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ .Values.filebeat.name }}
+    appType: filebeat
+    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ .Values.filebeat.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.filebeat.name }}
+    spec:
+      serviceAccountName:  {{ .Values.filebeat.name }}
+      containers:
+        - name: {{ .Values.filebeat.name }}
+          image: {{ .Values.filebeat.image.repo }}/{{ .Values.filebeat.image.name }}:{{ .Values.filebeat.image.version }}
+          command: ["/usr/bin/tini"]
+          args: ["--","/usr/local/bin/docker-entrypoint","-environment","container","-c","/usr/share/filebeat/config/filebeat.yml","-e"] #, "-d" ,"*"]
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsUser: 0
+          resources:
+{{ toYaml .Values.filebeat.resources | indent 12}}
+          volumeMounts:
+            - name: filebeat-config-file
+              mountPath: /usr/share/filebeat/config/
+              readOnly: true
+            - name: filebeat-data-dir
+              mountPath: /usr/share/filebeat/data/
+            - name: pod-path
+              mountPath: /var/lib/kubelet/pods/
+              readOnly: true
+      terminationGracePeriodSeconds: 30
+      volumes:
+        - name: pod-path
+          hostPath:
+            path: /var/lib/kubelet/pods/
+        - name: filebeat-data-dir
+          emptyDir: {}
+        - name: filebeat-config-file
+          configMap:
+            name: filebeat-config
+            
+      {{- with .Values.logstash.nodeSelector }}
+      nodeSelector:
+{{ toYaml . | indent 8 }}
+      {{- end }}
+      {{- with .Values.logstash.affinity }}
+      affinity:
+{{ toYaml . | indent 8 }}
+      {{- end }}
+      {{- with .Values.logstash.tolerations }}
+      tolerations:
+{{ toYaml . | indent 8 }}
+      {{- end }}
+ 

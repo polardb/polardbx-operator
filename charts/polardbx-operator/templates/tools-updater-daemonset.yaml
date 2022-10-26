@@ -47,6 +47,11 @@ spec:
         volumeMounts:
         - mountPath: /target
           name: tools-vol
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
         command:
         - /bin/ash
         args:

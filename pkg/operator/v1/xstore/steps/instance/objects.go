@@ -38,17 +38,26 @@ import (
 var CreateSecret = xstorev1reconcile.NewStepBinder("CreateSecret",
 	func(rc *xstorev1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
 		xstore := rc.MustGetXStore()
-
 		secret, err := rc.GetXStoreSecret()
 		if client.IgnoreNotFound(err) != nil {
-			return flow.Error(err, "Unable to get secret.")
+			return flow.Error(err, "Unable to get secret")
 		}
-
 		if secret == nil {
-			secret = factory.NewSecret(xstore)
-			err := rc.SetControllerRefAndCreate(secret)
-			if err != nil {
-				return flow.Error(err, "Unable to create secret.")
+			if xstore.Spec.Restore != nil {
+				secret, err := rc.CreateSecretByXStore(xstore)
+				if err != nil {
+					return flow.Error(err, "unable to get secret while restoring")
+				}
+				err = rc.SetControllerRefAndCreate(secret)
+				if err != nil {
+					return flow.Error(err, "Unable to set secret while restoring.")
+				}
+			} else {
+				secret = factory.NewSecret(xstore)
+				err := rc.SetControllerRefAndCreate(secret)
+				if err != nil {
+					return flow.Error(err, "Unable to create secret.")
+				}
 			}
 		}
 
@@ -56,10 +65,12 @@ var CreateSecret = xstorev1reconcile.NewStepBinder("CreateSecret",
 	},
 )
 
-func CreatePodsAndHeadlessServicesWithExtraFactory(extraPodFactory factory.ExtraPodFactory) control.BindFunc {
-	return xstorev1reconcile.NewStepBinder("CreatePodsAndHeadlessServices",
+func CreatePodsAndPodServicesWithExtraFactory(extraPodFactory factory.ExtraPodFactory) control.BindFunc {
+	return xstorev1reconcile.NewStepBinder("CreatePodsAndPodServices",
 		func(rc *xstorev1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
 			xstore := rc.MustGetXStore()
+
+			readonly := xstore.Spec.Readonly
 
 			topology := xstore.Status.ObservedTopology
 			generation := xstore.Status.ObservedGeneration
@@ -76,11 +87,20 @@ func CreatePodsAndHeadlessServicesWithExtraFactory(extraPodFactory factory.Extra
 			// Set stable single node set if there's no node set.
 			nodeSets := topology.NodeSets
 			if len(nodeSets) == 0 {
-				nodeSets = []polardbxv1xstore.NodeSet{
-					{
-						Role:     polardbxv1xstore.RoleCandidate,
-						Replicas: 1,
-					},
+				if !readonly {
+					nodeSets = []polardbxv1xstore.NodeSet{
+						{
+							Role:     polardbxv1xstore.RoleCandidate,
+							Replicas: 1,
+						},
+					}
+				} else {
+					nodeSets = []polardbxv1xstore.NodeSet{
+						{
+							Role:     polardbxv1xstore.RoleLearner,
+							Replicas: 1,
+						},
+					}
 				}
 			}
 
@@ -103,6 +123,7 @@ func CreatePodsAndHeadlessServicesWithExtraFactory(extraPodFactory factory.Extra
 						if err := rc.SetControllerRefAndCreate(pod); err != nil {
 							return flow.Error(err, "Unable to create new pod", "pod", podName)
 						}
+						podMap[podName] = pod
 
 						newCnt++
 					} else {
@@ -132,23 +153,23 @@ func CreatePodsAndHeadlessServicesWithExtraFactory(extraPodFactory factory.Extra
 				}
 			}
 
-			if featuregate.EnableXStoreWithHeadlessService.Enabled() {
-				// Get current headless services.
-				headlessServices, err := rc.GetXStoreHeadlessServices()
+			if featuregate.EnableXStoreWithPodService.Enabled() {
+				// Get current pod services.
+				podServices, err := rc.GetXStorePodServices()
 				if err != nil {
-					return flow.Error(err, "Unable to get headless services.")
+					return flow.Error(err, "Unable to get pod services.")
 				}
 
-				// For each pod, create a headless service.
+				// For each pod, create a pod service.
 				for _, nodeSet := range nodeSets {
 					for i := 0; i < int(nodeSet.Replicas); i++ {
 						podName := convention.NewPodName(xstore, &nodeSet, i)
-						_, exists := headlessServices[podName]
+						_, exists := podServices[podName]
 						if !exists {
-							svc := factory.NewHeadlessService(xstore, podName)
+							svc := factory.NewClusterIpService(xstore, podMap[podName])
 							err := rc.SetControllerRefAndCreate(svc)
 							if err != nil {
-								return flow.Error(err, "Unable to create headless service for pod.", "pod", podName)
+								return flow.Error(err, "Unable to create service for pod.", "pod", podName)
 							}
 						}
 					}
@@ -209,7 +230,7 @@ var WaitUntilCandidatesAndVotersReady = xstorev1reconcile.NewStepBinder("WaitUnt
 	func(rc *xstorev1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
 		pods, err := rc.GetXStorePods()
 		if err != nil {
-			return flow.Error(err, "Unable to get pods.")
+			return flow.RetryErr(err, "Unable to get pods.")
 		}
 
 		for _, pod := range pods {
@@ -226,7 +247,7 @@ var WaitUntilCandidatesAndVotersReady = xstorev1reconcile.NewStepBinder("WaitUnt
 			// Do connectivity check locally.
 			err := xstoreexec.CheckConnectivityLocally(rc, &pod, "engine", flow.Logger())
 			if err != nil {
-				return flow.Error(err, "Failed to check connectivity locally.", "pod", pod.Name)
+				return flow.RetryErr(err, "Failed to check connectivity locally.", "pod", pod.Name)
 			}
 		}
 		return flow.Continue("All candidates and voters are ready for connections.")
@@ -287,3 +308,28 @@ func WhenPodsDeletedFound(binders ...control.BindFunc) control.BindFunc {
 			return len(pods) < expectedPods, nil
 		}, binders...)
 }
+
+var UpdateMycnfParameters = xstorev1reconcile.NewStepBinder("UpdateMycnfParameters",
+	func(rc *xstorev1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+		pods, err := rc.GetXStorePods()
+		if err != nil {
+			return flow.Error(err, "Unable to get pods.")
+		}
+
+		// update my.cnf for my.cnf.override
+		for _, pod := range pods {
+			if !k8shelper.IsPodReady(&pod) {
+				return flow.Wait("Found candidate or voter pod not ready. Just wait.",
+					"pod", pod.Name, "pod.phase", pod.Status.Phase)
+			}
+
+			// update my.cnf locally.
+			err := xstoreexec.UpdateMycnfParameters(rc, &pod, "engine", flow.Logger())
+			if err != nil {
+				return flow.Error(err, "Failed to update my.cnf locally.", "pod", pod.Name)
+			}
+		}
+
+		return flow.Pass()
+	},
+)

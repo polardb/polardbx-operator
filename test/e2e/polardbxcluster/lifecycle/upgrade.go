@@ -74,7 +74,7 @@ var _ = ginkgo.Describe("[PolarDBXCluster] [Lifecycle:Upgrade]", func() {
 		exp.ExpectDeploymentsOk()
 		exp.ExpectXStoresOk()
 
-		obj.Spec.Topology.Nodes.CN.Replicas = 1
+		*obj.Spec.Topology.Nodes.CN.Replicas = 1
 		err := f.Client.Update(f.Ctx, obj)
 		framework.ExpectNoError(err)
 
@@ -124,7 +124,7 @@ var _ = ginkgo.Describe("[PolarDBXCluster] [Lifecycle:Upgrade]", func() {
 		exp.ExpectDeploymentsOk()
 		exp.ExpectXStoresOk()
 
-		obj.Spec.Topology.Nodes.CN.Replicas = 2
+		*obj.Spec.Topology.Nodes.CN.Replicas = 2
 		err := f.Client.Update(f.Ctx, obj)
 		framework.ExpectNoError(err)
 
@@ -527,4 +527,19 @@ var _ = ginkgo.Describe("[PolarDBXCluster] [Lifecycle:Upgrade]", func() {
 			return obj
 		}, false)
 	})
+
+	ginkgo.It("change log data separation config", func() {
+		doScaleAndExpect("e2e-test-logdataseparation", func(obj *polardbxv1.PolarDBXCluster) *polardbxv1.PolarDBXCluster {
+			nodeDn := &obj.Spec.Config.DN
+			// Simply minus 1 and update
+			nodeDn.LogDataSeparation = true
+			err := f.Client.Update(f.Ctx, obj)
+			framework.ExpectNoError(err, "update failed")
+
+			obj, err = pxcframework.WaitUntilPolarDBXClusterUpgradeCompleteOrFail(f.Client, obj.Name, obj.Namespace, 60*time.Minute)
+			framework.ExpectNoError(err)
+			return obj
+		}, false)
+	})
+
 })

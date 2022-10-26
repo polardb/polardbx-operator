@@ -78,6 +78,9 @@ const (
 	Custom modeName = "custom"
 	// QuickStart creates a 1 GMS + 1 CN + 1 DN + 1 CDC in total resources 4c8g for quick start.
 	QuickStart modeName = "quick-start"
+
+	// QuickStartPaxos Change to 3 paxos replicas of DN on the basis of QuickStart
+	QuickStartPaxos modeName = "quick-start-paxos"
 )
 
 const (
@@ -100,7 +103,7 @@ func (h *topologyModeHandler) updateTopology(obj *polardbxv1.PolarDBXCluster, mo
 		switch node {
 		case CN:
 			conf.resource.DeepCopyInto(&obj.Spec.Topology.Nodes.CN.Template.Resources)
-			obj.Spec.Topology.Nodes.CN.Replicas = conf.replica
+			*obj.Spec.Topology.Nodes.CN.Replicas = conf.replica
 		case DN:
 			conf.resource.DeepCopyInto(&obj.Spec.Topology.Nodes.DN.Template.Resources.ResourceRequirements)
 			obj.Spec.Topology.Nodes.DN.Replicas = conf.replica
@@ -464,6 +467,58 @@ func (t *topologyModeFactory) newQuickStartModeConfig() map[nodeType]*nodeConfig
 	}
 }
 
+func (t *topologyModeFactory) newQuickStartPaxosModeConfig() map[nodeType]*nodeConfig {
+	storeResources := corev1.ResourceRequirements{
+		Limits: map[corev1.ResourceName]resource.Quantity{
+			corev1.ResourceCPU:    resource.MustParse("1"),
+			corev1.ResourceMemory: resource.MustParse("1Gi"),
+		},
+		Requests: map[corev1.ResourceName]resource.Quantity{
+			corev1.ResourceCPU:    resource.MustParse("100m"),
+			corev1.ResourceMemory: resource.MustParse("500Mi"),
+		},
+	}
+
+	return map[nodeType]*nodeConfig{
+		GMS: {
+			replica:      1,
+			paxosReplica: 3,
+			resource:     &storeResources,
+		},
+		CN: {
+			replica: 1,
+			resource: &corev1.ResourceRequirements{
+				Limits: map[corev1.ResourceName]resource.Quantity{
+					corev1.ResourceCPU:    resource.MustParse("1"),
+					corev1.ResourceMemory: resource.MustParse("2Gi"),
+				},
+				Requests: map[corev1.ResourceName]resource.Quantity{
+					corev1.ResourceCPU:    resource.MustParse("100m"),
+					corev1.ResourceMemory: resource.MustParse("1Gi"),
+				},
+			},
+		},
+		DN: {
+			replica:      1,
+			paxosReplica: 3,
+			resource:     &storeResources,
+		},
+		CDC: {
+			replica: 1,
+			resource: &corev1.ResourceRequirements{
+				Limits: map[corev1.ResourceName]resource.Quantity{
+					corev1.ResourceCPU:    resource.MustParse("1"),
+					corev1.ResourceMemory: resource.MustParse("1Gi"),
+				},
+				Requests: map[corev1.ResourceName]resource.Quantity{
+					corev1.ResourceCPU:    resource.MustParse("100m"),
+					corev1.ResourceMemory: resource.MustParse("500Mi"),
+				},
+			},
+		},
+	}
+}
+
 func (t *topologyModeFactory) parseTopologyModeGuide(s string) (*topologyMode, error) {
 	s = strings.TrimSpace(s)
 	mode := &topologyMode{}
@@ -493,6 +548,10 @@ func (t *topologyModeFactory) parseTopologyModeGuide(s string) (*topologyMode, e
 		mode.name = Minimum
 		mode.config = t.computeResourcesForMinimumMode(false)
 		mode.shareGMS = true
+	case strings.HasPrefix(s, string(QuickStartPaxos)):
+		mode.name = QuickStartPaxos
+		mode.config = t.newQuickStartPaxosModeConfig()
+		mode.shareGMS = false
 	case strings.HasPrefix(s, string(QuickStart)):
 		mode.name = QuickStart
 		mode.config = t.newQuickStartModeConfig()

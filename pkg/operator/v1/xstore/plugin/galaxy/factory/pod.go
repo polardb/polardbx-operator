@@ -17,6 +17,7 @@ limitations under the License.
 package factory
 
 import (
+	"github.com/alibaba/polardbx-operator/pkg/util/network"
 	corev1 "k8s.io/api/core/v1"
 
 	polardbxv1xstore "github.com/alibaba/polardbx-operator/api/v1/xstore"
@@ -45,11 +46,11 @@ func (f *ExtraPodFactoryGalaxy) NewPorts(ctx *factory.PodFactoryContext, allocat
 		[]corev1.ContainerPort{
 			{
 				Name:          "paxos",
-				ContainerPort: accessPort.ContainerPort + 8000,
+				ContainerPort: network.GetPaxosPort(accessPort.ContainerPort),
 			},
 			{
 				Name:          "polarx",
-				ContainerPort: accessPort.ContainerPort + 28000,
+				ContainerPort: network.GetXPort(accessPort.ContainerPort),
 			},
 		}...,
 	)

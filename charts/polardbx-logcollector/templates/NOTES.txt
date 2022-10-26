@@ -1,0 +1,5 @@
+polardbx-operator logcollector plugin is installed. Please check the status of components:
+
+    kubectl get pods --namespace {{ .Release.Namespace }}
+
+Now start to collect logs of  your polardbx cluster.

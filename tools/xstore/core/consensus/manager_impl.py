@@ -42,6 +42,17 @@ def fetchone_with_lowercase_fieldnames(cursor: pymysql.cursors.Cursor):
 
 
 # noinspection SqlResolve,SqlResolve,SqlNoDataSourceInspection,SqlDialectInspection
+def _slave_status_from_row(r):
+    return SlaveStatus(
+        relay_log_file=r['relay_log_file'],
+        relay_log_pos=int(r['relay_log_pos']),
+        slave_io_running=r['slave_io_running'],
+        slave_sql_running=r['slave_sql_running'],
+        slave_sql_running_state=r['slave_sql_running_state'],
+        seconds_behind_master=r['seconds_behind_master']
+    )
+
+
 class LegacyConsensusManager(AbstractConsensusManager):
     """
     Consensus manager for legacy implementation. Interfaces are customized
@@ -179,12 +190,11 @@ class LegacyConsensusManager(AbstractConsensusManager):
 
         return self.get_consensus_node(target_addr)
 
-    def drop_learner(self, target: Union[str, ConsensusNode]):
+    def drop_learner(self, target_addr: str):
         self.check_current_role(ConsensusRole.LEADER)
 
-        target_server_id = self._get_server_id(target)
         with self._conn.cursor() as cur:
-            cur.execute('drop consensus_learner %d' % target_server_id)
+            cur.execute('drop consensus_learner "%s"' % target_addr)
 
     def add_follower(self, target_addr: str) -> ConsensusNode:
         self.check_current_role(ConsensusRole.LEADER)
@@ -297,6 +307,12 @@ class LegacyConsensusManager(AbstractConsensusManager):
         with self._conn.cursor() as cur:
             cur.execute(stmt)
 
+    def show_slave_status(self):
+        with self._conn.cursor() as cur:
+            cur.execute('show slave status')
+            row = fetchone_with_lowercase_fieldnames(cur)
+            return _slave_status_from_row(row)
+
 
 class ConsensusManager(AbstractConsensusManager):
     """
@@ -400,10 +416,10 @@ class ConsensusManager(AbstractConsensusManager):
             cur.execute('call dbms_consensus.change_leader(%d)' % target_server_id)
 
     def configure_follower(self, target: Union[str, ConsensusNode], election_weight: int, force_sync: bool):
-        target_server_id = self._get_server_id(target)
+        addr = self._get_address(target)
         with self._conn.cursor() as cur:
-            cur.execute('call dbms_consensus.configure_follower(%d, %d, %d)' % (
-                target_server_id, election_weight, 1 if force_sync else 0
+            cur.execute('call dbms_consensus.configure_follower("%s", %d, %d)' % (
+                addr, election_weight, 1 if force_sync else 0
             ))
 
     def modify_cluster_id(self, cluster_id: int):
@@ -435,12 +451,11 @@ class ConsensusManager(AbstractConsensusManager):
 
         return self.get_consensus_node(target_addr)
 
-    def drop_learner(self, target: Union[str, ConsensusNode]):
+    def drop_learner(self, target_addr: str):
         self.check_current_role(ConsensusRole.LEADER)
 
-        target_server_id = self._get_server_id(target)
         with self._conn.cursor() as cur:
-            cur.execute('call dbms_consensus.drop_learner(%d)' % target_server_id)
+            cur.execute('call dbms_consensus.drop_learner("%s")' % target_addr)
 
     def add_follower(self, target_addr: str) -> ConsensusNode:
         node = self.add_learner(target_addr)
@@ -559,3 +574,19 @@ class ConsensusManager(AbstractConsensusManager):
                 cur.execute('call dbms_consensus.purge_log(%d)' % to_purge_logs[-1].start_log_index)
             else:
                 cur.execute('call dbms_consensus.local_purge_log(%d)' % to_purge_logs[-1].start_log_index)
+
+    def _slave_status_from_row(r) -> SlaveStatus:
+        return SlaveStatus(
+            relay_log_file=r['relay_log_file'],
+            relay_log_pos=int(r['relay_log_pos']),
+            slave_io_running=r['slave_io_running'],
+            slave_sql_running=r['slave_sql_running'],
+            slave_sql_running_state=r['slave_sql_running_state'],
+            seconds_behind_master=float(r['seconds_behind_master'])
+        )
+
+    def show_slave_status(self) -> SlaveStatus:
+        with self._conn.cursor() as cur:
+            cur.execute('show slave status')
+            row = fetchone_with_lowercase_fieldnames(cur)
+            return self._slave_status_from_row(row)

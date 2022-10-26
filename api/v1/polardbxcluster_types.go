@@ -72,6 +72,23 @@ type PolarDBXClusterSpec struct {
 	// backups silently.
 	// +optional
 	Restore *polardbx.RestoreSpec `json:"restore,omitempty"`
+
+	// ParameterTemplate defines the template of parameters used by cn/dn/gms.
+	ParameterTemplate polardbx.ParameterTemplate `json:"parameterTemplate,omitempty"`
+
+	// +kubebuilder:default=false
+
+	// Readonly demonstrates whether the cluster is readonly. Default is false
+	// +optional
+	Readonly bool `json:"readonly,omitempty"`
+
+	// PrimaryCluster is the name of primary cluster of the readonly cluster
+	// +optional
+	PrimaryCluster string `json:"primaryCluster,omitempty"`
+
+	// InitReadonly is the list of readonly cluster that needs to be created and initialized
+	// +optional
+	InitReadonly []*polardbx.ReadonlyParam `json:"initReadonly,omitempty"`
 }
 
 type PolarDBXClusterStatus struct {
@@ -102,6 +119,15 @@ type PolarDBXClusterStatus struct {
 	// SpecSnapshot represents the snapshot of some aspects of the observed spec.
 	// It should be updated atomically with the observed generation.
 	SpecSnapshot *polardbx.SpecSnapshot `json:"specSnapshot,omitempty"`
+
+	// Restarting represents if pods need restart
+	Restarting bool `json:"restarting,omitempty"`
+
+	// RestartingType represents the type of restart
+	RestartingType string `json:"restartingType,omitempty"`
+
+	// RestartingPods represents pods need to restart
+	RestartingPods polardbx.RestartingPods `json:"restartingPods,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -123,7 +149,7 @@ type PolarDBXCluster struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	// +kubebuilder:default={topology:{nodes:{cn:{replicas:2,template:{resources:{limits:{cpu:4,memory:"8Gi"}}}},dn:{replicas:2,template:{hostNetwork:true,resources:{limits:{cpu:4,memory:"8Gi"}}}}}}}
+	// +kubebuilder:default={topology:{nodes:{cn:{template:{resources:{limits:{cpu:4,memory:"8Gi"}}}},dn:{replicas:2,template:{hostNetwork:true,resources:{limits:{cpu:4,memory:"8Gi"}}}}}}}
 	Spec   PolarDBXClusterSpec   `json:"spec,omitempty"`
 	Status PolarDBXClusterStatus `json:"status,omitempty"`
 }

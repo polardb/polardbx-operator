@@ -56,7 +56,9 @@ func (f *fileTask) Wait() error {
 
 func (f *fileTask) complete(err error) {
 	f.progress = 100
-	f.errC <- err
+	if err != nil {
+		f.errC <- err
+	}
 	close(f.errC)
 }
 

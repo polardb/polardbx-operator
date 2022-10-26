@@ -60,14 +60,14 @@ func declareFeatureGate(key string, enabled, static bool, description string) *F
 
 // Feature gates to prevent unstable or developing codes from running.
 var (
-	StoreUpgrade                    = declareFeatureGate("StoreUpgrade", true, true, "Enable store upgrading.")
-	StoreDynamicConfig              = declareFeatureGate("StoreDynamicConfig", false, true, "Enable dynamic config updating on stores.")
-	AutoDataRebalance               = declareFeatureGate("AutoDataRebalance", true, true, "Rebalance data automatically when scaling.")
-	WaitDrainedNodeToBeOffline      = declareFeatureGate("WaitDrainedNodeToBeOffline", true, true, "Enable waiting until drained nodes are marked offline when no CDC nodes found.")
-	EnableGalaxyClusterMode         = declareFeatureGate("EnableGalaxyCluster", true, false, "Enable cluster mode on galaxy store engine.")
-	EnforceQoSGuaranteed            = declareFeatureGate("EnforceQoSGuaranteed", false, false, "Enforce pod's QoS to Guaranteed.")
-	ResetTrustIpsBeforeStart        = declareFeatureGate("ResetTrustIpsBeforeStart", false, true, "Reset trust ips in CNs to avoid security problems.")
-	EnableXStoreWithHeadlessService = declareFeatureGate("EnableXStoreWithHeadlessService", true, false, "Use headless services for pods in xstore.")
+	StoreUpgrade               = declareFeatureGate("StoreUpgrade", true, true, "Enable store upgrading.")
+	StoreDynamicConfig         = declareFeatureGate("StoreDynamicConfig", false, true, "Enable dynamic config updating on stores.")
+	AutoDataRebalance          = declareFeatureGate("AutoDataRebalance", true, true, "Rebalance data automatically when scaling.")
+	WaitDrainedNodeToBeOffline = declareFeatureGate("WaitDrainedNodeToBeOffline", true, true, "Enable waiting until drained nodes are marked offline when no CDC nodes found.")
+	EnableGalaxyClusterMode    = declareFeatureGate("EnableGalaxyCluster", true, false, "Enable cluster mode on galaxy store engine.")
+	EnforceQoSGuaranteed       = declareFeatureGate("EnforceQoSGuaranteed", false, false, "Enforce pod's QoS to Guaranteed.")
+	ResetTrustIpsBeforeStart   = declareFeatureGate("ResetTrustIpsBeforeStart", false, true, "Reset trust ips in CNs to avoid security problems.")
+	EnableXStoreWithPodService = declareFeatureGate("EnableXStoreWithPodService", true, false, "Use services for pods in xstore.")
 )
 
 var extraFeatureGates []string

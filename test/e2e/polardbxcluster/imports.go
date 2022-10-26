@@ -17,5 +17,6 @@ limitations under the License.
 package polardbxcluster
 
 import (
+	_ "github.com/alibaba/polardbx-operator/test/e2e/polardbxcluster/configuration"
 	_ "github.com/alibaba/polardbx-operator/test/e2e/polardbxcluster/lifecycle"
 )

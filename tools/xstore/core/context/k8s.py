@@ -50,11 +50,11 @@ class PodInfo(object):
         :return: pod's name.
         """
         self._check_mount()
-
         if not self._name:
             with open(self._sub_path('name'), 'r') as f:
                 self._name = f.read().strip()
         return self._name
+
 
     def namespace(self) -> str:
         """
@@ -130,6 +130,13 @@ class PodInfo(object):
         :return: pod's IP.
         """
         return self._env['POD_IP']
+
+    def pod_name_from_env(self):
+        """
+        Get pod's name from env, used by restore job
+        :return: pod's name
+        """
+        return self._env['POD_NAME']
 
     def node_name(self):
         """

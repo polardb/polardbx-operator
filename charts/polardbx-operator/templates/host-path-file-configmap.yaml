@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.hostPathFileService.name}}-config
+  namespace: {{ .Release.Namespace }}
+data:
+  config.yaml: |-
+    sinks:
+{{ toYaml .Values.hostPathFileService.sinks | indent 7 }}
+

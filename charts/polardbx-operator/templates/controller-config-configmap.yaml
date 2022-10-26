@@ -36,6 +36,8 @@ data:
         galaxy:
           engine: {{ .Values.clusterDefaults.images.galaxyengine }}:{{ .Values.clusterDefaults.version }}
           exporter: prom/mysqld-exporter:master
+        xcluster:
+          exporter: prom/mysqld-exporter:master
 {{- if .Values.extension.config.images.store }}
 {{ toYaml .Values.extension.config.images.store | indent 8 }}
 {{- end}}
@@ -51,8 +53,20 @@ data:
       host_paths:
         tools: {{ .Values.node.volumes.data }}/cache/tools/xstore
         volume_data: {{ .Values.node.volumes.data }}/xstore
+        volume_log: {{ .Values.node.volumes.log }}/xstore
+        volume_filestream: {{ .Values.node.volumes.filestream }}
       hpfs_endpoint: {{.Values.hostPathFileService.name}}:{{ .Values.hostPathFileService.port }}
 {{- if .Values.extension.config.security }}
     security:
 {{ toYaml .Values.extension.config.security | indent 6 }}
+{{- end}}
+    oss:
+      oss_endpoint: {{ .Values.hostPathFileService.ossEndpoint }}
+      oss_bucket: {{ .Values.hostPathFileService.ossBucket }}
+      oss_access_key: {{ .Values.hostPathFileService.ossAccessKey }}
+      oss_access_secret: {{ .Values.hostPathFileService.ossAccessSecret }}
+{{- if .Values.node.nfs }}
+    nfs:
+      nfs_path: {{ .Values.node.nfs.path }}
+      nfs_server: {{ .Values.node.nfs.server }}
 {{- end}}
