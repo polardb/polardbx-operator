@@ -1,3 +1,0 @@
-[submodule "docs/zh"]
-	path = docs/zh
-	url = https://github.com/ApsaraDB/polardb-x-operator-docs.git

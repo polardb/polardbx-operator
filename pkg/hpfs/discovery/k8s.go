@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"reflect"
 	"strings"
 	"sync"
@@ -31,6 +32,10 @@ import (
 	"k8s.io/client-go/rest"
 
 	k8shelper "github.com/alibaba/polardbx-operator/pkg/k8s/helper"
+)
+
+const (
+	HpfsNodeJsonFilePath = "/tools/xstore/hdfs-nodes.json"
 )
 
 type k8sHostDiscovery struct {
@@ -106,12 +111,17 @@ func (h *k8sHostDiscovery) sync() error {
 		if sshPort == nil {
 			continue
 		}
+		filestreamPort := k8shelper.GetPortFromContainer(c, "filestream")
+		if filestreamPort == nil {
+			continue
+		}
 
 		hosts[p.Spec.NodeName] = HostInfo{
 			NodeName: p.Spec.NodeName,
 			HpfsHost: p.Status.PodIP,
 			HpfsPort: uint32(hpfsPort.ContainerPort),
 			SshPort:  uint32(sshPort.ContainerPort),
+			FsPort:   uint32(filestreamPort.ContainerPort),
 		}
 	}
 
@@ -126,6 +136,14 @@ func (h *k8sHostDiscovery) sync() error {
 	if toPrint {
 		s, _ := json.Marshal(h.aliveHosts)
 		fmt.Println("alive hosts: " + string(s))
+		os.Remove(HpfsNodeJsonFilePath)
+		f, err := os.OpenFile(HpfsNodeJsonFilePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
+		if err != nil {
+			fmt.Println(fmt.Errorf("failed to open file %w", err))
+		} else {
+			f.Write(s)
+			f.Close()
+		}
 	}
 
 	return nil

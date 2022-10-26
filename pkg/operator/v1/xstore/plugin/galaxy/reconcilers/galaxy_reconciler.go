@@ -57,6 +57,7 @@ func (r *GalaxyReconciler) Reconcile(rc *xstorev1reconcile.Context, log logr.Log
 
 func (r *GalaxyReconciler) newReconcileTask(rc *xstorev1reconcile.Context, xstore *polardbxv1.XStore, log logr.Logger) (*control.Task, error) {
 	task := control.NewTask()
+	readonly := xstore.Spec.Readonly
 
 	// Deferred steps, will always be executed in the deferred sequence.
 	defer instancesteps.PersistentStatus(task, true)
@@ -95,12 +96,17 @@ func (r *GalaxyReconciler) newReconcileTask(rc *xstorev1reconcile.Context, xstor
 		// Update the observed generation at the end of pending phase.
 		instancesteps.UpdateObservedGeneration(task)
 		instancesteps.UpdateObservedTopologyAndConfig(task)
+		instancesteps.InitializeParameterTemplate(task)
 
-		// TODO Transfer to creating or restoring phase.
-		instancesteps.UpdatePhaseTemplate(polardbxv1xstore.PhaseCreating)(task)
+		if xstore.Spec.Restore == nil {
+			instancesteps.UpdatePhaseTemplate(polardbxv1xstore.PhaseCreating)(task)
+		} else {
+			instancesteps.CheckXStoreRestoreSpec(task)
+			instancesteps.UpdatePhaseTemplate(polardbxv1xstore.PhaseRestoring)(task)
+		}
 	case polardbxv1xstore.PhaseCreating:
 		// Create pods and save volumes/ports into status.
-		galaxyinstancesteps.CreatePodsAndHeadlessServices(task)
+		galaxyinstancesteps.CreatePodsAndServices(task)
 		instancesteps.BindHostPathVolumesToHost(task)
 		instancesteps.BindPodPorts(task)
 
@@ -118,25 +124,86 @@ func (r *GalaxyReconciler) newReconcileTask(rc *xstorev1reconcile.Context, xstor
 
 		// Role reconciliation.
 		instancesteps.ReconcileConsensusRoleLabels(task)
-
 		instancesteps.WaitUntilLeaderElected(task)
-
+		control.When(readonly,
+			instancesteps.AddLearnerNodesToClusterOnLeader,
+			instancesteps.RestoreToLearner,
+		)(task)
 		// Try to initialize things on leader.
-		instancesteps.CreateAccounts(task)
+		control.When(!readonly,
+			instancesteps.CreateAccounts,
+		)(task)
+		xstoreplugincommonsteps.SetVoterElectionWeightToOne(task)
 
 		// Check connectivity and set engine version into status.
 		control.Branch(debug.IsDebugEnabled(),
 			instancesteps.QueryAndUpdateEngineVersion,          // Query the engine version via command. (DEBUG)
-			instancesteps.CheckConnectivityAndSetEngineVersion, // Updates the engine version by accessing directly.
+			instancesteps.CheckConnectivityAndSetEngineVersion, // Updates the engine version by accessing directly
 		)(task)
 
 		// Go to phase "Running".
 		instancesteps.UpdatePhaseTemplate(polardbxv1xstore.PhaseRunning)(task)
 	case polardbxv1xstore.PhaseRestoring:
-		// TODO impl restoring
+		switch xstore.Status.Stage {
+		case polardbxv1xstore.StageEmpty:
+			// Create pods and save volumes/ports into status.
+			galaxyinstancesteps.CreatePodsAndServices(task)
+			instancesteps.BindHostPathVolumesToHost(task)
+			instancesteps.BindPodPorts(task)
+
+			// Wait until pods' scheduled.
+			instancesteps.WaitUntilPodsScheduled(task)
+
+			xstoreplugincommonsteps.SyncNodesInfoAndKeepBlock(task)
+			instancesteps.PrepareRestoreJobContext(task)
+			instancesteps.StartRestoreJob(task)
+			instancesteps.WaitUntilRestoreJobFinished(task)
+			// Unblock bootstrap.
+			xstoreplugincommonsteps.UnblockBootstrap(task)
+
+			// Wait until leader ready.
+			instancesteps.WaitUntilCandidatesAndVotersReady(task)
+
+			// Role reconciliation.
+			instancesteps.ReconcileConsensusRoleLabels(task)
+
+			instancesteps.WaitUntilLeaderElected(task)
+
+			instancesteps.StartRecoverJob(task)
+			instancesteps.WaitUntilRecoverJobFinished(task)
+
+			// Check connectivity and set engine version into status.
+			control.Branch(debug.IsDebugEnabled(),
+				instancesteps.QueryAndUpdateEngineVersion,          // Query the engine version via command. (DEBUG)
+				instancesteps.CheckConnectivityAndSetEngineVersion, // Updates the engine version by accessing directly.
+			)(task)
+
+			instancesteps.UpdateStageTemplate(polardbxv1xstore.StageClean)(task)
+		case polardbxv1xstore.StageClean:
+			// clean up restore context
+			instancesteps.RemoveRestoreJob(task)
+			instancesteps.RemoveRecoverJob(task)
+
+			// Go to phase "Running".
+			instancesteps.UpdateStageTemplate(polardbxv1xstore.StageEmpty)(task)
+			instancesteps.UpdatePhaseTemplate(polardbxv1xstore.PhaseRunning)(task)
+		}
 	case polardbxv1xstore.PhaseRunning:
 		switch xstore.Status.Stage {
 		case polardbxv1xstore.StageEmpty:
+			// Restart xstore when restart parameters changed
+			control.When(rc.GetXStoreRestarting(),
+				instancesteps.GetRestartingPods,
+				instancesteps.UpdatePhaseTemplate(polardbxv1xstore.PhaseRestarting, true),
+			)(task)
+
+			// Update my.cnf.override when xstore parameters changed
+			control.When(rc.GetXStoreUpdateConfingMap(),
+				control.Block(instancesteps.UpdatePhaseTemplate(polardbxv1xstore.PhaseUpgrading),
+					instancesteps.UpdateStageTemplate(polardbxv1xstore.StageUpdate, true),
+				),
+			)(task)
+
 			// Role reconciliation.
 			if featuregate.EnableGalaxyClusterMode.Enabled() {
 				instancesteps.ReconcileConsensusRoleLabels(task)
@@ -151,6 +218,16 @@ func (r *GalaxyReconciler) newReconcileTask(rc *xstorev1reconcile.Context, xstor
 				instancesteps.UpdatePhaseTemplate(polardbxv1xstore.PhaseRepairing),
 				control.Retry("Start repairing..."),
 			)(task)
+
+			// Wait until leader ready.
+			instancesteps.WaitUntilCandidatesAndVotersReady(task)
+
+			// Role reconciliation.
+			instancesteps.ReconcileConsensusRoleLabels(task)
+			control.When(readonly,
+				instancesteps.AddLearnerNodesToClusterOnLeader,
+			)(task)
+			instancesteps.WaitUntilLeaderElected(task)
 
 			// Purge logs with interval specified (but not less than 2 minutes).
 			logPurgeInterval := 2 * time.Minute
@@ -171,9 +248,23 @@ func (r *GalaxyReconciler) newReconcileTask(rc *xstorev1reconcile.Context, xstor
 				control.Retry("Start locking..."),
 			)(task)
 
+			instancesteps.WhenEngineConfigChanged(
+				//Sync engine config map
+				instancesteps.SyncEngineConfigMap,
+			)(task)
+
+			// Sync my.cnf from my.cnf.override
+			instancesteps.UpdateMycnfParameters(task)
+
 			// Goto upgrading if topology changed. (not breaking the task flow)
 			instancesteps.WhenTopologyChanged(
 				instancesteps.UpdatePhaseTemplate(polardbxv1xstore.PhaseUpgrading),
+			)(task)
+
+			//Goto upgrading if some dynamic config changed
+			instancesteps.WhenDynamicConfigChanged(
+				instancesteps.UpdatePhaseTemplate(polardbxv1xstore.PhaseUpgrading),
+				control.Retry("Start PhaseUpgrading..."),
 			)(task)
 
 			// Update the observed generation at the end of running phase.
@@ -253,8 +344,21 @@ func (r *GalaxyReconciler) newReconcileTask(rc *xstorev1reconcile.Context, xstor
 		case polardbxv1xstore.StageClean:
 			instancesteps.DeleteExecutionContext(task)
 			instancesteps.UpdatePhaseTemplate(polardbxv1xstore.PhaseRunning, true)(task)
+		case polardbxv1xstore.StageUpdate:
+			instancesteps.GetParametersRoleMap(task)
+			instancesteps.UpdateXStoreConfigMap(task)
+			instancesteps.SetGlobalVariables(task)
+			instancesteps.CloseXStoreUpdatePhase(task)
+			instancesteps.UpdatePhaseTemplate(polardbxv1xstore.PhaseRunning, true)(task)
 		}
+
 	case polardbxv1xstore.PhaseDeleting:
+		//try clean xStore follower job
+		instancesteps.CleanRebuildJob(task)
+
+		control.When(readonly,
+			instancesteps.DropLearnerOnLeader,
+		)(task)
 		// Cancel all async tasks.
 		instancesteps.CancelAsyncTasks(task)
 
@@ -269,6 +373,19 @@ func (r *GalaxyReconciler) newReconcileTask(rc *xstorev1reconcile.Context, xstor
 
 		// Then let it go.
 		instancesteps.RemoveFinalizerFromXStore(task)
+	case polardbxv1xstore.PhaseRestarting:
+		instancesteps.WhenPodsDeletedFound(
+			instancesteps.UpdatePhaseTemplate(polardbxv1xstore.PhaseRepairing),
+			control.Retry("Start repairing..."),
+		)(task)
+		// Restart DN by deleting pods
+		control.Branch(
+			instancesteps.IsRollingRestart(xstore),
+			instancesteps.RollingRestartPods,
+			instancesteps.RestartingPods,
+		)(task)
+		instancesteps.CloseXStoreRestartPhase(task)
+		instancesteps.UpdatePhaseTemplate(polardbxv1xstore.PhaseRunning, true)(task)
 	case polardbxv1xstore.PhaseFailed:
 		log.Info("Failed.")
 	case polardbxv1xstore.PhaseUnknown:

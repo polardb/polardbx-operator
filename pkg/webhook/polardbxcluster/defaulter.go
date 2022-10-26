@@ -18,6 +18,7 @@ package polardbxcluster
 
 import (
 	"context"
+	"k8s.io/apimachinery/pkg/util/rand"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -48,6 +49,12 @@ func (d *PolarDBXClusterV1Defaulter) Default(ctx context.Context, obj runtime.Ob
 		polardbx.Spec.ProtocolVersion = intstr.FromString("8.0")
 	}
 
+	if polardbx.Spec.Config.CN.Static != nil {
+		if polardbx.Spec.Config.CN.Static.RPCProtocolVersion.String() == "" {
+			polardbx.Spec.Config.CN.Static.RPCProtocolVersion = intstr.FromString("1")
+		}
+	}
+
 	// Service name, default to the object name.
 	if polardbx.Spec.ServiceName == "" {
 		polardbx.Spec.ServiceName = polardbx.Name
@@ -71,6 +78,18 @@ func (d *PolarDBXClusterV1Defaulter) Default(ctx context.Context, obj runtime.Ob
 	}
 	if nodes.DN.Template.Engine == "" {
 		nodes.DN.Template.Engine = d.configLoader().StorageEngine
+	}
+
+	// Readonly cluster initialization list
+	if polardbx.Spec.InitReadonly != nil {
+		for i, readonlyParam := range polardbx.Spec.InitReadonly {
+			if readonlyParam.CnReplicas < 0 {
+				polardbx.Spec.InitReadonly[i].CnReplicas = 0
+			}
+			if readonlyParam.Name == "" {
+				polardbx.Spec.InitReadonly[i].Name = "ro-" + rand.String(4)
+			}
+		}
 	}
 
 	return nil

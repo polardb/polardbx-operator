@@ -18,6 +18,7 @@ package factory
 
 import (
 	"fmt"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"strconv"
 	"strings"
 
@@ -47,9 +48,10 @@ type EnvFactory interface {
 }
 
 type envFactory struct {
-	rc       *polardbxv1reconcile.Context
-	polardbx *polardbxv1.PolarDBXCluster
-	cipher   security.PasswordCipher
+	rc         *polardbxv1reconcile.Context
+	polardbx   *polardbxv1.PolarDBXCluster
+	cipher     security.PasswordCipher
+	objFactory *objectFactory
 }
 
 func (e *envFactory) newValueFromObjectFiled(fieldPath string) *corev1.EnvVarSource {
@@ -121,11 +123,22 @@ func (e *envFactory) roundDownMemory(memory int64, min int64, left int64) int64 
 	}
 }
 
-func (e *envFactory) newBasicEnvVarsForCNEngine(gmsConn *StorageConnection, ports *CNPorts, cpuLimit, memoryLimit int64, storageEngine string) []corev1.EnvVar {
+func (e *envFactory) newBasicEnvVarsForCNEngine(gmsConn *StorageConnection, ports *CNPorts, cpuLimit, memoryLimit int64, storageEngine string, readonly bool, attendHtap bool) []corev1.EnvVar {
 
 	// At least 2Gi and left 1Gi for non JVM usage.
 	const minMemoryBytes, leftMemoryBytes = int64(2) << 30, int64(1) << 30
 	containerAwareMemoryLimit := e.roundDownMemory(memoryLimit, minMemoryBytes, leftMemoryBytes)
+
+	var instanceType string
+	if readonly {
+		if attendHtap {
+			instanceType = gms.HtapReadOnlyCluster.String()
+		} else {
+			instanceType = gms.ReadOnlyCluster.String()
+		}
+	} else {
+		instanceType = gms.MasterCluster.String()
+	}
 
 	envs := []corev1.EnvVar{
 		{Name: "switchCloud", Value: "aliyun"},
@@ -138,7 +151,7 @@ func (e *envFactory) newBasicEnvVarsForCNEngine(gmsConn *StorageConnection, port
 		{Name: "storageDbXprotoPort", Value: strconv.Itoa(0)},
 		{Name: "metaDbConn", Value: fmt.Sprintf("mysql -h%s -P%d -u%s -p%s -D%s", gmsConn.Host, gmsConn.Port, gmsConn.User, gmsConn.Passwd, gms.MetaDBName)},
 		{Name: "instanceId", Value: e.polardbx.Name},
-		{Name: "instanceType", Value: gms.MasterCluster.String()},
+		{Name: "instanceType", Value: instanceType},
 		{Name: "serverPort", Value: strconv.Itoa(ports.AccessPort)},
 		{Name: "mgrPort", Value: strconv.Itoa(ports.MgrPort)},
 		{Name: "mppPort", Value: strconv.Itoa(ports.MppPort)},
@@ -161,9 +174,21 @@ func (e *envFactory) newBasicEnvVarsForCNEngine(gmsConn *StorageConnection, port
 
 	// Switch on the protocol for galaxy engine.
 	if storageEngine == "galaxy" {
+		staticConfig := e.polardbx.Spec.Config.CN.Static
+		galaxyXProtocolVersion := intstr.FromInt(1)
+		if staticConfig != nil {
+			galaxyXProtocolVersion = staticConfig.RPCProtocolVersion
+		}
 		envs = append(envs, corev1.EnvVar{
 			Name:  "galaxyXProtocol",
-			Value: "1",
+			Value: galaxyXProtocolVersion.String(),
+		})
+	}
+
+	if e.polardbx.Spec.Readonly {
+		envs = append(envs, corev1.EnvVar{
+			Name:  "primaryInstanceId",
+			Value: e.polardbx.Spec.PrimaryCluster,
 		})
 	}
 
@@ -221,7 +246,7 @@ func (e *envFactory) newJvmInjectionEnvVarForCNEngine(debugPort int) corev1.EnvV
 	staticConfig := e.polardbx.Spec.Config.CN.Static
 	if staticConfig != nil {
 		if staticConfig.EnableCoroutine {
-			tddlOpts = append(tddlOpts, "-XX:+UseWisp2", "-Dio.grpc.netty.shaded.io.netty.transport.noNative=true")
+			tddlOpts = append(tddlOpts, "-XX:+UseWisp2", "-Dio.grpc.netty.shaded.io.netty.transport.noNative=true", "-Dio.netty.transport.noNative=true")
 		}
 		if staticConfig.EnableJvmRemoteDebug {
 			tddlOpts = append(tddlOpts, fmt.Sprintf("-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=%d", debugPort))
@@ -265,10 +290,15 @@ func (e *envFactory) NewEnvVarsForCNEngine(gmsConn StorageConnection, ports CNPo
 	cpuLimit := template.Resources.Limits.Cpu().Value()
 	memoryLimit := template.Resources.Limits.Memory().Value()
 
+	attendHtap := false
+	staticConfig := e.polardbx.Spec.Config.CN.Static
+	if staticConfig != nil {
+		attendHtap = staticConfig.AttendHtap
+	}
 	// Basic environment variables.
 	systemEnvs := e.NewSystemEnvVars()
 	basicEnvs := e.newBasicEnvVarsForCNEngine(&gmsConn, &ports,
-		cpuLimit, memoryLimit, topology.Nodes.DN.Template.Engine)
+		cpuLimit, memoryLimit, topology.Nodes.DN.Template.Engine, e.polardbx.Spec.Readonly, attendHtap)
 
 	systemAndBasicEnvKeys := make(map[string]struct{})
 	for _, e := range systemEnvs {
@@ -309,10 +339,23 @@ func (e *envFactory) newBasicEnvVarsForCDCEngine(gmsConn *StorageConnection) []c
 		pxcServiceName = e.polardbx.Name
 	}
 
+	//binlog types,type1: BINLOG for global binlog; type2: BINLOG_X for multiple binlog streams
+	clusterType := "BINLOG"
+	objf := e.objFactory
+	if objf != nil && objf.buildContext.BuildCdcXBinLog {
+		if objf.buildContext.HasCdcXBinLog {
+			if objf.buildContext.BuildCdcXBinLog {
+				clusterType = "BINLOG_X"
+			}
+		}
+	}
+	clusterId := e.polardbx.Name + "-" + clusterType
+
 	// FIXME CDC currently doesn't support host network, so ports are hard coded.
 	return []corev1.EnvVar{
 		{Name: "switchCloud", Value: "aliyun"},
-		{Name: "cluster_id", Value: e.polardbx.Name},
+		{Name: "cluster_id", Value: clusterId},
+		{Name: "cluster_type", Value: clusterType},
 		{Name: "ins_id", ValueFrom: e.newValueFromObjectFiled("metadata.uid")},
 		{Name: "ins_ip", ValueFrom: e.newValueFromObjectFiled("status.podIP")},
 		{Name: "daemon_port", Value: "3007"},
@@ -337,10 +380,10 @@ func (e *envFactory) NewEnvVarsForCDCEngine(gmsConn StorageConnection) []corev1.
 	return append(systemEnvs, basicEnvs...)
 }
 
-func NewEnvFactory(rc *polardbxv1reconcile.Context, polardbx *polardbxv1.PolarDBXCluster) (EnvFactory, error) {
+func NewEnvFactory(rc *polardbxv1reconcile.Context, polardbx *polardbxv1.PolarDBXCluster, objectFactory *objectFactory) (EnvFactory, error) {
 	cipher, err := rc.GetPolarDBXPasswordCipher()
 	if err != nil {
 		return nil, fmt.Errorf("unable to get polardbx password cipher: %w", err)
 	}
-	return &envFactory{rc: rc, polardbx: polardbx, cipher: cipher}, nil
+	return &envFactory{rc: rc, polardbx: polardbx, cipher: cipher, objFactory: objectFactory}, nil
 }

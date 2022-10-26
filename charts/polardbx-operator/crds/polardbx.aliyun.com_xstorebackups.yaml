@@ -1,0 +1,120 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.9.0
+  creationTimestamp: null
+  name: xstorebackups.polardbx.aliyun.com
+spec:
+  group: polardbx.aliyun.com
+  names:
+    kind: XStoreBackup
+    listKind: XStoreBackupList
+    plural: xstorebackups
+    shortNames:
+    - xsbackup
+    - xsbackups
+    - xsb
+    singular: xstorebackup
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.xstore.name
+      name: XSTORE
+      type: string
+    - jsonPath: .status.startTime
+      name: START
+      type: string
+    - jsonPath: .status.endTime
+      name: END
+      type: string
+    - jsonPath: .status.phase
+      name: PHASE
+      type: string
+    - jsonPath: .spec.retentionTime
+      name: RETENTION
+      priority: 1
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: AGE
+      type: date
+    name: v1
+    schema:
+      openAPIV3Schema:
+        description: XStoreBackup is the Schema for the XStorebackups API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: XStoreBackupSpec defines the desired state of XStoreBackup
+            properties:
+              engine:
+                default: galaxy
+                description: Engine is the engine used by xstore. Default is "galaxy".
+                type: string
+              retentionTime:
+                type: string
+              storageProvider:
+                description: file storage
+                properties:
+                  sink:
+                    description: Sink defines the storage configuration choose to
+                      perform backup
+                    type: string
+                  storageName:
+                    description: StorageName defines the storage medium used to perform
+                      backup
+                    type: string
+                type: object
+              timezone:
+                type: string
+              xstore:
+                properties:
+                  name:
+                    type: string
+                type: object
+            type: object
+          status:
+            description: XStoreBackupStatus defines the observed state of XStoreBackup
+            properties:
+              backupRootPath:
+                description: BackupRootPath stores the root path of backup set
+                type: string
+              backupSetTimestamp:
+                description: BackupSetTimestamp records timestamp of last event included
+                  in tailored binlog
+                format: date-time
+                type: string
+              commitIndex:
+                format: int64
+                type: integer
+              endTime:
+                format: date-time
+                type: string
+              phase:
+                type: string
+              startTime:
+                format: date-time
+                type: string
+              storageName:
+                description: StorageName represents the kind of Storage
+                type: string
+              targetPod:
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

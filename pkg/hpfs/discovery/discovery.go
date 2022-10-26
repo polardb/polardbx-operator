@@ -31,6 +31,7 @@ type HostInfo struct {
 	HpfsHost string
 	HpfsPort uint32
 	SshPort  uint32
+	FsPort   uint32
 }
 
 type HostDiscovery interface {

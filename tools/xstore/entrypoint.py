@@ -57,11 +57,18 @@ fi''' % (current_path + '/venv/bin', current_path))
 
 @click.command()
 @click.option('--initialize', is_flag=True)
+@click.option('--restore-prepare', is_flag=True)
 @click.option('--debug', is_flag=True)
 @click.option('--ignore-indicates', is_flag=True)
-def _start(initialize, debug, ignore_indicates):
+@click.option('--force', is_flag=True)
+@click.option('--cluster-start-index', type=str)
+def _start(initialize, restore_prepare, debug, ignore_indicates, cluster_start_index, force):
     # Construct a new context.
     context = Context()
+
+    if restore_prepare:
+        context.set_restore_prepare(True)
+
     mgr = Manager(context)
 
     if debug:
@@ -81,14 +88,28 @@ def _start(initialize, debug, ignore_indicates):
 
     _write_convenient_access_script(context)
 
+    if cluster_start_index is not None:
+        engine.set_cluster_start_index(cluster_start_index)
+
+    if not force:
+        engine.wait_for_enable()
+
     if not engine.is_initialized():
         logging.info('Begin to initialize...')
         engine.initialize()
         logging.info('Initialized!')
 
+    if restore_prepare:
+        engine.set_restore_prepare(True)
+        engine.clean_data_log()
+
+
     # Bootstrap when not only initialize.
     if not initialize:
         logging.info('Bootstrapping engine %s ...' % context.engine_name())
+        engine.update_config()
+        # mv log file if log_data_separation config changes
+        engine.try_move_log_file()
         engine.bootstrap()
 
 

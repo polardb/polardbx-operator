@@ -30,6 +30,8 @@ type config struct {
 	ClusterConfig   clusterConfig   `json:"cluster,omitempty"`
 	StoreConfig     storeConfig     `json:"store,omitempty"`
 	SecurityConfig  securityConfig  `json:"security,omitempty"`
+	OssConfig       ossConfig       `json:"oss,omitempty"`
+	NfsConfig       nfsConfig       `json:"nfs,omitempty"`
 }
 
 func (c *config) Security() SecurityConfig {
@@ -50,6 +52,14 @@ func (c *config) Store() StoreConfig {
 
 func (c *config) Scheduler() SchedulerConfig {
 	return &c.SchedulerConfig
+}
+
+func (c *config) Oss() OssConfig {
+	return &c.OssConfig
+}
+
+func (c *config) Nfs() NfsConfig {
+	return &c.NfsConfig
 }
 
 type imagesConfig struct {
@@ -185,6 +195,14 @@ func (c *storeConfig) HostPathDataVolumeRoot() string {
 	return defaults.NonEmptyStrOrDefault(c.HostPaths["volume_data"], "/data/xstore")
 }
 
+func (c *storeConfig) HostPathLogVolumeRoot() string {
+	return defaults.NonEmptyStrOrDefault(c.HostPaths["volume_log"], "/data-log/xstore")
+}
+
+func (c *storeConfig) HostPathFilestreamVolumeRoot() string {
+	return defaults.NonEmptyStrOrDefault(c.HostPaths["volume_filestream"], "/filestream")
+}
+
 func (c *storeConfig) HostPathFileServiceEndpoint() string {
 	return c.HpfsEndpoint
 }
@@ -195,4 +213,40 @@ type securityConfig struct {
 
 func (c *securityConfig) DefaultEncodeKey() string {
 	return c.EncodeKey
+}
+
+type ossConfig struct {
+	OssEndpoint     string `json:"oss_endpoint,omitempty"`
+	OssBucket       string `json:"oss_bucket,omitempty"`
+	OssAccessKey    string `json:"oss_access_key,omitempty"`
+	OssAccessSecret string `json:"oss_access_secret,omitempty"`
+}
+
+func (c *ossConfig) Endpoint() string {
+	return c.OssEndpoint
+}
+
+func (c *ossConfig) Bucket() string {
+	return c.OssBucket
+}
+
+func (c *ossConfig) AccessKey() string {
+	return c.OssAccessKey
+}
+
+func (c *ossConfig) AccessSecret() string {
+	return c.OssAccessSecret
+}
+
+type nfsConfig struct {
+	NfsPath   string `json:"nfs_path,omitempty"`
+	NfsServer string `json:"nfs_server,omitempty"`
+}
+
+func (c *nfsConfig) Path() string {
+	return c.NfsPath
+}
+
+func (c *nfsConfig) Server() string {
+	return c.NfsServer
 }

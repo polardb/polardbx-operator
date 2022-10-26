@@ -83,9 +83,7 @@ func (r *PolarDBXMonitorReconciler) Reconcile(ctx context.Context, request recon
 	return r.reconcile(rc, monitor, logger)
 }
 
-func (r *PolarDBXMonitorReconciler) newReconcileTask(rc *polardbxreconcile.Context,
-	monitor *polardbxv1.PolarDBXMonitor,
-	log logr.Logger) *control.Task {
+func (r *PolarDBXMonitorReconciler) newReconcileTask(rc *polardbxreconcile.Context, monitor *polardbxv1.PolarDBXMonitor, log logr.Logger) *control.Task {
 	task := control.NewTask()
 
 	defer monitorsteps.PersistPolarDBXMonitor(task, true)
@@ -110,9 +108,7 @@ func (r *PolarDBXMonitorReconciler) newReconcileTask(rc *polardbxreconcile.Conte
 	return task
 }
 
-func (r *PolarDBXMonitorReconciler) reconcile(rc *polardbxreconcile.Context,
-	polardbxmonitor *polardbxv1.PolarDBXMonitor,
-	log logr.Logger) (reconcile.Result, error) {
+func (r *PolarDBXMonitorReconciler) reconcile(rc *polardbxreconcile.Context, polardbxmonitor *polardbxv1.PolarDBXMonitor, log logr.Logger) (reconcile.Result, error) {
 	log = log.WithValues("status", polardbxmonitor.Status.MonitorStatus)
 
 	task := r.newReconcileTask(rc, polardbxmonitor, log)

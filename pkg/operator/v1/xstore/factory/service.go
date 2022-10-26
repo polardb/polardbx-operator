@@ -19,6 +19,7 @@ package factory
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 
 	polardbxv1 "github.com/alibaba/polardbx-operator/api/v1"
 	k8shelper "github.com/alibaba/polardbx-operator/pkg/k8s/helper"
@@ -26,19 +27,30 @@ import (
 	xstoremeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/meta"
 )
 
-func NewHeadlessService(xstore *polardbxv1.XStore, podName string) *corev1.Service {
+func NewClusterIpService(xstore *polardbxv1.XStore, pod *corev1.Pod) *corev1.Service {
+	accessPort := k8shelper.MustGetPortFromContainer(
+		k8shelper.MustGetContainerFromPod(pod, convention.ContainerEngine),
+		convention.PortAccess,
+	).ContainerPort
+	polarxPort := k8shelper.MustGetPortFromContainer(
+		k8shelper.MustGetContainerFromPod(pod, convention.ContainerEngine),
+		"polarx",
+	).ContainerPort
+	paxosPort := k8shelper.MustGetPortFromContainer(
+		k8shelper.MustGetContainerFromPod(pod, convention.ContainerEngine),
+		"paxos",
+	).ContainerPort
 	serviceLabels := k8shelper.DeepCopyStrMap(xstore.Spec.ServiceLabels)
-
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      convention.NewHeadlessServiceName(podName),
+			Name:      convention.NewClusterIpServiceName(pod.Name),
 			Namespace: xstore.Namespace,
 			Labels: k8shelper.PatchLabels(
 				serviceLabels,
 				convention.ConstLabels(xstore),
 				map[string]string{
-					xstoremeta.LabelServiceType: xstoremeta.ServiceTypeHeadless,
-					xstoremeta.LabelPod:         podName,
+					xstoremeta.LabelServiceType: xstoremeta.ServiceTypeClusterIp,
+					xstoremeta.LabelPod:         pod.Name,
 				},
 			),
 			Annotations: map[string]string{},
@@ -48,13 +60,31 @@ func NewHeadlessService(xstore *polardbxv1.XStore, podName string) *corev1.Servi
 			Selector: k8shelper.PatchLabels(
 				convention.ConstLabels(xstore),
 				map[string]string{
-					xstoremeta.LabelPod: podName,
+					xstoremeta.LabelPod: pod.Name,
 				},
 			),
-			// Headless by setting .spec.clusterIP to None explicitly.
-			ClusterIP: corev1.ClusterIPNone,
 			// Must publish not ready addresses.
 			PublishNotReadyAddresses: true,
+			Ports: []corev1.ServicePort{
+				{
+					Name:       convention.PortAccess,
+					Protocol:   corev1.ProtocolTCP,
+					TargetPort: intstr.FromString(convention.PortAccess),
+					Port:       accessPort,
+				},
+				{
+					Name:       "polarx",
+					Protocol:   corev1.ProtocolTCP,
+					TargetPort: intstr.FromString("polarx"),
+					Port:       polarxPort,
+				},
+				{
+					Name:       "paxos",
+					Protocol:   corev1.ProtocolTCP,
+					TargetPort: intstr.FromString("paxos"),
+					Port:       paxosPort,
+				},
+			},
 		},
 	}
 }

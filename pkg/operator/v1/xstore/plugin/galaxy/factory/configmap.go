@@ -23,14 +23,13 @@ import (
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/convention"
 	xstorecommonfactory "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/factory"
 	xstoreplugincommonfactory "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/plugin/common/factory"
-	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/plugin/galaxy/galaxy"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/reconcile"
 )
 
 func NewConfigMap(rc *reconcile.Context, xstore *polardbxv1.XStore, cmType convention.ConfigMapType) (*corev1.ConfigMap, error) {
 	switch cmType {
 	case convention.ConfigMapTypeConfig:
-		return xstorecommonfactory.NewConfigConfigMap(rc, xstore, galaxy.Engine)
+		return xstorecommonfactory.NewConfigConfigMap(rc, xstore)
 	case convention.ConfigMapTypeShared:
 		return xstoreplugincommonfactory.NewSharedConfigMap(xstore)
 	case convention.ConfigMapTypeTask:

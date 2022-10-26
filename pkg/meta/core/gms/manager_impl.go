@@ -21,11 +21,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"runtime"
-	"strings"
-
+	meta2 "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/meta"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
+	"runtime"
+	"strings"
 
 	"github.com/alibaba/polardbx-operator/pkg/meta/core/gms/security"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/convention"
@@ -33,6 +33,7 @@ import (
 )
 
 // These are initialization DMLs for metadb.
+//
 //goland:noinspection SqlNoDataSourceInspection,SqlDialectInspection
 const (
 	createTableServerInfoIfNotExists = `CREATE TABLE IF NOT EXISTS server_info (
@@ -368,7 +369,7 @@ func (meta *manager) ExecuteStatementsOnMetaDBInTransaction(statements ...string
 }
 
 //goland:noinspection SqlDialectInspection
-func (meta *manager) IsMetaDBInitialized() (bool, error) {
+func (meta *manager) IsMetaDBExisted() (bool, error) {
 	if exists, err := meta.checkMetaDBIfDatabaseExist(meta.ctx); err != nil {
 		return false, err
 	} else if !exists {
@@ -405,16 +406,54 @@ func (meta *manager) IsMetaDBInitialized() (bool, error) {
 		}
 		return false, err
 	}
-	if cnt != 1 {
+	if cnt == 0 {
 		return false, nil
 	}
 
 	return initialized, nil
 }
 
+//goland:noinspection SqlDialectInspection
+func (meta *manager) IsMetaDBInitialized(clusterId string) (bool, error) {
+	existed, err := meta.IsMetaDBExisted()
+
+	if err != nil {
+		return false, err
+	}
+
+	if !existed {
+		return false, nil
+	}
+
+	conn, err := meta.getConnectionForMetaDB(meta.ctx)
+	if err != nil {
+		return false, err
+	}
+	defer dbutil.DeferClose(conn)
+
+	ctx := meta.ctx
+	// Check if k8s_topology contains current cluster
+	//goland:noinspection SqlNoDataSourceInspection,SqlResolve
+	row := conn.QueryRowContext(ctx, `SELECT count(1) FROM k8s_topology WHERE name = ?`, clusterId)
+	cnt := 0
+	if err = row.Scan(&cnt); err != nil {
+		if dbutil.IsMySQLErrTableNotExists(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	if cnt == 0 {
+		return false, nil
+	}
+
+	return true, nil
+}
+
 func (meta *manager) newStorageNodeInfoForMetaDB() StorageNodeInfo {
 	return StorageNodeInfo{
 		Id:            meta.metadb.Id,
+		MasterId:      meta.metadb.Id,
+		ClusterId:     meta.getClusterID(),
 		Host:          meta.metadb.Host,
 		Port:          int32(meta.metadb.Port),
 		XProtocolPort: int32(meta.metadb.XPort),
@@ -426,11 +465,12 @@ func (meta *manager) newStorageNodeInfoForMetaDB() StorageNodeInfo {
 		MaxConn:       10000,
 		CpuCore:       4,
 		MemSize:       int64(8) << 30,
+		IsVip:         IsVip,
 	}
 }
 
 //goland:noinspection SqlNoDataSourceInspection,SqlResolve,SqlDialectInspection
-func (meta *manager) InitializeMetaDB() error {
+func (meta *manager) InitializeMetaDBSchema() error {
 	// Create database if not exists
 	if err := meta.createMetaDBDatabaseIfNotExist(meta.ctx); err != nil {
 		return err
@@ -463,20 +503,32 @@ func (meta *manager) InitializeMetaDB() error {
 		return errors.New("unable to insert metadb record: " + err.Error())
 	}
 
-	// Insert the default quarantine config
-	//goland:noinspection SqlNoDataSourceInspection, SqlResolve
-	if _, err := conn.ExecContext(ctx, "INSERT IGNORE INTO `quarantine_config` VALUES (NULL, NOW(), NOW(), ?, 'default', NULL, NULL, ?)",
-		meta.getClusterID(), "0.0.0.0/0"); err != nil {
-		return errors.New("unable to insert default quarantine_config: " + err.Error())
+	// Finally initialize the k8s topology table as a sign of initialized
+	_, err = conn.ExecContext(ctx, createTableK8sTopologyIfNotExists)
+	if err != nil {
+		return errors.New("failed to create table polardbx_extra: " + err.Error())
 	}
 
+	return nil
+}
+
+//goland:noinspection SqlNoDataSourceInspection,SqlResolve,SqlDialectInspection
+func (meta *manager) InitializeMetaDBInfo(readonly bool) error {
+	conn, err := meta.getConnectionForMetaDB(meta.ctx)
+	if err != nil {
+		return err
+	}
+	defer dbutil.DeferClose(conn)
+
+	ctx := meta.ctx
+
 	// Initialize the necessary instance level config_listener records
-	for _, dataId := range []string{
+	for _, dataId := range append([]string{
 		fmt.Sprintf(clServerInfoDataIdFormat, meta.getClusterID()),
 		fmt.Sprintf(clStorageInfoDataIdFormat, meta.getClusterID()),
 		fmt.Sprintf(clConfigDataIdFormat, meta.getClusterID()),
 		fmt.Sprintf(clQuarantineConfigDataIdFormat, meta.getClusterID()),
-		clPrivilegeInfoDataId} {
+		clPrivilegeInfoDataId}) {
 		createStmt := fmt.Sprintf(`INSERT IGNORE INTO config_listener 
 						(id, gmt_created, gmt_modified, data_id, status, op_version, extras) 
 						VALUES (NULL, NOW(), NOW(), '%s', 0, 0, NULL)`, dataId)
@@ -485,10 +537,23 @@ func (meta *manager) InitializeMetaDB() error {
 		}
 	}
 
-	// Finally initialize the k8s topology table as a sign of initialized
-	_, err = conn.ExecContext(ctx, createTableK8sTopologyIfNotExists)
+	if _, err := conn.ExecContext(ctx, "INSERT IGNORE INTO `quarantine_config` VALUES (NULL, NOW(), NOW(), ?, 'default', NULL, NULL, ?)",
+		meta.getClusterID(), "0.0.0.0/0"); err != nil {
+		return errors.New("unable to insert default quarantine_config: " + err.Error())
+	}
+
+	clusterType := meta2.TypeMaster
+	if readonly {
+		clusterType = meta2.TypeReadonly
+	}
+
+	// Finally add current cluster info to k8s topology table to mark the initialization is finished
+	_, err = conn.ExecContext(ctx, fmt.Sprintf(`INSERT IGNORE INTO k8s_topology
+    							(uid, name, type, gmt_created, gmt_modified)
+								VALUES ('%s', '%s', '%s', NOW(), NOW())`, meta.getClusterID(), meta.getClusterID(), clusterType))
+
 	if err != nil {
-		return errors.New("failed to create table polardbx_extra: " + err.Error())
+		return errors.New("failed to insert record into k8s_topology: " + err.Error())
 	}
 
 	return nil
@@ -522,7 +587,7 @@ func (meta *manager) IsGmsSchemaRestored() (bool, error) {
 }
 
 //goland:noinspection SqlDialectInspection
-func (meta *manager) RestoreSchemas(fromPxcCluster string) error {
+func (meta *manager) RestoreSchemas(fromPxcCluster, fromPxcHash, PxcHash string) error {
 	conn, err := meta.getConnectionForMetaDB(meta.ctx)
 	if err != nil {
 		return err
@@ -547,7 +612,7 @@ func (meta *manager) RestoreSchemas(fromPxcCluster string) error {
 
 	// Reset the single group's storage id
 	//goland:noinspection SqlNoDataSourceInspection,SqlResolve
-	_, err = conn.ExecContext(ctx, "UPDATE inst_config SET param_val=REPLACE(param_val, ?, ?) where param_key='SINGLE_GROUP_STORAGE_INST_LIST'", fromPxcCluster, meta.getClusterID())
+	_, err = conn.ExecContext(ctx, "UPDATE inst_config SET param_val=REPLACE(param_val, ?, ?) where param_key='SINGLE_GROUP_STORAGE_INST_LIST'", fromPxcCluster+"-"+fromPxcHash, meta.getClusterID()+"-"+fromPxcHash)
 	if err != nil {
 		return errors.New("unable to reset single group's storage id: " + err.Error())
 	}
@@ -563,7 +628,7 @@ func (meta *manager) RestoreSchemas(fromPxcCluster string) error {
 	// update topologies
 	//goland:noinspection SqlNoDataSourceInspection,SqlResolve
 	_, err = conn.ExecContext(ctx, "UPDATE group_detail_info SET inst_id=?, storage_inst_id=REPLACE(storage_inst_id, ?, ?)", meta.getClusterID(),
-		fromPxcCluster, meta.getClusterID())
+		fromPxcCluster+"-"+fromPxcHash, meta.getClusterID()+"-"+PxcHash)
 	if err != nil {
 		return errors.New("unable to update group topologies: " + err.Error())
 	}
@@ -581,9 +646,32 @@ func (meta *manager) RestoreSchemas(fromPxcCluster string) error {
 		return errors.New("unable to clean config listeners: " + err.Error())
 	}
 
+	// Check available tables in meta db
+	tables := make(map[string]struct{})
+	rows, err := conn.QueryContext(ctx, "SHOW TABLES")
+	if err != nil {
+		return errors.New("unable to get available tables in meta db: " + err.Error())
+	}
+	for rows.Next() {
+		var table string
+		err = rows.Scan(&table)
+		if err != nil {
+			return errors.New("unable to get available tables in meta db: " + err.Error())
+		}
+		tables[table] = struct{}{}
+	}
+
 	// Truncate tables.
-	for _, table := range []string{"server_info", "storage_info", "quarantine_config", "inst_lock", "node_info"} {
+	for _, table := range []string{"server_info", "storage_info", "quarantine_config", "inst_lock", "node_info",
+		"backfill_objects", "scaleout_backfill_objects", "scaleout_checker_reports", "scaleout_outline",
+		"checker_reports", "ddl_engine", "ddl_engine_task", "read_write_lock", "binlog_dumper_info", "binlog_logic_meta_history",
+		"binlog_node_info", "binlog_oss_record", "binlog_phy_ddl_history", "binlog_polarx_command", "binlog_storage_history",
+		"binlog_system_config", "binlog_task_config", "binlog_task_info", "binlog_schedule_history", "inst_lock", "quarantine_config",
+		"concurrency_control_rule", "concurrency_control_trigger"} {
 		//goland:noinspection SqlNoDataSourceInspection
+		if _, ok := tables[table]; !ok {
+			continue
+		}
 		_, err := conn.ExecContext(ctx, fmt.Sprintf("TRUNCATE TABLE %s", table))
 		if err != nil {
 			return fmt.Errorf("unable to truncate table %s: %s", table, err.Error())
@@ -660,6 +748,13 @@ func (meta *manager) DisableComputeNodes(computeNodes ...ComputeNodeInfo) error 
 
 	// Execute the statement
 	return meta.ExecuteStatementsAndNotify(stmt, notifyStmt)
+}
+
+func (meta *manager) DisableAllComputeNodes(primaryPolardbxName string) error {
+	deleteStmt := fmt.Sprintf(`UPDATE server_info SET status = %d WHERE inst_id = '%s'`, PCNodeDisabled, meta.getClusterID())
+	notifyStmt := meta.newNotifyStmt(fmt.Sprintf(clStorageInfoDataIdFormat, primaryPolardbxName))
+
+	return meta.ExecuteStatementsAndNotify(deleteStmt, notifyStmt)
 }
 
 func (meta *manager) DeleteComputeNodes(computeNodes ...ComputeNodeInfo) error {
@@ -746,17 +841,17 @@ func (meta *manager) SyncComputeNodes(computeNodes ...ComputeNodeInfo) error {
 	return meta.ExecuteStatementsAndNotify(deleteStmt, insertStmt, notifyStmt)
 }
 
-func (s *StorageNodeInfo) toInsertValues(clusterId string, cipher security.PasswordCipher) string {
+func (s *StorageNodeInfo) toInsertValues(cipher security.PasswordCipher) string {
 	return fmt.Sprintf("(NULL, NOW(), NOW(), '%s', '%s', '%s', '%s', %d, %d, '%s', '%s', "+
 		"%d, %d, %d, NULL, NULL, NULL, %d, %d, %d, %d, '%s')",
-		clusterId, s.Id, s.Id, s.Host, s.Port, s.XProtocolPort, s.User, cipher.Encrypt(s.Passwd), s.Type, s.Kind,
-		PSNodeEnabled, s.MaxConn, s.CpuCore, s.MemSize, 1, s.Extra)
+		s.ClusterId, s.Id, s.MasterId, s.Host, s.Port, s.XProtocolPort, s.User, cipher.Encrypt(s.Passwd), s.Type, s.Kind,
+		PSNodeEnabled, s.MaxConn, s.CpuCore, s.MemSize, s.IsVip, s.Extra)
 }
 
 func (meta *manager) newInsertStorageNodeStatement(storageNodes ...StorageNodeInfo) string {
 	insertValues := make([]string, len(storageNodes))
 	for i, s := range storageNodes {
-		insertValues[i] = s.toInsertValues(meta.getClusterID(), meta.passwordCipher)
+		insertValues[i] = s.toInsertValues(meta.passwordCipher)
 	}
 
 	return `INSERT IGNORE INTO storage_info (id, gmt_created, gmt_modified, inst_id, storage_inst_id, storage_master_inst_id,
@@ -774,7 +869,7 @@ func (meta *manager) SyncStorageNodes(storageNodes ...StorageNodeInfo) error {
 	insertValues := make([]string, len(storageNodes))
 	for i, s := range storageNodes {
 		storageIds[i] = "'" + s.Id + "'"
-		insertValues[i] = s.toInsertValues(meta.getClusterID(), meta.passwordCipher)
+		insertValues[i] = s.toInsertValues(meta.passwordCipher)
 	}
 
 	deleteStmt := fmt.Sprintf(`DELETE FROM storage_info WHERE storage_inst_id NOT IN (%s)`, strings.Join(storageIds, ", "))
@@ -796,7 +891,7 @@ func (meta *manager) EnableStorageNodes(storageNodes ...StorageNodeInfo) error {
 	// Generate statement for insert
 	insertValues := make([]string, len(storageNodes))
 	for i, s := range storageNodes {
-		insertValues[i] = s.toInsertValues(meta.getClusterID(), meta.passwordCipher)
+		insertValues[i] = s.toInsertValues(meta.passwordCipher)
 	}
 
 	stmt := `INSERT IGNORE INTO storage_info (id, gmt_created, gmt_modified, inst_id, storage_inst_id, storage_master_inst_id,
@@ -828,6 +923,13 @@ func (meta *manager) DisableStorageNodes(storageNodes ...StorageNodeInfo) error 
 	notifyStmt := meta.newNotifyStmt(fmt.Sprintf(clStorageInfoDataIdFormat, meta.getClusterID()))
 
 	// Execute the statement
+	return meta.ExecuteStatementsAndNotify(stmt, notifyStmt)
+}
+
+func (meta *manager) DisableAllStorageNodes(primaryPolardbxName string) error {
+	stmt := fmt.Sprintf(`DELETE FROM storage_info WHERE inst_id = '%s'`, meta.getClusterID())
+	notifyStmt := meta.newNotifyStmt(fmt.Sprintf(clStorageInfoDataIdFormat, primaryPolardbxName))
+
 	return meta.ExecuteStatementsAndNotify(stmt, notifyStmt)
 }
 
@@ -916,6 +1018,13 @@ func (meta *manager) SyncDynamicParams(params map[string]string) error {
 
 	// Execute the statements
 	return meta.ExecuteStatementsAndNotify(stmt, notifyStmt)
+}
+
+func (meta *manager) SetGlobalVariables(key, value string) error {
+	stmt := fmt.Sprintf("SET GlOBAL %s=%s", key, value)
+
+	// Execute the statements
+	return meta.ExecuteStatementsAndNotify(stmt)
 }
 
 type userPrivSchema struct {

@@ -1,0 +1,188 @@
+apiVersion: v1
+data:
+  jvm.options: |
+    ## JVM configuration
+
+    # Xms represents the initial size of total heap space
+    # Xmx represents the maximum size of total heap space
+
+    -Xms1g
+    -Xmx1g
+
+    ################################################################
+    ## Expert settings
+    ################################################################
+    ##
+    ## All settings below this section are considered
+    ## expert settings. Don't tamper with them unless
+    ## you understand what you are doing
+    ##
+    ################################################################
+
+    ## GC configuration
+    11-13:-XX:+UseConcMarkSweepGC
+    11-13:-XX:CMSInitiatingOccupancyFraction=75
+    11-13:-XX:+UseCMSInitiatingOccupancyOnly
+
+    ## Locale
+    # Set the locale language
+    #-Duser.language=en
+
+    # Set the locale country
+    #-Duser.country=US
+
+    # Set the locale variant, if any
+    #-Duser.variant=
+
+    ## basic
+
+    # set the I/O temp directory
+    #-Djava.io.tmpdir=$HOME
+
+    # set to headless, just in case
+    -Djava.awt.headless=true
+
+    # ensure UTF-8 encoding by default (e.g. filenames)
+    -Dfile.encoding=UTF-8
+
+    # use our provided JNA always versus the system one
+    #-Djna.nosys=true
+
+    # Turn on JRuby invokedynamic
+    -Djruby.compile.invokedynamic=true
+    # Force Compilation
+    -Djruby.jit.threshold=0
+    # Make sure joni regexp interruptability is enabled
+    -Djruby.regexp.interruptible=true
+
+    ## heap dumps
+
+    # generate a heap dump when an allocation from the Java heap fails
+    # heap dumps are created in the working directory of the JVM
+    -XX:+HeapDumpOnOutOfMemoryError
+
+    # specify an alternative path for heap dumps
+    # ensure the directory exists and has sufficient space
+    #-XX:HeapDumpPath=${LOGSTASH_HOME}/heapdump.hprof
+
+    ## GC logging
+    #-Xlog:gc*,gc+age=trace,safepoint:file=@loggc@:utctime,pid,tags:filecount=32,filesize=64m
+
+    # log GC status to a file with time stamps
+    # ensure the directory exists
+    #-Xloggc:${LS_GC_LOG_FILE}
+
+    # Entropy source for randomness
+    -Djava.security.egd=file:/dev/urandom
+
+    # Copy the logging context from parent threads to children
+    -Dlog4j2.isThreadContextMapInheritable=true
+
+    11-:--add-opens=java.base/java.security=ALL-UNNAMED
+    11-:--add-opens=java.base/java.io=ALL-UNNAMED
+    11-:--add-opens=java.base/java.nio.channels=ALL-UNNAMED
+    11-:--add-opens=java.base/sun.nio.ch=ALL-UNNAMED
+    11-:--add-opens=java.management/sun.management=ALL-UNNAMED
+  log4j2.properties: |
+    status = error
+    name = LogstashPropertiesConfig
+
+    appender.console.type = Console
+    appender.console.name = plain_console
+    appender.console.layout.type = PatternLayout
+    appender.console.layout.pattern = [%d{ISO8601}][%-5p][%-25c]%notEmpty{[%X{pipeline.id}]}%notEmpty{[%X{plugin.id}]} %m%n
+
+    appender.json_console.type = Console
+    appender.json_console.name = json_console
+    appender.json_console.layout.type = JSONLayout
+    appender.json_console.layout.compact = true
+    appender.json_console.layout.eventEol = true
+
+    rootLogger.level = ${sys:ls.log.level}
+    rootLogger.appenderRef.console.ref = ${sys:ls.log.format}_console
+  logstash-sample.conf: |
+    # Sample Logstash configuration for creating a simple
+    # Beats -> Logstash -> Elasticsearch pipeline.
+
+    input {
+      beats {
+        port => 5044
+      }
+    }
+
+    output {
+      elasticsearch {
+        hosts => ["http://localhost:9200"]
+        index => "%{[@metadata][beat]}-%{[@metadata][version]}-%{+YYYY.MM.dd}"
+        #user => "elastic"
+        #password => "changeme"
+      }
+    }
+  logstash.yml: |
+    http.host: "0.0.0.0"
+    #xpack.monitoring.elasticsearch.hosts: [ "https://quickstart-es-http:9200" ]
+  pipelines.yml: |
+    # This file is where you define your pipelines. You can define multiple.
+    # For more information on multiple pipelines, see the documentation:
+    #   https://www.elastic.co/guide/en/logstash/current/multiple-pipelines.html
+
+    - pipeline.id: main
+      path.config: "/usr/share/logstash/pipeline"
+  startup.options: |
+    ################################################################################
+    # These settings are ONLY used by $LS_HOME/bin/system-install to create a custom
+    # startup script for Logstash and is not used by Logstash itself. It should
+    # automagically use the init system (systemd, upstart, sysv, etc.) that your
+    # Linux distribution uses.
+    #
+    # After changing anything here, you need to re-run $LS_HOME/bin/system-install
+    # as root to push the changes to the init script.
+    ################################################################################
+
+    # Override Java location
+    #JAVACMD=/usr/bin/java
+
+    # Set a home directory
+    LS_HOME=/usr/share/logstash
+
+    # logstash settings directory, the path which contains logstash.yml
+    LS_SETTINGS_DIR=/etc/logstash
+
+    # Arguments to pass to logstash
+    LS_OPTS="--path.settings ${LS_SETTINGS_DIR}"
+
+    # Arguments to pass to java
+    LS_JAVA_OPTS=""
+
+    # pidfiles aren't used the same way for upstart and systemd; this is for sysv users.
+    LS_PIDFILE=/var/run/logstash.pid
+
+    # user and group id to be invoked as
+    LS_USER=logstash
+    LS_GROUP=logstash
+
+    # Enable GC logging by uncommenting the appropriate lines in the GC logging
+    # section in jvm.options
+    LS_GC_LOG_FILE=/var/log/logstash/gc.log
+
+    # Open file limit
+    LS_OPEN_FILES=16384
+
+    # Nice level
+    LS_NICE=19
+
+    # Change these to have the init script named and described differently
+    # This is useful when running multiple instances of Logstash on the same
+    # physical box or vm
+    SERVICE_NAME="logstash"
+    SERVICE_DESCRIPTION="logstash"
+
+    # If you need to run a command or script before launching Logstash, put it
+    # between the lines beginning with `read` and `EOM`, and uncomment those lines.
+    ###
+    ## read -r -d '' PRESTART << EOM
+    ## EOM
+kind: ConfigMap
+metadata:
+  name: logstash-config
+  namespace: {{ .Release.Namespace }}

@@ -39,6 +39,8 @@ node:
     # Data volume, used for storing data of DN, caches and tools
     # used by the operator.
     data: /data
+    log: /data-log
+    filestream: /filestream
 
 # Service account of operator pods.
 serviceAccount: polardbx-operator
@@ -83,8 +85,33 @@ controllerManager:
 # Settings for host path file service.
 hostPathFileService:
   name: polardbx-hpfs
+  ossEndpoint: xxx
+  ossAccessKey: xxx
+  ossAccessSecret: xxx
+  ossBucket: xxx
   port: 6543
-
+  fsPort: 6643
+  fsMinFlow: 1048576  # 1MB/s
+  fsMaxFlow: 104857600 # 100MB/s
+  fsTotalFlow: 524288000 # 500MB/s
+  fsBufferSize: 2097152 # 2MB
+  sinks:
+    - name: default
+      type: oss
+      endpoint: xxx 
+      accessKey: xxx
+      accessSecret: xxxxx
+      bucket: xxx
+    - name: default
+      type: sftp
+      host: xxxxx
+      port: 22
+      user: admin
+      password: xxxx
+      rootPath: /xxx
+  
+  
+  
   resources:
     requests:
       cpu: 100m

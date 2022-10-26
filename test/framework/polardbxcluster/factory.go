@@ -79,8 +79,9 @@ func TopologyNode(role string, replicas int, engine, image string, hostNetwork b
 	switch role {
 	case polardbxmeta.RoleCN:
 		return func(polardbxcluster *polardbxv1.PolarDBXCluster) {
+			int32Replicas := int32(replicas)
 			polardbxcluster.Spec.Topology.Nodes.CN = polardbxv1polardbx.TopologyNodeCN{
-				Replicas: int32(replicas),
+				Replicas: &int32Replicas,
 				Template: polardbxv1polardbx.CNTemplate{
 					Image:       image,
 					HostNetwork: hostNetwork,
@@ -138,6 +139,12 @@ func EnableTLS(secretName string, selfSigned bool) FactoryOption {
 			SecretName:         secretName,
 			GenerateSelfSigned: selfSigned,
 		}
+	}
+}
+
+func ParameterTemplate(templateName string) FactoryOption {
+	return func(polardbxcluster *polardbxv1.PolarDBXCluster) {
+		polardbxcluster.Spec.ParameterTemplate.Name = templateName
 	}
 }
 

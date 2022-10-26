@@ -144,6 +144,15 @@ func (v *volumeFactory) newEmptyDirVolumeSource() corev1.VolumeSource {
 	}
 }
 
+func (v *volumeFactory) newNFS(path string, server string) corev1.VolumeSource {
+	return corev1.VolumeSource{
+		NFS: &corev1.NFSVolumeSource{
+			Path:   path,
+			Server: server,
+		},
+	}
+}
+
 func (v *volumeFactory) newConfigMapVolumeSource(name string, items []corev1.KeyToPath) corev1.VolumeSource {
 	return corev1.VolumeSource{
 		ConfigMap: &corev1.ConfigMapVolumeSource{
@@ -201,6 +210,14 @@ func (v *volumeFactory) NewVolumesForCN() []corev1.Volume {
 		},
 	}
 
+	nfsConfig := v.rc.Config().Nfs()
+	if nfsConfig.Server() != "" {
+		volumes = append(volumes, corev1.Volume{
+			Name:         "polardbx-nfs",
+			VolumeSource: v.newNFS(nfsConfig.Path(), nfsConfig.Server()),
+		})
+	}
+
 	return append(systemVols, volumes...)
 }
 
@@ -235,6 +252,16 @@ func (v *volumeFactory) NewVolumeMountsForCNEngine() []corev1.VolumeMount {
 			MountPropagation: mountPropagationModePtr(corev1.MountPropagationHostToContainer),
 		},
 	}
+
+	nfsConfig := v.rc.Config().Nfs()
+	if nfsConfig.Server() != "" {
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:             "polardbx-nfs",
+			MountPath:        "/home/admin/drds-server/cold-data",
+			MountPropagation: mountPropagationModePtr(corev1.MountPropagationHostToContainer),
+		})
+	}
+
 	return append(systemVolMounts, volumeMounts...)
 }
 

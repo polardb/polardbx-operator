@@ -1,16 +1,35 @@
 # Changelog
 
+## 2022-10-26
+
+Release v1.3.0-alpha.1
+
++ Enhancement & New Features
+  + Support backup and restore.
+  + Support multiple architecture: linux/amd64, linux/arm64.
+  + Support log(audit, error) collection.
+  + Support read only cluster.
+  + Support parameter template and configuration.
+  + Support XStore node rebuild.
+  + Support splitting dn data and log into different directories.
+  + Support archiving cold data into OSS and NFS.
++ Bug Fix
+  + Fix `mycnfOverwrite` not working issue.
+  + Fix issue of cn topology rules not working in host network mode.
+  + Fix XStore node not ready when ip changed in container network mode.
+
 ## 2022-06-07
 
 Release v1.2.2.
 
 This is a bugfix release.
-+ Fix DN scale up/down and upgrade issue.
-+ Fix grafana memory usage panel when deployed on minikube.
-+ Create xstore of DN in parallel.
-+ Fix node selector issue for polardbx-monitor.
-+ Disable service links in pod spec.
-+ Fix overriding my.cnf passing to the script without section.
+
+Fix DN scale up/down and upgrade issue.
+Fix grafana memory usage panel when deployed on minikube.
+Create xstore of DN in parallel.
+Fix node selector issue for polardbx-monitor.
+Disable service links in pod spec.
+Fix overriding my.cnf passing to the script without section.
 
 ## 2022-04-11
 

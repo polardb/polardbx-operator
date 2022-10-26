@@ -19,6 +19,7 @@ package planner
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -31,6 +32,7 @@ import (
 	xstoreconvention "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/convention"
 	xstoremeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/meta"
 	xstorev1reconcile "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/reconcile"
+	maputil "github.com/alibaba/polardbx-operator/pkg/util/map"
 )
 
 type Planner struct {
@@ -81,22 +83,34 @@ func (p *Planner) buildExpectedNodes() map[string]model.PaxosNode {
 	if p.selfHeal {
 		topology = p.xstore.Status.ObservedTopology
 	}
-
+	nodeRebuildConfig := p.createNodeRebuildConfig()
 	nodes := make(map[string]model.PaxosNode)
 	for _, ns := range topology.NodeSets {
 		for i := 0; i < int(ns.Replicas); i++ {
 			name := xstoreconvention.NewPodName(p.xstore, &ns, i)
 			nodes[name] = model.PaxosNode{
-				Pod:        name,
-				Role:       strings.ToLower(string(ns.Role)),
-				Generation: p.xstore.Generation,
-				Set:        ns.Name,
-				Index:      i,
+				PaxosInnerNode: model.PaxosInnerNode{
+					Pod:        name,
+					Role:       strings.ToLower(string(ns.Role)),
+					Generation: p.xstore.Generation,
+					Set:        ns.Name,
+					Index:      i,
+				},
+				RebuildConfig: nodeRebuildConfig,
 			}
 		}
 	}
 
 	return nodes
+}
+
+func (p *Planner) createNodeRebuildConfig() map[string]interface{} {
+	rebuildConfig := make(map[string]interface{})
+	config := xstoremeta.RebuildConfig{
+		LogSeparation: strconv.FormatBool(p.xstore.Spec.Config.Dynamic.LogDataSeparation),
+	}
+	rebuildConfig[xstoremeta.LabelConfigHash] = config.ComputeHash()
+	return rebuildConfig
 }
 
 func podVolume(pod *corev1.Pod) string {
@@ -119,14 +133,20 @@ func (p *Planner) buildRunningNodes() (map[string]model.PaxosNodeStatus, error) 
 		}
 		nodes[pod.Name] = model.PaxosNodeStatus{
 			PaxosNode: model.PaxosNode{
-				Pod:        pod.Name,
-				Role:       pod.Labels[xstoremeta.LabelNodeRole],
-				Generation: generation,
-				Set:        pod.Labels[xstoremeta.LabelNodeSet],
-				Index:      index,
+				PaxosInnerNode: model.PaxosInnerNode{
+					Pod:        pod.Name,
+					Role:       pod.Labels[xstoremeta.LabelNodeRole],
+					Generation: generation,
+					Set:        pod.Labels[xstoremeta.LabelNodeSet],
+					Index:      index,
+				},
+				RebuildConfig: map[string]interface{}{
+					xstoremeta.LabelConfigHash: pod.Labels[xstoremeta.LabelConfigHash],
+				},
 			},
-			Host:   pod.Spec.NodeName,
-			Volume: podVolume(pod),
+			Host:       pod.Spec.NodeName,
+			Volume:     podVolume(pod),
+			XStoreRole: pod.Labels[xstoremeta.LabelRole],
 		}
 	}
 
@@ -222,6 +242,7 @@ func (p *Planner) build() (plan.Plan, error) {
 
 	pl := plan.NewPlan(p.runningNodes)
 
+	var leaderStep *plan.Step
 	// TODO(fix) volumes
 	// Create, update or replace expected nodes.
 	for _, expectNode := range p.expectedNodes {
@@ -248,12 +269,27 @@ func (p *Planner) build() (plan.Plan, error) {
 				p.ec.GetNodeTemplate(runningNode.Generation, runningNode.Set, runningNode.Index),
 				p.ec.GetNodeTemplate(expectNode.Generation, expectNode.Set, expectNode.Index),
 			)
+			rebuildPodConfigChanged := maputil.Equals(&expectNode.RebuildConfig, &runningNode.RebuildConfig)
 
 			stepType := plan.StepTypeUpdate
-			if !topologyChanged {
+			if !topologyChanged && !rebuildPodConfigChanged {
 				stepType = plan.StepTypeBumpGen
 			} else if expectNode.Role != runningNode.Role {
 				stepType = plan.StepTypeReplace
+			}
+
+			if runningNode.XStoreRole == xstoremeta.RoleLeader && leaderStep == nil {
+				leaderStep = &plan.Step{
+					Type:             stepType,
+					OriginGeneration: runningNode.Generation,
+					OriginHost:       runningNode.Host,
+					TargetGeneration: expectNode.Generation,
+					Target:           expectNode.Pod,
+					TargetRole:       expectNode.Role,
+					NodeSet:          expectNode.Set,
+					Index:            expectNode.Index,
+				}
+				continue
 			}
 
 			pl.AppendStep(plan.Step{
@@ -267,6 +303,9 @@ func (p *Planner) build() (plan.Plan, error) {
 				Index:            expectNode.Index,
 			})
 		}
+	}
+	if leaderStep != nil {
+		pl.AppendStep(*leaderStep)
 	}
 
 	// Delete unexpected running nodes.

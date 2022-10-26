@@ -17,6 +17,7 @@ limitations under the License.
 package factory
 
 import (
+	"github.com/alibaba/polardbx-operator/api/v1/polardbx"
 	promv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -39,18 +40,26 @@ type ObjectFactory interface {
 	NewXStoreMyCnfOverlay4DN(idx int) (string, error)
 	NewXStoreGMS() (*polardbxv1.XStore, error)
 	NewXStoreDN(idx int) (*polardbxv1.XStore, error)
-
 	NewSecret() (*corev1.Secret, error)
+	NewSecretFromPolarDBX(*corev1.Secret) (*corev1.Secret, error)
 	NewSecuritySecret() (*corev1.Secret, error)
 	NewConfigMap(cmType convention.ConfigMapType) (*corev1.ConfigMap, error)
 
 	NewServiceMonitors() (map[string]promv1.ServiceMonitor, error)
+
+	NewReadonlyPolardbx(*polardbx.ReadonlyParam) (*polardbxv1.PolarDBXCluster, error)
+}
+
+type Context struct {
+	HasCdcXBinLog   bool
+	BuildCdcXBinLog bool
 }
 
 type objectFactory struct {
-	rc *polardbxv1reconcile.Context
+	rc           *polardbxv1reconcile.Context
+	buildContext Context
 }
 
 func NewObjectFactory(rc *polardbxv1reconcile.Context) ObjectFactory {
-	return &objectFactory{rc: rc}
+	return &objectFactory{rc: rc, buildContext: Context{}}
 }

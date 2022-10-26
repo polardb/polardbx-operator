@@ -23,6 +23,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	"github.com/alibaba/polardbx-operator/pkg/webhook/knobs"
+	"github.com/alibaba/polardbx-operator/pkg/webhook/parameter"
 	"github.com/alibaba/polardbx-operator/pkg/webhook/polardbxcluster"
 )
 
@@ -43,6 +44,10 @@ func SetupWebhooks(ctx context.Context, mgr ctrl.Manager, configPath string) err
 	}
 
 	if err := knobs.SetupWebhooks(ctx, mgr, ApiPath); err != nil {
+		return err
+	}
+
+	if err := parameter.SetupWebhooks(ctx, mgr, ApiPath); err != nil {
 		return err
 	}
 

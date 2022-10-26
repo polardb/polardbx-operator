@@ -51,6 +51,7 @@ rules:
   - deployments
   - statefulsets
   - controllerrevisions
+  - daemonsets
   verbs:
   - "*"
 - apiGroups:
@@ -123,6 +124,7 @@ rules:
   - deployments
   - statefulsets
   - controllerrevisions
+  - daemonsets
   verbs:
   - "*"
 - apiGroups:

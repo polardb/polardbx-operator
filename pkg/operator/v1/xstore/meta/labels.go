@@ -34,6 +34,24 @@ const (
 	LabelNodeSet     = "xstore/node-set"
 	LabelGeneration  = "xstore/generation"
 	LabelPortLock    = "xstore/port-lock"
+	LabelHash        = "xstore/hash"
+	LabelConfigHash  = "xstore/config-hash"
+	LabelPrimaryName = "xstore/primary-name"
+	LabelRebuildTask = "xstore/rebuild-task"
+	LabelOriginName  = "xstore/origin-name"
+	LabelTmp         = "xstore/tmp"
+)
+
+const (
+	LabelXStoreBackupName       = "xstore/backup"
+	LabelXStoreBinlogBackupName = "xstore/binlogbackup"
+	LabelBinlogPurgeLock        = "xstore/binlogpurge-lock"
+	LabelXStoreCollectName      = "xstore/collect"
+)
+
+const (
+	BinlogPurgeLock   = "locked"
+	BinlogPurgeUnlock = "unlock"
 )
 
 // Valid roles
@@ -115,8 +133,9 @@ func IsPodRoleLearner(pod *corev1.Pod) bool {
 
 // Valid service types.
 const (
-	ServiceTypeReadWrite = "readwrite"
-	ServiceTypeReadOnly  = "readonly"
-	ServiceTypeMetrics   = "metrics"
-	ServiceTypeHeadless  = "headless"
+	ServiceTypeReadWrite       = "readwrite"
+	ServiceTypeReadOnly        = "readonly"
+	ServiceTypeMetrics         = "metrics"
+	ServiceTypeClusterIp       = "clusterIp"
+	ServiceTypeStaticClusterIp = "staticClusterIp"
 )

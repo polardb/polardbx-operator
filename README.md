@@ -7,7 +7,7 @@ tasks.
 
 ## Quick Start
 
-Follow the [ [Quick Start](./docs/en/deploy/quick-start.md) / [快速开始](https://github.com/ApsaraDB/polardb-x-operator-docs/blob/main/deployment/0-quickstart.md) ] guide to start a testing Kubernetes cluster and play with PolarDB-X Operator.
+Follow the [[Quick Start](./docs/en/deploy/quick-start.md) / [快速开始](https://doc.polardbx.com/quickstart/topics/quickstart-k8s.html)] guide to start a testing Kubernetes cluster and play with PolarDB-X Operator.
 
 ## Documentation
 
@@ -15,7 +15,7 @@ Follow the [ [Quick Start](./docs/en/deploy/quick-start.md) / [快速开始](htt
 
 Refer to the documentations for more details, such as CRD definitions and operation guides.
 
-+ [简体中文](https://github.com/ApsaraDB/polardb-x-operator-docs)
++ [简体中文](https://doc.polardbx.com/quickstart/topics/quickstart-k8s.html)
 + [English](docs/en/index.md)
 
 ## Roadmap
@@ -33,14 +33,17 @@ Implemented:
 + ✅ Automated Data Rebalance
 + ✅ Automated Failover
 + ✅ Security and TLS
-+ ✅ Multiple Architecture Support
-  + linux/amd64, linux/arm64
++ ✅ Multiple Architecture Support: linux/amd64, linux/arm64
++ ✅ Backup and Restore
++ ✅ Log(Audit, Error) Collection
++ ✅ Readonly instance
++ ✅ Parameter Template and Configuration
++ ✅ XStore Node Rebuild
 
 Working in progress:
 
-+ [T0] Backup and Restore 
-+ [T1] Backup Plan
-+ [T1] Configuration (DN) 
++ [T0] Backup Plan
++ [T1] Point in Time Recovery
 + [T2] Dashboard
 + ...
 

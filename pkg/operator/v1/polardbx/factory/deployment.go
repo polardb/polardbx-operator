@@ -18,6 +18,9 @@ package factory
 
 import (
 	"fmt"
+	dictutil "github.com/alibaba/polardbx-operator/pkg/util/dict"
+	maputil "github.com/alibaba/polardbx-operator/pkg/util/map"
+	"github.com/alibaba/polardbx-operator/pkg/util/math"
 	"sort"
 	"strconv"
 	"strings"
@@ -159,9 +162,11 @@ func (f *objectFactory) getStatelessMatchingRules(replicas int, hostNetwork bool
 	if defaultRule != nil {
 		defaultRuleName = defaultRule.Name
 	}
-	ruleReplicas[defaultRuleName] = matchingRule{
-		replicas: replicas - ruleDeclaredReplicas,
-		rule:     defaultRule,
+	if replicas > ruleDeclaredReplicas {
+		ruleReplicas[defaultRuleName] = matchingRule{
+			replicas: replicas - ruleDeclaredReplicas,
+			rule:     defaultRule,
+		}
 	}
 
 	// Build matching rules.
@@ -220,6 +225,13 @@ func (f *objectFactory) tryScatterAffinityForStatelessDeployment(labels map[stri
 }
 
 func (f *objectFactory) getGmsConn(polardb *polardbxv1.PolarDBXCluster) (StorageConnection, error) {
+	var err error
+	if polardb.Spec.Readonly {
+		polardb, err = f.rc.GetPrimaryPolarDBX()
+		if err != nil {
+			return StorageConnection{}, err
+		}
+	}
 	gmsObjectName := ""
 	if polardb.Spec.ShareGMS {
 		gmsObjectName = fmt.Sprintf("%s-%s-dn-0", polardb.Name, polardb.Status.Rand)
@@ -288,13 +300,13 @@ fi
 `
 )
 
-func (f *objectFactory) newDeployment4CN(group string, mr *matchingRule) (*appsv1.Deployment, error) {
+func (f *objectFactory) newDeployment4CN(group string, mr *matchingRule, mustStaticPorts bool) (*appsv1.Deployment, error) {
 	polardbx := f.rc.MustGetPolarDBX()
 	topology := polardbx.Status.SpecSnapshot.Topology
 	template := polardbx.Status.SpecSnapshot.Topology.Nodes.CN.Template
 
 	// Factories
-	envFactory, err := NewEnvFactory(f.rc, polardbx)
+	envFactory, err := NewEnvFactory(f.rc, polardbx, f)
 	if err != nil {
 		return nil, err
 	}
@@ -306,10 +318,6 @@ func (f *objectFactory) newDeployment4CN(group string, mr *matchingRule) (*appsv
 	if err != nil {
 		return nil, err
 	}
-
-	// Ports & Envs
-	ports := portsFactory.NewPortsForCNEngine()
-	envVars := envFactory.NewEnvVarsForCNEngine(gmsConn, ports)
 
 	// Affinity
 	var nodeSelector *corev1.NodeSelector
@@ -326,10 +334,19 @@ func (f *objectFactory) newDeployment4CN(group string, mr *matchingRule) (*appsv
 
 	// Name & Labels & Annotations
 	deployName := convention.NewDeploymentName(polardbx, polardbxmeta.RoleCN, group)
-	labels := convention.ConstLabelsForCN(polardbx, polardbxmeta.CNTypeRW)
+	cnType := polardbxmeta.CNTypeRW
+	if polardbx.Spec.Readonly {
+		cnType = polardbxmeta.CNTypeRO
+	}
+
+	labels := convention.ConstLabelsForCN(polardbx, cnType)
 	labels[polardbxmeta.LabelGroup] = group
 
 	annotations := f.newPodAnnotations(polardbx)
+
+	// Ports & Envs
+	ports := portsFactory.NewPortsForCNEngine(mustStaticPorts)
+	envVars := envFactory.NewEnvVarsForCNEngine(gmsConn, ports)
 
 	// Host network
 	podLabels := copyutil.CopyStrMap(labels)
@@ -485,15 +502,14 @@ func (f *objectFactory) newDeployment4CN(group string, mr *matchingRule) (*appsv
 		}
 	}
 
-	// Return
-	return &appsv1.Deployment{
+	deployment := appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      deployName,
 			Namespace: f.rc.Namespace(),
 			Labels: k8shelper.PatchLabels(
 				copyutil.CopyStrMap(labels),
 				map[string]string{
-					polardbxmeta.LabelGeneration: strconv.FormatInt(polardbx.Status.ObservedGeneration, 10),
+					polardbxmeta.LabelAuditLog: strconv.FormatBool(f.rc.MustGetPolarDBX().Spec.Config.CN.EnableAuditLog),
 				},
 			),
 		},
@@ -525,7 +541,17 @@ func (f *objectFactory) newDeployment4CN(group string, mr *matchingRule) (*appsv
 				},
 			},
 		},
-	}, nil
+	}
+
+	//add hash to label
+	convention.AddLabelHash(polardbxmeta.LabelHash, &deployment)
+	//update generation label
+	deployment.SetLabels(k8shelper.PatchLabels(deployment.Labels, map[string]string{
+		polardbxmeta.LabelGeneration: strconv.FormatInt(polardbx.Status.ObservedGeneration, 10),
+	}))
+
+	// Return
+	return &deployment, nil
 }
 
 func (f *objectFactory) NewDeployments4CN() (map[string]appsv1.Deployment, error) {
@@ -535,7 +561,7 @@ func (f *objectFactory) NewDeployments4CN() (map[string]appsv1.Deployment, error
 	}
 	topology := polardbx.Status.SpecSnapshot.Topology
 	rules := topology.Rules.Components.CN
-	replicas, template := topology.Nodes.CN.Replicas, topology.Nodes.CN.Template
+	replicas, template := *topology.Nodes.CN.Replicas, topology.Nodes.CN.Template
 
 	matchingRules, err := f.getStatelessMatchingRules(int(replicas), template.HostNetwork, rules)
 	if err != nil {
@@ -546,14 +572,14 @@ func (f *objectFactory) NewDeployments4CN() (map[string]appsv1.Deployment, error
 	return f.buildDeployments(matchingRules, f.newDeployment4CN)
 }
 
-func (f *objectFactory) newDeployment4CDC(group string, mr *matchingRule) (*appsv1.Deployment, error) {
+func (f *objectFactory) newDeployment4CDC(group string, mr *matchingRule, mustStaticPorts bool) (*appsv1.Deployment, error) {
 	polardbx := f.rc.MustGetPolarDBX()
 	config := f.rc.Config()
 	topology := polardbx.Status.SpecSnapshot.Topology
 	template := polardbx.Status.SpecSnapshot.Topology.Nodes.CDC.Template
 
 	// Factories
-	envFactory, err := NewEnvFactory(f.rc, polardbx)
+	envFactory, err := NewEnvFactory(f.rc, polardbx, f)
 	if err != nil {
 		return nil, err
 	}
@@ -658,8 +684,7 @@ func (f *objectFactory) newDeployment4CDC(group string, mr *matchingRule) (*apps
 		containers = append(containers, exporterContainer)
 	}
 
-	// Return
-	return &appsv1.Deployment{
+	deployment := appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      deployName,
 			Namespace: f.rc.Namespace(),
@@ -698,16 +723,33 @@ func (f *objectFactory) newDeployment4CDC(group string, mr *matchingRule) (*apps
 				},
 			},
 		},
-	}, nil
+	}
+
+	//add hash to label
+	convention.AddLabelHash(polardbxmeta.LabelHash, &deployment)
+	//update generation label
+	deployment.SetLabels(k8shelper.PatchLabels(deployment.Labels, map[string]string{
+		polardbxmeta.LabelGeneration: strconv.FormatInt(polardbx.Status.ObservedGeneration, 10),
+	}))
+
+	// Return
+	return &deployment, nil
 }
 
-func (f *objectFactory) buildDeployments(rules map[string]matchingRule, builder func(name string, mr *matchingRule) (*appsv1.Deployment, error)) (map[string]appsv1.Deployment, error) {
+func (f *objectFactory) buildDeployments(rules map[string]matchingRule, builder func(name string, mr *matchingRule, mustStaticPorts bool) (*appsv1.Deployment, error)) (map[string]appsv1.Deployment, error) {
 	deployments := make(map[string]appsv1.Deployment)
 	for name, mr := range rules {
-		deploy, err := builder(name, &mr)
+		deploy, err := builder(name, &mr, false)
 		if err != nil {
 			return nil, err
 		}
+		deploy2, err2 := builder(name, &mr, true)
+		if err2 != nil {
+			return nil, err2
+		}
+		deploy.SetLabels(k8shelper.PatchLabels(deploy.Labels, map[string]string{
+			polardbxmeta.LabelHash: deploy2.Labels[polardbxmeta.LabelHash],
+		}))
 		deployments[name] = *deploy
 	}
 	return deployments, nil
@@ -724,14 +766,65 @@ func (f *objectFactory) NewDeployments4CDC() (map[string]appsv1.Deployment, erro
 	if nodes == nil {
 		return nil, nil
 	}
-	replicas /*template*/, _ := topology.Nodes.CDC.Replicas, topology.Nodes.CDC.Template
 
+	replicas := topology.Nodes.CDC.Replicas + topology.Nodes.CDC.XReplicas
 	// FIXME Host network for CDC not supported.
 	matchingRules, err := f.getStatelessMatchingRules(int(replicas) /*template.HostNetwork*/, false, rules)
 	if err != nil {
 		return nil, err
 	}
 
+	if topology.Nodes.CDC.XReplicas > 0 {
+		//first global binlog cdc, then binlog x cdc.
+		resultMatchRules := SplitMatchRules(matchingRules, int(topology.Nodes.CDC.Replicas), int(topology.Nodes.CDC.XReplicas))
+		buildXReplicasFlags := []bool{false, true}
+		deployments := map[string]appsv1.Deployment{}
+		f.buildContext.HasCdcXBinLog = true
+		for index, xReplicasFlags := range buildXReplicasFlags {
+			f.buildContext.BuildCdcXBinLog = xReplicasFlags
+			builtDeployments, err := f.buildDeployments(resultMatchRules[index], f.newDeployment4CDC)
+			if err != nil {
+				return deployments, err
+			}
+			deployments = maputil.MergeMap(deployments, builtDeployments, false).(map[string]appsv1.Deployment)
+		}
+		return deployments, nil
+	}
+
 	// Build deployments according rules.
 	return f.buildDeployments(matchingRules, f.newDeployment4CDC)
+}
+
+func SplitMatchRules(matchRules map[string]matchingRule, replicasGroups ...int) (resultMatchRules []map[string]matchingRule) {
+	resultMatchRules = make([]map[string]matchingRule, len(replicasGroups))
+	for i := 0; i < len(replicasGroups); i++ {
+		resultMatchRules[i] = map[string]matchingRule{}
+	}
+	replicaGroupIndex := 0
+
+	ruleNames := dictutil.SortedStringKeys(matchRules)
+	ruleNameIndex := 0
+	for {
+		ruleName := ruleNames[ruleNameIndex]
+		matchRule := matchRules[ruleName]
+		replicas := replicasGroups[replicaGroupIndex]
+		minCount := math.MinInt(matchRule.replicas, replicas)
+		resultMatchRules[replicaGroupIndex][fmt.Sprintf("%sg-%d", ruleName, replicaGroupIndex)] = matchingRule{
+			replicas: minCount,
+			rule:     matchRule.rule,
+		}
+		replicasGroups[replicaGroupIndex] = replicas - minCount
+		if replicasGroups[replicaGroupIndex] == 0 {
+			replicaGroupIndex++
+		}
+		matchRule.replicas = matchRule.replicas - minCount
+		matchRules[ruleName] = matchRule
+		if matchRule.replicas == 0 {
+			ruleNameIndex++
+		}
+		if replicaGroupIndex >= len(replicasGroups) || ruleNameIndex >= len(ruleNames) {
+			break
+		}
+	}
+	return
 }

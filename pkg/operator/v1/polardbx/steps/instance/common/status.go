@@ -19,6 +19,13 @@ package common
 import (
 	"time"
 
+	dictutil "github.com/alibaba/polardbx-operator/pkg/util/dict"
+
+	iniutil "github.com/alibaba/polardbx-operator/pkg/util/ini"
+	"gopkg.in/ini.v1"
+
+	"github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/convention"
+
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -134,7 +141,7 @@ var UpdateDisplayStorageSize = polardbxv1reconcile.NewStepBinder("UpdateDisplayS
 		if statusForPrintRef.StorageSizeUpdateTime == nil ||
 			statusForPrintRef.StorageSizeUpdateTime.Time.Add(1*time.Minute).Before(now) {
 			totalSize := int64(0)
-			if !polardbx.Spec.ShareGMS && gmsStore != nil {
+			if !polardbx.Spec.ShareGMS && gmsStore != nil && !polardbx.Spec.Readonly {
 				totalSize += getTotalDataSizeOfXStore(gmsStore)
 			}
 			for _, dnStore := range dnStores {
@@ -164,10 +171,6 @@ var UpdateDisplayReplicas = polardbxv1reconcile.NewStepBinder("UpdateDisplayRepl
 
 		statusForPrintRef, snapshot := &polardbx.Status.StatusForPrint, polardbx.Status.SpecSnapshot
 
-		cnDeployments, err := rc.GetDeploymentMap(polardbxmeta.RoleCN)
-		if err != nil {
-			return flow.Error(err, "Unable to get deployments of CN.")
-		}
 		gmsStore, err := rc.GetGMS()
 		if client.IgnoreNotFound(err) != nil {
 			return flow.Error(err, "Unable to get xstore of GMS.")
@@ -180,10 +183,20 @@ var UpdateDisplayReplicas = polardbxv1reconcile.NewStepBinder("UpdateDisplayRepl
 		// update replicas status.
 		statusRef.ReplicaStatus = polardbxv1polardbx.ClusterReplicasStatus{
 			GMS: polardbxv1polardbx.ReplicasStatus{Total: 1, Available: int32(countAvailableXStores(gmsStore))},
-			CN:  polardbxv1polardbx.ReplicasStatus{Total: snapshot.Topology.Nodes.CN.Replicas, Available: int32(countAvailableReplicasFromDeployments(cnDeployments))},
 			DN:  polardbxv1polardbx.ReplicasStatus{Total: snapshot.Topology.Nodes.DN.Replicas, Available: int32(countAvailableXStores(dnStores...))},
+			CN:  nil,
 			CDC: nil,
 		}
+
+		cnDeployments, err := rc.GetDeploymentMap(polardbxmeta.RoleCN)
+		if err != nil {
+			return flow.Error(err, "Unable to get deployments of CN.")
+		}
+		statusRef.ReplicaStatus.CN = &polardbxv1polardbx.ReplicasStatus{
+			Total:     *snapshot.Topology.Nodes.CN.Replicas,
+			Available: int32(countAvailableReplicasFromDeployments(cnDeployments)),
+		}
+
 		if snapshot.Topology.Nodes.CDC != nil {
 			cdcDeployments, err := rc.GetDeploymentMap(polardbxmeta.RoleCDC)
 			if err != nil {
@@ -191,11 +204,18 @@ var UpdateDisplayReplicas = polardbxv1reconcile.NewStepBinder("UpdateDisplayRepl
 			}
 			statusRef.ReplicaStatus.CDC = &polardbxv1polardbx.ReplicasStatus{
 				Available: int32(countAvailableReplicasFromDeployments(cdcDeployments)),
-				Total:     snapshot.Topology.Nodes.CDC.Replicas,
+				Total:     snapshot.Topology.Nodes.CDC.Replicas + snapshot.Topology.Nodes.CDC.XReplicas,
 			}
 		}
+
+		gmsDisplay := statusRef.ReplicaStatus.GMS.Display()
+
+		if polardbx.Spec.Readonly {
+			gmsDisplay = " - "
+		}
+
 		statusForPrintRef.ReplicaStatus = polardbxv1polardbx.ReplicaStatusForPrint{
-			GMS: statusRef.ReplicaStatus.GMS.Display(),
+			GMS: gmsDisplay,
 			CN:  statusRef.ReplicaStatus.CN.Display(),
 			DN:  statusRef.ReplicaStatus.DN.Display(),
 			CDC: statusRef.ReplicaStatus.CDC.Display(),
@@ -213,7 +233,13 @@ var UpdateDisplayDetailedVersion = polardbxv1reconcile.NewStepBinder("UpdateDisp
 		if err != nil {
 			return flow.Error(err, "Unable to get group manager.")
 		}
-		clusterVersion, err := mgr.GetClusterVersion()
+		clusterVersion := ""
+		if polardbx.Spec.Readonly && !rc.HasCNs() {
+			clusterVersion, err = rc.GetDnVersion()
+			clusterVersion = "0.0.0-PXC-0.0.0-00000000/" + clusterVersion
+		} else {
+			clusterVersion, err = mgr.GetClusterVersion()
+		}
 		if err != nil {
 			return flow.Error(err, "Unable to get cluster version.")
 		}
@@ -227,6 +253,174 @@ var GenerateRandInStatus = polardbxv1reconcile.NewStepBinder("GenerateRandInStat
 		polardbx := rc.MustGetPolarDBX()
 		if len(polardbx.Status.Rand) == 0 {
 			polardbx.Status.Rand = rand.String(4)
+		}
+		return flow.Pass()
+	},
+)
+
+func GetMode(node, mode string) string {
+	if node == polardbxmeta.RoleCN {
+		if mode == polardbxv1.ReadOnly {
+			return polardbxv1.CNReadOnly
+		} else {
+			return polardbxv1.CNReadWrite
+		}
+	} else if node == polardbxmeta.RoleDN {
+		if mode == polardbxv1.ReadOnly {
+			return polardbxv1.DNReadOnly
+		} else {
+			return polardbxv1.DNReadWrite
+		}
+	} else {
+		if mode == polardbxv1.ReadOnly {
+			return polardbxv1.GMSReadOnly
+		} else {
+			return polardbxv1.GMSReadWrite
+		}
+	}
+}
+
+var InitializeParameterTemplate = polardbxv1reconcile.NewStepBinder("InitializeParameterTemplate",
+	func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+
+		templateCm, err := rc.GetPolarDBXConfigMap(convention.ConfigMapTypeConfig)
+		if err != nil {
+			return flow.Error(err, "Unable to get config map for task.")
+		}
+
+		if templateCm.Data == nil {
+			templateCm.Data = make(map[string]string)
+		}
+
+		cnParams, err := ini.LoadSources(ini.LoadOptions{
+			AllowBooleanKeys:           true,
+			AllowPythonMultilineValues: true,
+			SpaceBeforeInlineComment:   true,
+			PreserveSurroundedQuote:    true,
+			IgnoreInlineComment:        true,
+		}, []byte{})
+		if err != nil {
+			return flow.Error(err, "Unable to load config map to ini")
+		}
+
+		paramMap := rc.GetPolarDBXParams()
+		parameterTemplateName := rc.GetPolarDBXTemplateName()
+		templateParams := rc.GetPolarDBXTemplateParams()
+
+		if parameterTemplateName == "" {
+			return flow.Continue("No parameter template specified, use default.")
+		}
+
+		pt, err := rc.GetPolarDBXParameterTemplate(parameterTemplateName)
+		if pt == nil {
+			return flow.Error(err, "Unable to get parameter template.", "node", parameterTemplateName)
+		}
+
+		// CN
+		for _, param := range pt.Spec.NodeType.CN.ParamList {
+			cnParams.Section("").Key(param.Name).SetValue(param.DefaultValue)
+			// read only / read write
+			mode := GetMode(polardbxmeta.RoleCN, param.Mode)
+			paramMap[mode][param.Name] = polardbxv1.Params{
+				Name:  param.Name,
+				Value: param.DefaultValue,
+			}
+			// restart
+			if param.Restart {
+				paramMap[polardbxv1.CNRestart][param.Name] = polardbxv1.Params{
+					Name:  param.Name,
+					Value: param.DefaultValue,
+				}
+			}
+			templateParams[polardbxmeta.RoleCN][param.Name] = param
+		}
+		templateCm.Data[polardbxmeta.RoleCN] = iniutil.ToString(cnParams)
+
+		//DN
+		for _, param := range pt.Spec.NodeType.DN.ParamList {
+			// read only / read write
+			mode := GetMode(polardbxmeta.RoleDN, param.Mode)
+			paramMap[mode][param.Name] = polardbxv1.Params{
+				Name:  param.Name,
+				Value: param.DefaultValue,
+			}
+			// restart
+			if param.Restart {
+				paramMap[polardbxv1.DNRestart][param.Name] = polardbxv1.Params{
+					Name:  param.Name,
+					Value: param.DefaultValue,
+				}
+			}
+			templateParams[polardbxmeta.RoleDN][param.Name] = param
+		}
+
+		// GMS
+		if len(pt.Spec.NodeType.GMS.ParamList) != 0 {
+			for _, param := range pt.Spec.NodeType.GMS.ParamList {
+				// read only / read write
+				mode := GetMode(polardbxmeta.RoleGMS, param.Mode)
+				paramMap[mode][param.Name] = polardbxv1.Params{
+					Name:  param.Name,
+					Value: param.DefaultValue,
+				}
+				// restart
+				if param.Restart {
+					paramMap[polardbxv1.GMSRestart][param.Name] = polardbxv1.Params{
+						Name:  param.Name,
+						Value: param.DefaultValue,
+					}
+				}
+				templateParams[polardbxmeta.RoleGMS][param.Name] = param
+			}
+		} else {
+			paramMap[polardbxv1.GMSReadOnly] = paramMap[polardbxv1.DNReadOnly]
+			paramMap[polardbxv1.GMSReadWrite] = paramMap[polardbxv1.DNReadWrite]
+			paramMap[polardbxv1.GMSRestart] = paramMap[polardbxv1.DNRestart]
+			templateParams[polardbxmeta.RoleGMS] = templateParams[polardbxmeta.RoleDN]
+		}
+
+		rc.SetPolarDBXParams(paramMap)
+		rc.SetPolarDBXTemplateParams(templateParams)
+
+		// Update config map.
+		err = rc.Client().Update(rc.Context(), templateCm)
+		if err != nil {
+			return flow.Error(err, "Unable to update task config map.")
+		}
+
+		return flow.Pass()
+	},
+)
+
+var SyncCnParameters = polardbxv1reconcile.NewStepBinder("SyncCnParameters",
+	func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+		parameter := rc.MustGetPolarDBXParameter()
+
+		mgr, err := rc.GetPolarDBXGMSManager()
+		if err != nil {
+			return flow.Error(err, "Unable to get GMS manager.")
+		}
+
+		observedParams, err := mgr.ListDynamicParams()
+		if err != nil {
+			return flow.Error(err, "Unable to list current configs.")
+		}
+
+		// Dynamic part always uses the spec.
+		params := parameter.Spec.NodeType.CN.ParamList
+		targetParams := make(map[string]string)
+		for _, param := range params {
+			targetParams[param.Name] = param.Value
+		}
+
+		toUpdateDynamicConfigs := dictutil.DiffStringMap(targetParams, observedParams)
+		if len(toUpdateDynamicConfigs) > 0 {
+			flow.Logger().Info("Syncing dynamic configs...")
+			err := mgr.SyncDynamicParams(toUpdateDynamicConfigs)
+			if err != nil {
+				return flow.Error(err, "Unable to sync dynamic configs.")
+			}
+			return flow.Continue("Dynamic configs synced.")
 		}
 		return flow.Pass()
 	},

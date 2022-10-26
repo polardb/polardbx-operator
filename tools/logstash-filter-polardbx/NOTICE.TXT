@@ -1,0 +1,5 @@
+PolarDB-X
+Copyright 2021 Alibaba Group Holding Limited.
+
+This product includes software developed by The Apache Software
+Foundation (http://www.apache.org/).

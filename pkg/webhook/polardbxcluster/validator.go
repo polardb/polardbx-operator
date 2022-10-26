@@ -485,15 +485,16 @@ func (v *PolarDBXClusterV1Validator) validateReplicas(ctx context.Context, topol
 
 	cnRules := topology.Rules.Components.CN
 	cnNodes := topology.Nodes.CN
+	// Skip if CN nodes is nil.
 	errList = append(errList, v.validateReplicasOnStatelessComponent(ctx, cnRules,
-		field.NewPath("spec", "topology", "rules", "cn"), int(cnNodes.Replicas))...)
+		field.NewPath("spec", "topology", "rules", "cn"), int(*cnNodes.Replicas))...)
 
 	cdcRules := topology.Rules.Components.CDC
 	cdcNodes := topology.Nodes.CDC
 	// Skip if CDC nodes is nil.
 	if cdcNodes != nil {
 		errList = append(errList, v.validateReplicasOnStatelessComponent(ctx, cdcRules,
-			field.NewPath("spec", "topology", "rules", "cdc"), int(cdcNodes.Replicas))...)
+			field.NewPath("spec", "topology", "rules", "cdc"), int(cdcNodes.Replicas+cdcNodes.XReplicas))...)
 	}
 
 	return errList
@@ -584,6 +585,16 @@ func (v *PolarDBXClusterV1Validator) validate(ctx context.Context, polardbx *pol
 	errList = append(errList, v.validatePrivileges(ctx, polardbx.Spec.Privileges)...)
 	errList = append(errList, v.validateSecurity(ctx, polardbx.Spec.Security)...)
 
+	if spec.Readonly {
+		if spec.PrimaryCluster == "" {
+			errList = append(errList, field.Invalid(
+				field.NewPath("spec", "primaryCluster"),
+				spec.PrimaryCluster,
+				fmt.Sprintf(`primaryCluster cannot be empty for readonly pxc`),
+			))
+		}
+	}
+
 	switch spec.ProtocolVersion.String() {
 	case "5", "5.7", "8", "8.0": // break
 	default:
@@ -594,6 +605,21 @@ func (v *PolarDBXClusterV1Validator) validate(ctx context.Context, polardbx *pol
 				"5", "5.7", "8", "8.0",
 			}),
 		)
+	}
+
+	staticConfig := spec.Config.CN.Static
+	if staticConfig != nil {
+		switch staticConfig.RPCProtocolVersion.String() {
+		case "1", "2", "":
+		default:
+			errList = append(errList, field.NotSupported(
+				field.NewPath("spec", "RPCProtocolVersion"),
+				spec.Config.CN.Static.RPCProtocolVersion,
+				[]string{
+					"1", "2",
+				}),
+			)
+		}
 	}
 
 	switch spec.ServiceType {
@@ -658,6 +684,28 @@ func (v *PolarDBXClusterV1Validator) ValidateUpdate(ctx context.Context, oldObj,
 		)
 	}
 
+	if oldSpec.Readonly != newSpec.Readonly {
+		return apierrors.NewForbidden(
+			schema.GroupResource{
+				Group:    gvk.Group,
+				Resource: gvk.Kind,
+			},
+			new.Name,
+			field.Forbidden(field.NewPath("spec").Child("readonly"), "field is immutable"),
+		)
+	}
+
+	if oldSpec.PrimaryCluster != newSpec.PrimaryCluster {
+		return apierrors.NewForbidden(
+			schema.GroupResource{
+				Group:    gvk.Group,
+				Resource: gvk.Kind,
+			},
+			new.Name,
+			field.Forbidden(field.NewPath("spec").Child("primaryCluster"), "field is immutable"),
+		)
+	}
+
 	oldStorageEngine := oldSpec.Topology.Nodes.DN.Template.Engine
 	newStorageEngine := newSpec.Topology.Nodes.DN.Template.Engine
 	if oldStorageEngine != newStorageEngine {
@@ -712,6 +760,34 @@ func (v *PolarDBXClusterV1Validator) ValidateUpdate(ctx context.Context, oldObj,
 			field.Forbidden(
 				field.NewPath("spec", "security"),
 				"security is immutable",
+			),
+		)
+	}
+
+	if !equality.Semantic.DeepEqual(oldSpec.InitReadonly, newSpec.InitReadonly) {
+		return apierrors.NewForbidden(
+			schema.GroupResource{
+				Group:    gvk.Group,
+				Resource: gvk.Kind,
+			},
+			new.Name,
+			field.Forbidden(
+				field.NewPath("spec", "initReadonly"),
+				"initReadonly is immutable",
+			),
+		)
+	}
+
+	if !equality.Semantic.DeepEqual(oldSpec.Config.CN.ColdDataFileStorage, newSpec.Config.CN.ColdDataFileStorage) {
+		return apierrors.NewForbidden(
+			schema.GroupResource{
+				Group:    gvk.Group,
+				Resource: gvk.Kind,
+			},
+			new.Name,
+			field.Forbidden(
+				field.NewPath("spec", "config", "cn", "coldDataFileStorage"),
+				"coldDataFileStorage is immutable",
 			),
 		)
 	}

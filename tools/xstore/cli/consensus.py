@@ -11,14 +11,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 import re
 import sys
 
 import click
+import pymysql
 
 from core import channel, convention
-from core.consensus import ConsensusRole, ConsensusExtRole, ConsensusNode
+from core.consensus import ConsensusRole, ConsensusExtRole, ConsensusNode, SlaveStatus
 from .common import global_mgr, print_rows
 
 
@@ -186,7 +186,7 @@ def configure_election_weight(weight, nodes):
         return
 
     shared_channel = global_mgr.shared_channel()
-
+    weights = []
     with global_mgr.consensus_manager() as mgr:
         consensus_nodes = dict([(n.addr, n) for n in mgr.list_consensus_nodes()])
 
@@ -198,6 +198,8 @@ def configure_election_weight(weight, nodes):
                 election_weight=weight,
                 force_sync=consensus_node.global_info.force_sync
             )
+            weights.append(str(consensus_node.global_info.election_weight))
+    print(','.join(weights))
 
 
 consensus_group.add_command(configure_election_weight)
@@ -214,6 +216,61 @@ def change_leader_to(node):
 
 
 consensus_group.add_command(change_leader_to)
+
+
+@click.command(name='add-learner')
+@click.argument('node')
+def add_learner(node):
+    shared_channel = global_mgr.shared_channel()
+    addr = _get_addr_from_argument(node, shared_channel)
+
+    with global_mgr.consensus_manager() as mgr:
+        consensus_nodes = mgr.list_consensus_nodes()
+        # check if the leaner node already existed
+        for consensus_node in consensus_nodes:
+            if consensus_node.role == ConsensusRole.LEARNER and consensus_node.addr == addr:
+                return
+        mgr.add_learner(addr)
+
+
+consensus_group.add_command(add_learner)
+
+
+@click.command(name='drop-learner')
+@click.argument('node')
+def drop_learner(node):
+    shared_channel = global_mgr.shared_channel()
+    addr = _get_addr_from_argument(node, shared_channel)
+
+    with global_mgr.consensus_manager() as mgr:
+        consensus_nodes = mgr.list_consensus_nodes()
+        # check if the leaner node exists
+        for consensus_node in consensus_nodes:
+            if consensus_node.role == ConsensusRole.LEARNER and consensus_node.addr == addr:
+                mgr.drop_learner(addr)
+                return
+
+
+consensus_group.add_command(drop_learner)
+
+
+@click.command(name='slave-status')
+def show_status():
+    with global_mgr.consensus_manager() as mgr:
+        slave_status = mgr.show_slave_status()
+        print_rows(sep=' | ', header=(
+            'relay_log_file',
+            'relay_log_pos',
+            'slave_io_running',
+            'slave_sql_running',
+            'slave_sql_running_state',
+            'seconds_behind_master',
+        ), rows=[(slave_status.relay_log_file, slave_status.relay_log_pos, slave_status.slave_io_running,
+                  slave_status.slave_sql_running, slave_status.slave_sql_running_state,
+                  slave_status.seconds_behind_master)])
+
+
+consensus_group.add_command(show_status)
 
 
 @click.group(name='log')

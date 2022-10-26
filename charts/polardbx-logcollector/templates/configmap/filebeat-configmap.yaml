@@ -1,0 +1,65 @@
+apiVersion: v1
+data:
+  filebeat.yml: |-
+    filebeat.autodiscover:
+      providers:
+        - type: kubernetes
+          templates:
+            - condition:
+                and:
+                  - equals:
+                      kubernetes.labels.polardbx/role: cn
+    
+                  - equals:
+                      kubernetes.labels.polardbx/enableAuditLog: "true"
+    
+              config:
+                - type: log
+                  fields:
+                    log_type: cn_sql_log
+                    instance_id: ${data.kubernetes.labels.polardbx/name}
+                    pod_name: ${data.kubernetes.pod.name}
+                    node_name: ${data.kubernetes.node.name}
+                  paths:
+                    - {{ .Values.filebeat.hostEmplyDirPathPrefix }}/${data.kubernetes.pod.uid}/volumes/kubernetes.io~empty-dir/polardbx-log/*/sql.log
+                - type: log
+                  fields:
+                    log_type: cn_slow_log
+                    instance_id: ${data.kubernetes.labels.polardbx/name}
+                    pod_name: ${data.kubernetes.pod.name}
+                    node_name: ${data.kubernetes.node.name}
+                  paths:
+                    - {{ .Values.filebeat.hostEmplyDirPathPrefix }}/${data.kubernetes.pod.uid}/volumes/kubernetes.io~empty-dir/polardbx-log/*/slow.log
+                - type: log
+                  fields:
+                    log_type: cn_tddl_log
+                    instance_id: ${data.kubernetes.labels.polardbx/name}
+                    pod_name: ${data.kubernetes.pod.name}
+                    node_name: ${data.kubernetes.node.name}
+                  paths:
+                    - {{ .Values.filebeat.hostEmplyDirPathPrefix }}/${data.kubernetes.pod.uid}/volumes/kubernetes.io~empty-dir/polardbx-log/*/tddl.log
+                  multiline:
+                    type: pattern
+                    pattern: '^\[[0-9]{4}-[0-9]{2}-[0-9]{2}'
+                    negate: true
+                    match: after
+    
+    processors:
+      - drop_fields:
+          fields: ["input","log","ecs","container","kubernetes","@metadata","agent"]
+          ignore_missing: false
+    
+    
+    
+    #output.console:
+    #  enable: false
+    #  codec.json:
+    #    pretty: true
+    
+    output.logstash:
+      enable: true
+      hosts: ["{{ .Values.logstash.name }}:{{ .Values.logstash.port }}"]
+kind: ConfigMap
+metadata:
+  name: filebeat-config
+  namespace: {{ .Release.Namespace }}

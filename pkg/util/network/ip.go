@@ -100,3 +100,25 @@ func GetOutBoundIp() (net.IP, error) {
 
 	return localAddr.IP, nil
 }
+
+func GetDefaultPort() int32 {
+	return 3306
+}
+
+func GetXPort(port int32) int32 {
+	// TODO: check the port
+	return port + 28000
+}
+
+func GetPaxosPort(port int32) int32 {
+	// TODO: check the port
+	return port + 8000
+}
+
+func GetDefaultPaxosPort() int32 {
+	return GetPaxosPort(GetDefaultPort())
+}
+
+func GetDefaultXPort() int32 {
+	return GetXPort(GetDefaultPort())
+}

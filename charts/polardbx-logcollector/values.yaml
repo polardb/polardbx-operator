@@ -1,0 +1,72 @@
+#the configuration of logstash deployment
+logstash:
+  image:
+    #image repo of logstash
+    repo: polardbx
+    #image name of logstash
+    name: logstash
+    #image tag of logstash
+    version: 8.1.2-polardbx-20220624153221
+  #the name of the logstash deployment
+  name: logstash
+  #the exported port the logstash. filebeat will access this port.
+  port: 5044
+  #the timezone of the logstash, which affects parsing date field
+  timezone:
+    name: "Asia/Shanghai"
+    hostPath: "/usr/share/zoneinfo/Asia/Shanghai"
+  #the resource configuration of one logstash replica
+  resources:
+    limits:
+      cpu: "2"
+      memory: "1200Mi"
+    requests:
+      cpu: "2"
+      memory: "1200Mi"
+  elastic:
+    #the name of elastic cert secret, which will be need when logtash upload data to an elastic search cluster.
+    certsSecretName: elastic-certs-public
+  #the config of the logstash, it  will be the name of a config map
+  config:
+    name: logstash-config
+  #the pipeline configName of logstash, it will be the name of config map
+  pipeline:
+    configName: logstash-pipeline
+  #the replica count of the logstash
+  spec:
+    replicas: 1
+  #liveProbe configuration of logstash
+  livenessProbe:
+    initialDelaySeconds: 30
+    periodSeconds: 30
+
+#configuration of filebeat deamonset
+filebeat:
+  image:
+    #the image repo of the filebeat
+    repo: docker.elastic.co/beats
+    #the image name of the  filebeat
+    name: filebeat
+    #the image tag f the filebeat
+    version: 8.1.0
+  #the daemonset name of filebeat
+  name: filebeat
+  #the service account name of filebeat. the service account will be used to discover pods on the node.
+  serviceAccount:
+    name: filebeat
+  #the resource of configuration of filebeat
+  resources:
+    limits:
+      memory: "512Mi"
+      cpu: "1"
+    requests:
+      memory: "512Mi"
+      cpu: "1"
+  #hostpath prefix of the cn pod's empty dir volumes
+  hostEmplyDirPathPrefix: /var/lib/kubelet/pods
+
+#the name of polardbxlogcollector instance. 
+#command to get it : 
+#kubectl get polardbxlogcollector --namespace {{ .Release.Namespace }}
+logCollector:
+  name: polardbxlogcollector

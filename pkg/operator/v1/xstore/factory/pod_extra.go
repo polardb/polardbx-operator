@@ -204,11 +204,25 @@ func (f *DefaultExtraPodFactory) newDataVolumeName(i int, skipSequence bool) str
 	return "data-" + strconv.Itoa(i)
 }
 
+func (f *DefaultExtraPodFactory) newLogVolumeName(i int, skipSequence bool) string {
+	if skipSequence {
+		return "data-log"
+	}
+	return "data-log" + strconv.Itoa(i)
+}
+
 func (f *DefaultExtraPodFactory) newDataVolumeMountPath(i int, skipSequence bool) string {
 	if skipSequence {
 		return "/data/mysql"
 	}
 	return path.Join("/data/mysql", strconv.Itoa(i))
+}
+
+func (f *DefaultExtraPodFactory) newLogVolumeMountPath(i int, skipSequence bool) string {
+	if skipSequence {
+		return "/data-log/mysql"
+	}
+	return path.Join("/data-log/mysql", strconv.Itoa(i))
 }
 
 func newHostPathTypeForHostPathVolume(vol *polardbxv1xstore.HostPathVolume) *corev1.HostPathType {
@@ -249,6 +263,15 @@ func (f *DefaultExtraPodFactory) NewVolumes(ctx *PodFactoryContext, volumes []po
 				},
 			},
 		})
+		res = append(res, corev1.Volume{
+			Name: f.newLogVolumeName(i, skipSequence),
+			VolumeSource: corev1.VolumeSource{
+				HostPath: &corev1.HostPathVolumeSource{
+					Path: vol.LogHostPath,
+					Type: newHostPathTypeForHostPathVolume(&vol),
+				},
+			},
+		})
 	}
 
 	return res, nil
@@ -271,6 +294,11 @@ func (f *DefaultExtraPodFactory) NewVolumeMounts(ctx *PodFactoryContext) (map[st
 		mounts = append(mounts, corev1.VolumeMount{
 			Name:             f.newDataVolumeName(i, skipSequence),
 			MountPath:        f.newDataVolumeMountPath(i, skipSequence),
+			MountPropagation: k8shelper.MountPropagationModePtr(corev1.MountPropagationHostToContainer),
+		})
+		mounts = append(mounts, corev1.VolumeMount{
+			Name:             f.newLogVolumeName(i, skipSequence),
+			MountPath:        f.newLogVolumeMountPath(i, skipSequence),
 			MountPropagation: k8shelper.MountPropagationModePtr(corev1.MountPropagationHostToContainer),
 		})
 	}
@@ -303,6 +331,7 @@ func (f *DefaultExtraPodFactory) NewEnvs(ctx *PodFactoryContext) (map[string][]c
 				{Name: "ENGINE", Value: ctx.engine},
 				{Name: "LIMITS_CPU", Value: strconv.FormatInt(resources.Limits.Cpu().MilliValue(), 10)},
 				{Name: "LIMITS_MEM", Value: strconv.FormatInt(resources.Limits.Memory().Value(), 10)},
+				{Name: "LOG_DATA_SEPARATION", Value: strconv.FormatBool(ctx.xstore.Spec.Config.Dynamic.LogDataSeparation)},
 			},
 			f.newEnvsForEnginePorts(ctx),
 		),
@@ -310,14 +339,16 @@ func (f *DefaultExtraPodFactory) NewEnvs(ctx *PodFactoryContext) (map[string][]c
 }
 
 func (f *DefaultExtraPodFactory) ExtraLabels(ctx *PodFactoryContext) map[string]string {
+	extraLabels := make(map[string]string, 0)
 	if boolutil.IsTrue(ctx.template.Spec.HostNetwork) {
-		return map[string]string{
-			// Lock on access port to avoid port conflict when host network is true.
-			xstoremeta.LabelPortLock: strconv.Itoa(ctx.portMap[convention.PortAccess]),
-		}
-	} else {
-		return nil
+		// Lock on access port to avoid port conflict when host network is true.
+		extraLabels[xstoremeta.LabelPortLock] = strconv.Itoa(ctx.portMap[convention.PortAccess])
 	}
+	config := xstoremeta.RebuildConfig{
+		LogSeparation: strconv.FormatBool(ctx.xstore.Spec.Config.Dynamic.LogDataSeparation),
+	}
+	extraLabels[xstoremeta.LabelConfigHash] = config.ComputeHash()
+	return extraLabels
 }
 
 func (f *DefaultExtraPodFactory) ExtraAnnotations(ctx *PodFactoryContext) map[string]string {

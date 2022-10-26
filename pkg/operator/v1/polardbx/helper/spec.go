@@ -34,7 +34,7 @@ func IsTopologyOrStaticConfigChanges(polardbx *polardbxv1.PolarDBXCluster) bool 
 		panic("never be nil")
 	}
 
-	staticConfigChanged := !equality.Semantic.DeepEqual(spec.Config.CN.Static, snapshot.Config.CN.Static)
+	staticConfigChanged := !equality.Semantic.DeepEqual(spec.Config, snapshot.Config)
 	topologyChanged := !equality.Semantic.DeepEqual(&spec.Topology, &snapshot.Topology)
 
 	return topologyChanged || staticConfigChanged
@@ -61,4 +61,27 @@ func IsMonitorConfigChanged(monitor *polardbxv1.PolarDBXMonitor) bool {
 	monitorConfigChanged := !equality.Semantic.DeepEqual(spec, specSnapshot)
 
 	return monitorConfigChanged
+}
+
+func IsParameterChanged(polardbxParameter *polardbxv1.PolarDBXParameter) bool {
+	spec := &polardbxParameter.Spec
+	snapshot := polardbxParameter.Status.ParameterSpecSnapshot
+	if snapshot == nil {
+		panic("never be nil")
+	}
+
+	var parameterChanges, clusterChanges, templateChanges bool
+
+	if spec.NodeType.GMS == nil {
+		// GMS not set
+		parameterChanges = !(equality.Semantic.DeepEqual(spec.NodeType.CN, snapshot.NodeType.CN) &&
+			equality.Semantic.DeepEqual(spec.NodeType.DN, snapshot.NodeType.DN))
+	} else {
+		parameterChanges = !equality.Semantic.DeepEqual(spec, snapshot)
+	}
+
+	clusterChanges = !equality.Semantic.DeepEqual(spec.ClusterName, snapshot.ClusterName)
+	templateChanges = !equality.Semantic.DeepEqual(spec.TemplateName, snapshot.TemplateName)
+
+	return parameterChanges || clusterChanges || templateChanges
 }

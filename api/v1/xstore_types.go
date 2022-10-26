@@ -23,6 +23,34 @@ import (
 	"github.com/alibaba/polardbx-operator/api/v1/xstore"
 )
 
+// XStoreRestoreFrom defines the source information of the restored cluster.
+type XStoreRestoreFrom struct {
+
+	// XStoreName defines the the xstore name that this xstore is restored from. Optional.
+	// +optional
+	XStoreName string `json:"clusterName,omitempty"`
+
+	// BackupSelector defines the selector for the backups to be selected. Optional.
+	// +optional
+	BackupSelector map[string]string `json:"backupSelector,omitempty"`
+}
+
+// XStoreRestoreSpec defines the specification for restore a xstore with desired state.
+type XStoreRestoreSpec struct {
+	//BackupSet defines the source of backup set
+	BackupSet string `json:"backupset,omitempty"`
+
+	// From defines the source information, either backup sets, snapshot or an running cluster.
+	From XStoreRestoreFrom `json:"from,omitempty"`
+
+	// Time defines the specified time of the restored data, in the format of 'yyyy-MM-dd HH:mm:ss'. Required.
+	Time string `json:"time,omitempty"`
+
+	// TimeZone defines the specified time zone of the restore time. Default is the location of current cluster.
+	// +optional
+	TimeZone string `json:"timezone,omitempty"`
+}
+
 type XStoreSpec struct {
 	// +kubebuilder:default="galaxy"
 
@@ -61,6 +89,27 @@ type XStoreSpec struct {
 	// UpgradeStrategy is the strategy when upgrading xstore. Default is BestEffort.
 	// +optional
 	UpgradeStrategy xstore.UpgradeStrategy `json:"upgradeStrategy,omitempty"`
+
+	// ParameterTemplate defines the template of parameters used by cn/dn/gms.
+	ParameterTemplate xstore.ParameterTemplate `json:"parameterTemplate,omitempty"`
+
+	// +kubebuilder:default=false
+
+	// Readonly demonstrates whether the xstore is readonly. Default is false
+	// +optional
+	Readonly bool `json:"readonly,omitempty"`
+
+	// PrimaryCluster is the name of primary cluster of the readonly cluster
+	// +optional
+	PrimaryCluster string `json:"primaryCluster,omitempty"`
+
+	// PrimaryXStore is the name of primary XStore of the readonly xstore
+	// +optional
+	PrimaryXStore string `json:"primaryXStore,omitempty"`
+
+	// Restore defines the spec of restore.
+	// +optional
+	Restore *XStoreRestoreSpec `json:"restore,omitempty"`
 }
 
 type XStoreStatus struct {
@@ -117,6 +166,21 @@ type XStoreStatus struct {
 
 	// EngineVersion records the engine's version.
 	EngineVersion string `json:"engineVersion,omitempty"`
+
+	// ParameterName
+	ParameterName string `json:"parameterName,omitempty"`
+
+	// Restarting represents if pods need restart
+	Restarting bool `json:"restarting,omitempty"`
+
+	// Restarting represents pods restarting type
+	RestartingType string `json:"restartingType,omitempty"`
+
+	// UpdateConfigMap represents update cm.cnf.override in config map
+	UpdateConfigMap bool `json:"updateConfigMap,omitempty"`
+
+	// RestartingPods represents pods need to restart
+	RestartingPods xstore.RestartingPods `json:"restartingPods,omitempty"`
 }
 
 // +kubebuilder:object:root=true

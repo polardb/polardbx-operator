@@ -84,7 +84,35 @@ func setupXStoreControllers(opts controllerOptions) error {
 		Logger:         ctrl.Log.WithName("controller").WithName("xstore"),
 		MaxConcurrency: opts.opts.MaxConcurrentReconciles,
 	}
-	err := xstoreReconciler.SetupWithManager(opts.Manager)
+	if err := xstoreReconciler.SetupWithManager(opts.Manager); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func setupXStoreFollowerControllers(opts controllerOptions) error {
+	xstoreFollowerReconciler := xstorev1controllers.XStoreFollowerReconciler{
+		BaseRc:         opts.BaseReconcileContext,
+		LoaderFactory:  opts.LoaderFactory,
+		Logger:         ctrl.Log.WithName("controller").WithName("xstore_follower"),
+		MaxConcurrency: opts.opts.MaxConcurrentReconciles,
+	}
+	err := xstoreFollowerReconciler.SetupWithManager(opts.Manager)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func setupPolarDBXParameterControllers(opts controllerOptions) error {
+	polardbxParameterReconciler := polardbxv1controllers.PolarDBXParameterReconciler{
+		BaseRc:         opts.BaseReconcileContext,
+		LoaderFactory:  opts.LoaderFactory,
+		Logger:         ctrl.Log.WithName("controller").WithName("polardbxparameter"),
+		MaxConcurrency: opts.opts.MaxConcurrentReconciles,
+	}
+	err := polardbxParameterReconciler.SetupWithManager(opts.Manager)
 	if err != nil {
 		return err
 	}
@@ -123,19 +151,72 @@ func setupPolarDBXControllers(opts controllerOptions) error {
 		return err
 	}
 
+	logCollectReconciler := polardbxv1controllers.PolarDBXLogCollectorReconciler{
+		BaseRc:         opts.BaseReconcileContext,
+		LoaderFactory:  opts.LoaderFactory,
+		Logger:         ctrl.Log.WithName("controller").WithName("polardbxlogcollector"),
+		MaxConcurrency: opts.opts.MaxConcurrentReconciles,
+	}
+
+	if err := logCollectReconciler.SetupWithManager(opts.Manager); err != nil {
+		return err
+	}
+
 	return nil
 }
+
+func setupPolarDBXBackupControllers(opts controllerOptions) error {
+	pxcBackupReconciler := polardbxv1controllers.PolarDBXBackupReconciler{
+		BaseRc:         opts.BaseReconcileContext,
+		LoaderFactory:  opts.LoaderFactory,
+		Logger:         ctrl.Log.WithName("controller").WithName("polardbxbackup"),
+		MaxConcurrency: opts.opts.MaxConcurrentReconciles,
+	}
+	if err := pxcBackupReconciler.SetupWithManager(opts.Manager); err != nil {
+		return err
+	}
+	return nil
+}
+func setupXStoreBackupControllers(opts controllerOptions) error {
+	xstoreBackupReconciler := xstorev1controllers.XStoreBackupReconciler{
+		BaseRc:         opts.BaseReconcileContext,
+		LoaderFactory:  opts.LoaderFactory,
+		Logger:         ctrl.Log.WithName("controller").WithName("xstorebackup"),
+		MaxConcurrency: opts.opts.MaxConcurrentReconciles,
+	}
+
+	err := xstoreBackupReconciler.SetupWithManager(opts.Manager)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+//func setupXStoreBackupScheduleControllers(opts controllerOptions) error {
+//	xstoreBackupReconciler := xstorev1controllers.XStoreBackupReconciler{
+//		BaseRc:         opts.BaseReconcileContext,
+//		LoaderFactory:  opts.LoaderFactory,
+//		Logger:         ctrl.Log.WithName("controller").WithName("xstorebackup"),
+//		MaxConcurrency: opts.opts.MaxConcurrentReconciles,
+//	}
+//	if err := xstoreBackupReconciler.SetupWithManager(opts.Manager); err != nil {
+//		return err
+//	}
+//	return nil
+//}
 
 // Start starts all related controllers of PolarDB-X. The first parameter ctx is used to control the
 // stop of the controllers. Recommendation is to use the context returned by `ctrl.SetupSignalHandler`
 // to handle signals correctly. The second parameter opts defines the configurable options of controllers.
 //
 // Currently, these controllers are included:
-//   1. Controller for PolarDBXCluster (v1)
-//   2. Controller for XStore (v1)
-//   3. Controllers for PolarDBXBackup, PolarDBXBinlogBackup (v1)
-//   4. Controllers for XStoreBackup, XStoreBinlogBackup (v1)
-//   5. Controllers for PolarDBXBackupSchedule, PolarDBXBinlogBackupSchedule (v1)
+//  1. Controller for PolarDBXCluster (v1)
+//  2. Controller for XStore (v1)
+//  3. Controllers for PolarDBXBackup, PolarDBXBinlogBackup (v1)
+//  4. Controllers for XStoreBackup, XStoreBinlogBackup (v1)
+//  5. Controllers for PolarDBXBackupSchedule, PolarDBXBinlogBackupSchedule (v1)
+//  6. Controllers for PolarDBXParameter (v1)
 func Start(ctx context.Context, opts Options) {
 	// Start instruction loader.
 	hint.StartLoader(ctx)
@@ -194,7 +275,30 @@ func Start(ctx context.Context, opts Options) {
 		os.Exit(1)
 	}
 
+	err = setupXStoreFollowerControllers(ctrlOpts)
+	if err != nil {
+		setupLog.Error(err, "Unable to setup controllers for xstore follower.")
+		os.Exit(1)
+	}
+
+	err = setupPolarDBXBackupControllers(ctrlOpts)
+	if err != nil {
+		setupLog.Error(err, "Unable to setup controllers for polardbx backup")
+		os.Exit(1)
+	}
+	err = setupXStoreBackupControllers(ctrlOpts)
+	if err != nil {
+		setupLog.Error(err, "Unable to setup controllers for xstore backup.")
+		os.Exit(1)
+	}
+
 	err = setupPolarDBXControllers(ctrlOpts)
+	if err != nil {
+		setupLog.Error(err, "Unable to setup controllers for polardbx.")
+		os.Exit(1)
+	}
+
+	err = setupPolarDBXParameterControllers(ctrlOpts)
 	if err != nil {
 		setupLog.Error(err, "Unable to setup controllers for polardbx.")
 		os.Exit(1)

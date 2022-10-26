@@ -1,0 +1,68 @@
+apiVersion: v1
+data:
+  logstash.conf: |-
+    input {
+      beats {
+        port => {{ .Values.logstash.port }}
+      }
+    }
+
+    filter {
+
+        if [fields][log_type] in ["cn_sql_log","cn_slow_log"] {
+
+            polardbx {
+            }
+            date{
+              match => ["timestamp", "UNIX_MS","ISO8601"]
+              timezone => "{{ .Values.logstash.timezone.name }}"
+            }
+
+            mutate{
+              remove_field => ["event", "timestamp","[message][begin_time]","[message][timestamp]"]
+              add_field => { "[@metadata][target_index]" => "%{[fields][log_type]}-%{+YYYY.MM.dd}" }
+            }
+
+         } else if [fields][log_type] == "cn_tddl_log" {
+
+            grok{
+              match =>  { "message" => "%{TIMESTAMP_ISO8601:timestamp} \[%{DATA:thread}\] %{LOGLEVEL:loglevel} %{DATA:logger} - %{JAVALOGMESSAGE:messagetmp}" }
+            }
+
+            date{
+              match => ["timestamp","ISO8601"]
+              timezone => "{{ .Values.logstash.timezone.name }}"
+            }
+
+            mutate{
+                remove_field => ["event","timestamp"]
+                rename => {"messagetmp" => "message"}
+                add_field => { "[@metadata][target_index]" => "%{[fields][log_type]}-%{+YYYY.MM.dd}" }
+            }
+
+         } else {
+
+            mutate{
+                 add_field => { "[@metadata][target_index]" => "other_log-%{+YYYY.MM.dd}" }
+            }
+
+         }
+
+    }
+
+    output {
+      #elasticsearch {
+      #  hosts => ["https://quickstart-es-http:9200"]
+      #  api_key => "I31aPIABxEEMom1PBQ7s:8sX1NA1sQP23k9rj7pHwWg"
+      #  ssl => true
+      #  cacert => "/usr/share/logstash/config/certs/ca.crt"
+      #  index => "%{[@metadata][target_index]}"
+      #  }
+       stdout {
+        codec => rubydebug
+      }
+    }
+kind: ConfigMap
+metadata:
+  name: logstash-pipeline
+  namespace: {{ .Release.Namespace }}

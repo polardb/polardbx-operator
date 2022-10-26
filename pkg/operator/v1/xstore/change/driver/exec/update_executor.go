@@ -17,12 +17,6 @@ limitations under the License.
 package exec
 
 import (
-	"strconv"
-
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-
 	polardbxv1xstore "github.com/alibaba/polardbx-operator/api/v1/xstore"
 	"github.com/alibaba/polardbx-operator/pkg/k8s/control"
 	k8shelper "github.com/alibaba/polardbx-operator/pkg/k8s/helper"
@@ -30,6 +24,10 @@ import (
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/factory"
 	xstoremeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/meta"
 	xstorev1reconcile "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/reconcile"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"strconv"
 )
 
 type UpdateExec struct {

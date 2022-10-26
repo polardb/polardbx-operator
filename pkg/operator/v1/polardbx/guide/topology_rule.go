@@ -221,10 +221,10 @@ func (h *topologyRuleHandler) Handle(rc *polardbxv1reconcile.Context, obj *polar
 
 	// Adjust the replicas of CN
 	scaleBase := h.cnReplicaScaleBase(mode)
-	if int(obj.Spec.Topology.Nodes.CN.Replicas)%scaleBase != 0 {
-		obj.Spec.Topology.Nodes.CN.Replicas /= int32(scaleBase)
-		if obj.Spec.Topology.Nodes.CN.Replicas == 0 {
-			obj.Spec.Topology.Nodes.CN.Replicas = int32(scaleBase)
+	if int(*obj.Spec.Topology.Nodes.CN.Replicas)%scaleBase != 0 {
+		*obj.Spec.Topology.Nodes.CN.Replicas /= int32(scaleBase)
+		if *obj.Spec.Topology.Nodes.CN.Replicas == 0 {
+			*obj.Spec.Topology.Nodes.CN.Replicas = int32(scaleBase)
 		}
 	}
 

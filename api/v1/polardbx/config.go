@@ -22,20 +22,35 @@ import (
 )
 
 type CNStaticConfig struct {
+	AttendHtap           bool                          `json:"AttendHtap,omitempty"`
 	EnableCoroutine      bool                          `json:"EnableCoroutine,omitempty"`
 	EnableReplicaRead    bool                          `json:"EnableReplicaRead,omitempty"`
 	EnableJvmRemoteDebug bool                          `json:"EnableJvmRemoteDebug,omitempty"`
 	ServerProperties     map[string]intstr.IntOrString `json:"ServerProperties,omitempty"`
+
+	// +kubebuilder:default=1
+	// +kubebuilder:validation:Enum=1;2;"1";"2";""
+
+	RPCProtocolVersion intstr.IntOrString `json:"RPCProtocolVersion,omitempty"`
 }
 
 type CNConfig struct {
 	Dynamic map[string]intstr.IntOrString `json:"dynamic,omitempty"`
-	Static  *CNStaticConfig               `json:"static,omitempty"`
+
+	// +kubebuilder:default={EnableCoroutine: true}
+
+	Static         *CNStaticConfig `json:"static,omitempty"`
+	EnableAuditLog bool            `json:"enableAuditLog,omitempty"`
+
+	// ColdDataFileStorage defines the file storage used to store cold data
+	ColdDataFileStorage []FileStorageInfo `json:"coldDataFileStorage,omitempty"`
 }
 
 type DNConfig struct {
-	MycnfOverwrite   string          `json:"mycnfOverwrite,omitempty"`
-	LogPurgeInterval metav1.Duration `json:"logPurgeInterval,omitempty"`
+	MycnfOverwrite    string          `json:"mycnfOverwrite,omitempty"`
+	LogPurgeInterval  metav1.Duration `json:"logPurgeInterval,omitempty"`
+	EnableAuditLog    bool            `json:"enableAuditLog,omitempty"`
+	LogDataSeparation bool            `json:"logDataSeparation,omitempty"`
 }
 
 type Config struct {

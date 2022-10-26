@@ -59,3 +59,29 @@ var BlockBeforeOtherSystemsFinalized = polardbxv1reconcile.NewStepBinder("BlockB
 		return flow.Wait("Block, other finalizers detected.")
 	},
 )
+
+var CleanGMS = polardbxv1reconcile.NewStepBinder("CleanGMS",
+	func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+		mgr, err := rc.GetPolarDBXGMSManager()
+		if err != nil {
+			return flow.Continue("Unable to get gms manager.")
+		}
+
+		primaryPolardbx, err := rc.GetPrimaryPolarDBX()
+		if err != nil {
+			return flow.Continue("Unable to get primary pxc.")
+		}
+
+		err = mgr.DisableAllStorageNodes(primaryPolardbx.Name)
+		if err != nil {
+			flow.Logger().Info("Clean storage_info failed.")
+		}
+
+		err = mgr.DisableAllComputeNodes(primaryPolardbx.Name)
+		if err != nil {
+			flow.Logger().Info("Clean server_info failed.")
+		}
+
+		return flow.Pass()
+	},
+)

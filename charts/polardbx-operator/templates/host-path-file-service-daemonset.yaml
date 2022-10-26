@@ -22,18 +22,35 @@ spec:
         app.kubernetes.io/component: polardbx-hpfs
     spec:
       volumes:
+      - name: tools-vol
+        hostPath:
+          path: {{ .Values.node.volumes.data }}/cache/tools/xstore
+          type: DirectoryOrCreate
       - name: xdata
         hostPath:
           path: {{ .Values.node.volumes.data }}/xstore
+          type: DirectoryOrCreate
+      - name: xdata-log
+        hostPath:
+          path: {{ .Values.node.volumes.log }}/xstore
           type: DirectoryOrCreate
       - name: hpfs-data
         hostPath:
           path: {{ .Values.node.volumes.data }}/hpfs
           type: DirectoryOrCreate
+      - name: filestream
+        hostPath:
+          path: {{ .Values.node.volumes.filestream }}
+          type: DirectoryOrCreate
       - name: cgroups-blkio
         hostPath:
           path: /sys/fs/cgroup/blkio
           type: Directory
+      - name: tmpfs
+        emptyDir: {}
+      - name: config
+        configMap:
+          name: {{ .Values.hostPathFileService.name}}-config
       {{- if .Values.imagePullSecrets }}
       imagePullSecrets:
 {{ toYaml .Values.imagePullSecrets | indent 6}}
@@ -63,23 +80,41 @@ spec:
         volumeMounts:
         - mountPath: {{ .Values.node.volumes.data }}/xstore
           name: xdata
+        - mountPath: {{ .Values.node.volumes.log }}/xstore
+          name: xdata-log
         - mountPath: {{ .Values.node.volumes.data }}/hpfs
           name: hpfs-data
+        - mountPath: /filestream
+          name: filestream
         - mountPath: /sys/fs/cgroup/blkio
           name: cgroups-blkio
+        - mountPath: /tools/xstore
+          name: tools-vol
+        - mountPath: /tmp
+          name: tmpfs
+        - mountPath: /config
+          name: config
         ports:
         - containerPort: {{ .Values.hostPathFileService.port }}
           name: hpfs
         - containerPort: 22
           name: ssh
+        - containerPort: {{ .Values.hostPathFileService.fsPort }}
+          name: filestream
         args:
         - --port={{ .Values.hostPathFileService.port }}
         - --host-name=$(NODE_NAME)
-        - --limited-paths={{ .Values.node.volumes.data }}
+        - --limited-paths={{ .Values.node.volumes.data }},{{ .Values.node.volumes.log }},{{ .Values.node.volumes.filestream }}
         - --task-db={{ .Values.node.volumes.data }}/hpfs/task.db
         - --k8s-namespace=$(NAMESPACE)
         - --k8s-selector=app.kubernetes.io/component=polardbx-hpfs
         - --lock-file={{ .Values.node.volumes.data }}/hpfs/hpfs.lock
+        - --fss-port={{ .Values.hostPathFileService.fsPort }}
+        - --fss-root-path={{ .Values.node.volumes.filestream }}
+        - --fc-min-flow={{ .Values.hostPathFileService.fsMinFlow }}
+        - --fc-max-flow={{ .Values.hostPathFileService.fsMaxFlow }}
+        - --fc-total-flow={{ .Values.hostPathFileService.fsTotalFlow }}
+        - --fc-buffer-size={{ int .Values.hostPathFileService.fsBufferSize }}
         securityContext:
           privileged: true
         livenessProbe:

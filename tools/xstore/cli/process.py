@@ -14,6 +14,8 @@
 
 import os
 import signal
+import sys
+import subprocess
 
 import click
 
@@ -54,3 +56,30 @@ def continue_engine_process():
 
 
 process_group.add_command(continue_engine_process)
+
+
+@click.command(name='kill_all_mysql')
+def kill_engine_all_process():
+    subprocess.Popen(
+        ["/usr/bin/sh", "-c",
+         "pid=`ps -ef|grep /tools/xstore/current/entrypoint | grep -v grep | awk '{print $2}'`&&kill -9 $pid"],
+        cwd=None, stdout=None, stderr=None)
+
+
+process_group.add_command(kill_engine_all_process)
+
+
+@click.command(name='check_std_err_complete')
+@click.option('--filepath', type=str)
+def check_std_err_complete(filepath: str, keyword="completed OK!"):
+    complete = False
+    with open(filepath, 'r') as f:
+        for line in f.readlines():
+            if line.strip().endswith(keyword):
+                complete = True
+    if complete:
+        sys.exit(0)
+    sys.exit(1)
+
+
+process_group.add_command(check_std_err_complete)

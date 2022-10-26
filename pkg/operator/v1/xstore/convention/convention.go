@@ -35,10 +35,11 @@ import (
 type ServiceType string
 
 const (
-	ServiceTypeReadWrite ServiceType = "readwrite"
-	ServiceTypeReadOnly  ServiceType = "readonly"
-	ServiceTypeMetrics   ServiceType = "metrics"
-	ServiceTypeHeadless  ServiceType = "headless"
+	ServiceTypeReadWrite       ServiceType = "readwrite"
+	ServiceTypeReadOnly        ServiceType = "readonly"
+	ServiceTypeMetrics         ServiceType = "metrics"
+	ServiceTypeClusterIp       ServiceType = "clusterIp"
+	ServiceTypeStaticClusterIp ServiceType = "staticClusterIp"
 )
 
 func GetXStoreServiceName(xstore *polardbxv1.XStore) string {
@@ -49,8 +50,8 @@ func GetXStoreServiceName(xstore *polardbxv1.XStore) string {
 	}
 }
 
-func NewHeadlessServiceName(podName string) string {
-	return podName
+func NewClusterIpServiceName(podName string) string {
+	return podName + "-service"
 }
 
 func NewServiceName(xstore *polardbxv1.XStore, serviceType ServiceType) string {
@@ -136,6 +137,14 @@ func GetGenerationLabelValue(object client.Object) (int64, error) {
 	return strconv.ParseInt(val, 10, 64)
 }
 
+func GetHashLabelValue(object client.Object) string {
+	labels := object.GetLabels()
+	if val, ok := labels[xstoremeta.LabelHash]; ok {
+		return val
+	}
+	return ""
+}
+
 func IsGenerationOutdated(xstore *polardbxv1.XStore, object client.Object) (bool, error) {
 	observedGeneration, err := GetGenerationLabelValue(object)
 	if err != nil {
@@ -182,9 +191,10 @@ const (
 type ConfigMapType string
 
 const (
-	ConfigMapTypeConfig ConfigMapType = "config"
-	ConfigMapTypeShared ConfigMapType = "shared"
-	ConfigMapTypeTask   ConfigMapType = "task"
+	ConfigMapTypeConfig  ConfigMapType = "config"
+	ConfigMapTypeShared  ConfigMapType = "shared"
+	ConfigMapTypeTask    ConfigMapType = "task"
+	ConfigMapTypeRestore ConfigMapType = "restore"
 )
 
 func NewConfigMapName(xstore *polardbxv1.XStore, cmType ConfigMapType) string {
@@ -195,12 +205,36 @@ func NewConfigMapName(xstore *polardbxv1.XStore, cmType ConfigMapType) string {
 	}
 }
 
+func NewBackupConfigMapName(xstoreBackup *polardbxv1.XStoreBackup, cmType ConfigMapType) string {
+	return fmt.Sprintf("%s-%s", xstoreBackup.Name, cmType)
+}
+
 // Conventions for containers.
 
 const (
 	ContainerEngine   = "engine"
 	ContainerExporter = "exporter"
 	ContainerProber   = "prober"
+)
+
+// Conventions for xStore follower
+const (
+	FileStreamBackupFilename        = "backup"
+	FileStreamRootDir               = "/filestream"
+	XClusterBackupBinFilepath       = "/u01/xcluster_xtrabackup/bin/innobackupex"
+	XClusterBackupSetPrepareArg     = "--apply-log"
+	GalaxyEngineBackupSlaveInfoArgs = "--slave-info"
+	XClusterBackupSlaveInfoArgs     = ""
+	GalaxyEngineBackupStreamArgs    = "--stream=xbstream"
+	XClusterBackupStreamArgs        = "--stream=tar"
+	GalaxyEngineTargetDirArgs       = "--target-dir="
+	XClusterTargetDirArgs           = ""
+	GalaxyEngineBackupBinFilepath   = "/tools/xstore/current/xcluster_xtrabackup80/bin/xtrabackup"
+	GalaxyEngineBackupSetPrepareArg = "--prepare"
+	PodInfoVolumeName               = "podinfo"
+	PodInfoNamePath                 = "name"
+	PodInfoNameFieldPath            = "metadata.labels['xstorefollowerjob/target_pod_name']"
+	TempPodSuffix                   = "-tmp"
 )
 
 // Conventions for jobs.
@@ -210,5 +244,16 @@ func NewJobName(xstore *polardbxv1.XStore, name string) string {
 		return fmt.Sprintf("%s-%s-%s", xstore.Name, xstore.Status.Rand, name)
 	} else {
 		return fmt.Sprintf("%s-%s", xstore.Name, name)
+	}
+}
+
+const (
+	ParameterName = "parameter"
+	ParameterType = "dynamic"
+)
+
+func GetParameterLabel() map[string]string {
+	return map[string]string{
+		ParameterName: ParameterType,
 	}
 }

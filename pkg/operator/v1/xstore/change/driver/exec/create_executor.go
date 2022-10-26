@@ -113,11 +113,14 @@ func (exec *CreateExec) Execute(rc *xstorev1reconcile.Context, flow control.Flow
 
 		exec.ec.AddPaxosNode(model.PaxosNodeStatus{
 			PaxosNode: model.PaxosNode{
-				Pod:        target,
-				Role:       step.TargetRole,
-				Generation: step.TargetGeneration,
-				Set:        step.NodeSet,
-				Index:      step.Index,
+				PaxosInnerNode: model.PaxosInnerNode{
+					Pod:        target,
+					Role:       step.TargetRole,
+					Generation: step.TargetGeneration,
+					Set:        step.NodeSet,
+					Index:      step.Index,
+				},
+				RebuildConfig: map[string]interface{}{},
 			},
 			Host:   pod.Spec.NodeName,
 			Volume: "", // TODO

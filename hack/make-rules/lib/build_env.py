@@ -111,7 +111,8 @@ BASIC_BUILD_ENV = BuildEnv(
         BuildTarget(target='cmd/polardbx-exporter', binary='polardbx-exporter', image='polardbx-exporter',image_build_path=None),
         BuildTarget(target='cmd/probe-proxy', binary='probe-proxy', image='probe-proxy', image_build_path=None),
         BuildTarget(target='cmd/polardbx-operator', binary='polardbx-operator', image='polardbx-operator', image_build_path=None),
-        BuildTarget(target='tools/xstore', binary=None, image='xstore-tools', image_build_path='tools/xstore')
+        BuildTarget(target='tools/xstore', binary=None, image='xstore-tools', image_build_path=None),
+        BuildTarget(target='tools/logstash-filter-polardbx', binary=None, image='polardbx-logstash', image_build_path=None)
     ],
     arch=os.environ.get('ARCH', 'amd64')
 )

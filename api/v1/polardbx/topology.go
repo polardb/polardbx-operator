@@ -178,7 +178,7 @@ type TopologyNodeCN struct {
 	// +kubebuilder:default=2
 	// +kubebuilder:validation:Minimum=0
 
-	Replicas int32 `json:"replicas,omitempty"`
+	Replicas *int32 `json:"replicas,omitempty"`
 
 	// +kubebuilder:default={resources: {limits: {cpu: 4, memory: "8Gi"}}}
 
@@ -191,6 +191,10 @@ type TopologyNodeCDC struct {
 
 	Replicas int32 `json:"replicas,omitempty"`
 
+	// +kubebuilder:validation:Minimum=0
+
+	XReplicas int32 `json:"xReplicas,omitempty"`
+
 	// +kubebuilder:default={resources: {limits: {cpu: 4, memory: "8Gi"}}}
 
 	Template CDCTemplate `json:"template,omitempty"`
@@ -200,7 +204,6 @@ type TopologyNodes struct {
 	GMS TopologyNodeGMS `json:"gms,omitempty"`
 
 	// +kubebuilder:default={replicas:2,template:{resources:{limits:{cpu:4,memory:"8Gi"}}}}
-
 	CN TopologyNodeCN `json:"cn,omitempty"`
 
 	// +kubebuilder:default={replicas:2,template:{hostNetwork:true,resources:{limits:{cpu:4,memory:"8Gi"}}}}

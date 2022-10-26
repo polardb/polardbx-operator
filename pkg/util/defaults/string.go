@@ -16,6 +16,8 @@ limitations under the License.
 
 package defaults
 
+import "hash/fnv"
+
 func NonEmptyStrOrDefault(s, defaultVal string) string {
 	if s == "" {
 		return defaultVal
@@ -28,4 +30,10 @@ func NonEmptyStrPtrOrDefault(ptr *string, defaultVal string) string {
 		return defaultVal
 	}
 	return *ptr
+}
+
+func FNV64(text string) uint64 {
+	hashAlgorithm := fnv.New64a()
+	hashAlgorithm.Write([]byte(text))
+	return hashAlgorithm.Sum64()
 }

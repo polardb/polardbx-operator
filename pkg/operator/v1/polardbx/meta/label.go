@@ -17,15 +17,27 @@ limitations under the License.
 package meta
 
 const (
-	LabelName         = "polardbx/name"
-	LabelRand         = "polardbx/rand"
-	LabelRole         = "polardbx/role"
-	LabelCNType       = "polardbx/cn-type"
-	LabelDNIndex      = "polardbx/dn-index"
-	LabelTopologyRule = "polardbx/topology-rule"
-	LabelGeneration   = "polardbx/generation"
-	LabelPortLock     = "polardbx/port-lock"
-	LabelGroup        = "polardbx/group"
+	LabelName            = "polardbx/name"
+	LabelRand            = "polardbx/rand"
+	LabelRole            = "polardbx/role"
+	LabelCNType          = "polardbx/cn-type"
+	LabelDNIndex         = "polardbx/dn-index"
+	LabelTopologyRule    = "polardbx/topology-rule"
+	LabelGeneration      = "polardbx/generation"
+	LabelPortLock        = "polardbx/port-lock"
+	LabelGroup           = "polardbx/group"
+	LabelHash            = "polardbx/hash"
+	LabelTopBackup       = "polardbx/top-backup"
+	LabelBackupXStore    = "polardbx/xstore"
+	LabelBackupXStoreUID = "polardbx/xstore-uid"
+	LabelBinlogPurgeLock = "polardbx/binlogpurge-lock"
+	LabelPrimaryName     = "polardbx/primary-name"
+	LabelType            = "polardbx/type"
+	LabelAuditLog        = "polardbx/enableAuditLog"
+)
+const (
+	SeekCpJobLabelPXCName    = "seekcp-job/pxc"
+	SeekCpJobLabelBackupName = "seekcp-job/backup"
 )
 
 const (
@@ -33,6 +45,16 @@ const (
 	RoleCN  = "cn"
 	RoleDN  = "dn"
 	RoleCDC = "cdc"
+)
+
+const (
+	BackupPath        = "polardbx-backup"
+	FullBackupPath    = "fullbackup"
+	BinlogOffsetPath  = "binlogoffset"
+	CollectBinlogPath = "collect"
+	BinlogBackupPath  = "binlogbackup"
+	SeekCpName        = "set.cp"
+	BinlogIndexesName = "indexes"
 )
 
 func AssertRoleIn(role string, candidates ...string) {
@@ -47,4 +69,9 @@ func AssertRoleIn(role string, candidates ...string) {
 const (
 	CNTypeRW = "rw"
 	CNTypeRO = "ro"
+)
+
+const (
+	TypeMaster   = "master"
+	TypeReadonly = "readonly"
 )

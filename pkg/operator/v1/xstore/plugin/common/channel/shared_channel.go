@@ -36,11 +36,23 @@ type Node struct {
 	Role string `json:"role,omitempty"`
 }
 
+type Indicate struct {
+	ResetMeta      bool `json:"reset_meta,omitempty"`
+	ResetAsLearner bool `json:"reset_as_learner,omitempty"`
+	RecoverIndex   *int `json:"recover_index,omitempty"`
+	Block          bool `json:"block,omitempty"`
+	ResetConfig    bool `json:"reset_config,omitempty"`
+
+	// used when bootstrap cluster.
+	BlockGatePrepareData bool `json:"block_gate_prepare_data,omitempty"`
+}
+
 type SharedChannel struct {
-	Generation            int64         `json:"generation,omitempty"`
-	Nodes                 []Node        `json:"nodes,omitempty"`
-	Status                ChannelStatus `json:"status,omitempty"`
-	LastBackupBinlogIndex *int64        `json:"last_backup_log_index,omitempty"`
+	Generation            int64               `json:"generation,omitempty"`
+	Nodes                 []Node              `json:"nodes,omitempty"`
+	Status                ChannelStatus       `json:"status,omitempty"`
+	Indicates             map[string]Indicate `json:"indicates,omitempty"`
+	LastBackupBinlogIndex *int64              `json:"last_backup_log_index,omitempty"`
 }
 
 func (sc *SharedChannel) IsBlocked() bool {
@@ -51,6 +63,9 @@ func (sc *SharedChannel) Unblock() {
 	sc.Status = ChannelOpen
 }
 
+func (sc *SharedChannel) UpdateLastBackupBinlogIndex(commitIndex *int64) {
+	sc.LastBackupBinlogIndex = commitIndex
+}
 func (sc *SharedChannel) String() string {
 	b, _ := json.MarshalIndent(sc, "", "  ")
 	return string(b)

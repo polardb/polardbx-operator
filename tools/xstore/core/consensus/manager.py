@@ -133,6 +133,18 @@ class RoleMismatchError(Exception):
     pass
 
 
+class SlaveStatus(NamedTuple):
+    """
+    the result of show slave status
+    """
+    relay_log_file: str
+    relay_log_pos: int
+    slave_io_running: str
+    slave_sql_running: str
+    slave_sql_running_state: str
+    seconds_behind_master: float
+
+
 class AbstractConsensusManager(AbstractContextManager):
     def __init__(self, conn: pymysql.Connection, current_addr: str):
         if not conn or not isinstance(conn, pymysql.Connection):
@@ -203,6 +215,7 @@ class AbstractConsensusManager(AbstractContextManager):
         :return: a ConsensusNode object.
         """
 
+    # FIXME: ConsensusNode -> ip:port
     @abstractmethod
     def change_leader(self, target: Union[str, ConsensusNode]):
         """
@@ -213,6 +226,7 @@ class AbstractConsensusManager(AbstractContextManager):
         :return: None
         """
 
+    # FIXME: ConsensusNode -> ip:port
     @abstractmethod
     def configure_follower(self, target: Union[str, ConsensusNode], *,
                            election_weight: int, force_sync: bool):
@@ -241,6 +255,7 @@ class AbstractConsensusManager(AbstractContextManager):
 
         """
 
+    # FIXME: ConsensusNode -> ip:port
     @abstractmethod
     def fix_match_index(self, target: Union[str, ConsensusNode], match_index: int):
         """
@@ -261,11 +276,11 @@ class AbstractConsensusManager(AbstractContextManager):
         """
 
     @abstractmethod
-    def drop_learner(self, target: Union[str, ConsensusNode]):
+    def drop_learner(self, target_addr: str):
         """
         Drop learner from configuration.
 
-        :param target: address or Consensus Node of target consensus node.
+        :param target_addr: address of target consensus node.
         """
 
     @abstractmethod
@@ -277,6 +292,7 @@ class AbstractConsensusManager(AbstractContextManager):
         :return: a ConsensusNode object of the new follower.
         """
 
+    # FIXME: ConsensusNode -> ip:port
     @abstractmethod
     def drop_follower(self, target: Union[str, ConsensusNode]):
         """
@@ -285,6 +301,7 @@ class AbstractConsensusManager(AbstractContextManager):
         :param target: address or Consensus Node of target consensus node.
         """
 
+    # FIXME: ConsensusNode -> ip:port
     @abstractmethod
     def upgrade_learner_to_follower(self, target: Union[str, ConsensusNode]) -> ConsensusNode:
         """
@@ -294,6 +311,7 @@ class AbstractConsensusManager(AbstractContextManager):
         :return: a new ConsensusNode represents the target node.
         """
 
+    # FIXME: ConsensusNode -> ip:port
     @abstractmethod
     def downgrade_follower_to_learner(self, target: Union[str, ConsensusNode]) -> ConsensusNode:
         """
@@ -303,6 +321,7 @@ class AbstractConsensusManager(AbstractContextManager):
         :return: a new ConsensusNode represents the target node.
         """
 
+    # FIXME: ConsensusNode -> ip:port
     @abstractmethod
     def configure_learner_source(self, learner: Union[str, ConsensusNode], source: Union[str, ConsensusNode],
                                  *, applied_index: bool):
@@ -363,4 +382,10 @@ class AbstractConsensusManager(AbstractContextManager):
         :param local: purge only local logs.
         :param force: force purge. (may not work on some versions)
         :return:
+        """
+
+    @abstractmethod
+    def show_slave_status(self) -> SlaveStatus:
+        """
+        return query result of "show slave status"
         """

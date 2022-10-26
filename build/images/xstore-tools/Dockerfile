@@ -19,21 +19,51 @@ RUN rpm --rebuilddb && yum install -y python3 && yum clean all
 
 # Copy files.
 WORKDIR /tools/xstore/current
-COPY requirements.txt requirements.txt
+COPY tools/xstore/requirements.txt requirements.txt
 
 # Download dependencies.
-RUN mkdir -p deps && python3 -m pip download -r requirements.txt -d deps
+# RUN mkdir -p deps && python3 -m pip download -r requirements.txt -d deps
 
 # Build the virtualenv.
 RUN python3 -m venv --copies ./venv
+
+#Upgrade pip in the virtualenv
+RUN ./venv/bin/pip install --upgrade pip
+
 RUN ./venv/bin/pip install -r requirements.txt -f deps && ./venv/bin/pip uninstall -y pip setuptools
-COPY . .
+COPY tools/xstore .
 
 # Precompile scripts and imported libs.
 RUN ./venv/bin/python3 -m compileall . && LC_LANG=en_US.utf8 LC_ALL=en_US.utf8 ENGINE=mock ./venv/bin/python3 cli.py
 
+
+FROM golang:1.18 as gobuilder
+
+WORKDIR /workspace
+
+# Copy the Go Modules manifests
+COPY go.mod go.mod
+COPY go.sum go.sum
+
+# cache deps before building and copying source so that we don't need to re-download as much
+# and so that source changes don't invalidate our downloaded layer
+ENV GOPROXY=https://goproxy.cn
+RUN go mod download
+
+# Copy the go source
+ADD api api
+ADD cmd cmd
+ADD pkg pkg
+ADD third-party third-party
+
+# Build binlog tools
+RUN CGO_ENABLED=0 GOOS=linux GO111MODULE=on go build -tags polardbx -o polardbx-binlog cmd/polardbx-binlog/main.go
+# Build filestream tools
+RUN CGO_ENABLED=0 GOOS=linux GO111MODULE=on go build -o polardbx-filestream-client cmd/polardbx-filestream-cli/main.go
+
+
 # Build the image with scripts
-FROM busybox:latest
+FROM polardbx/xstore-tools-base:v1.3.0
 
 ARG VERSION=test
 
@@ -41,9 +71,12 @@ ARG VERSION=test
 WORKDIR /tools/xstore/current
 
 # Copy source before
-COPY . .
+COPY tools/xstore .
 COPY --from=builder /tools/xstore/current/venv venv
 COPY --from=builder /tools/xstore/current/__pycache__ __pycache__
+COPY --from=gobuilder /workspace/polardbx-binlog bb
+RUN mkdir -p /tools/xstore/current/bin
+COPY --from=gobuilder /workspace/polardbx-filestream-client /tools/xstore/current/bin/
 
 # Copy all scripts
 RUN ln -s cli.py xsl && chmod +x xsl

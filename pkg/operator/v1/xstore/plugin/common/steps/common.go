@@ -17,6 +17,8 @@ limitations under the License.
 package steps
 
 import (
+	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/plugin/galaxy/galaxy"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -35,7 +37,7 @@ import (
 	xstorev1reconcile "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/reconcile"
 )
 
-func parseChannelFromConfigMap(cm *corev1.ConfigMap) (*channel.SharedChannel, error) {
+func ParseChannelFromConfigMap(cm *corev1.ConfigMap) (*channel.SharedChannel, error) {
 	sharedChannel := &channel.SharedChannel{}
 	err := sharedChannel.Load(cm.Data[channel.SharedChannelKey])
 	if err != nil {
@@ -44,17 +46,27 @@ func parseChannelFromConfigMap(cm *corev1.ConfigMap) (*channel.SharedChannel, er
 	return sharedChannel, nil
 }
 
-func transformPodsIntoNodesWithHeadlessServices(namespace string, pods []corev1.Pod) []channel.Node {
-	nodes := transformPodsIntoNodes(namespace, pods)
+func transformPodsIntoNodesWithServices(rc *xstorev1reconcile.Context, pods []corev1.Pod) []channel.Node {
+	nodes := TransformPodsIntoNodes(rc.Namespace(), pods)
 	// Reset every host to DNS.
 	for i := range nodes {
 		// DNS record for {service} because by default searches {ns}.svc.cluster.local
-		nodes[i].Host = convention.NewHeadlessServiceName(nodes[i].Pod)
+		service, err := rc.GetXStoreServiceForPod(nodes[i].Pod)
+		if err != nil {
+			panic(err)
+		}
+		nodes[i].Host = service.Name
+		if nodes[i].Role == strings.ToLower(xstoremeta.RoleLearner) {
+			nodes[i].Host = service.Spec.ClusterIP
+		}
+		if rc.MustGetXStore().Spec.Engine == galaxy.Engine {
+			nodes[i].Host = service.Spec.ClusterIP
+		}
 	}
 	return nodes
 }
 
-func transformPodsIntoNodes(namespace string, pods []corev1.Pod) []channel.Node {
+func TransformPodsIntoNodes(namespace string, pods []corev1.Pod) []channel.Node {
 	nodes := make([]channel.Node, 0, len(pods))
 	for _, pod := range pods {
 		paxosPort := k8shelper.MustGetPortFromContainer(
@@ -77,6 +89,51 @@ func transformPodsIntoNodes(namespace string, pods []corev1.Pod) []channel.Node 
 	return nodes
 }
 
+var SyncNodesInfoAndKeepBlock = xstorev1reconcile.NewStepBinder("SyncNodesInfoAndKeepBlock",
+	func(rc *xstorev1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+		sharedCm, err := rc.GetXStoreConfigMap(convention.ConfigMapTypeShared)
+		if err != nil {
+			return flow.Error(err, "Unable to get configmap")
+		}
+
+		sharedChannel, err := ParseChannelFromConfigMap(sharedCm)
+		if err != nil {
+			return flow.Error(err, "Unable to parse shared channel from config map.")
+		}
+
+		if sharedChannel.Nodes != nil {
+			return flow.Continue("Nodes' info already synced!")
+		}
+
+		pods, err := rc.GetXStorePods()
+		if err != nil {
+			return flow.Error(err, "Unable to get xcluster pods")
+		}
+
+		// Set the node's info.
+		if featuregate.EnableXStoreWithPodService.Enabled() {
+			sharedChannel.Nodes = transformPodsIntoNodesWithServices(rc, pods)
+		} else {
+			sharedChannel.Nodes = TransformPodsIntoNodes(rc.Namespace(), pods)
+		}
+
+		// Block for each pod.
+		sharedChannel.Indicates = make(map[string]channel.Indicate)
+		for _, p := range pods {
+			sharedChannel.Indicates[p.Name] = channel.Indicate{
+				Block: true,
+			}
+		}
+
+		// Update configmap.
+		sharedCm.Data[channel.SharedChannelKey] = sharedChannel.String()
+		if err := rc.Client().Update(rc.Context(), sharedCm); err != nil {
+			return flow.Error(err, "Unable to update xcluster configmap")
+		}
+
+		return flow.Continue("Global shared channel updated!")
+	})
+
 var UnblockBootstrap = xstorev1reconcile.NewStepBinder("UnblockBootstrap",
 	func(rc *xstorev1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
 		sharedCm, err := rc.GetXStoreConfigMap(convention.ConfigMapTypeShared)
@@ -84,7 +141,7 @@ var UnblockBootstrap = xstorev1reconcile.NewStepBinder("UnblockBootstrap",
 			return flow.Error(err, "Unable to get shared config map.")
 		}
 
-		sharedChannel, err := parseChannelFromConfigMap(sharedCm)
+		sharedChannel, err := ParseChannelFromConfigMap(sharedCm)
 		if err != nil {
 			return flow.Error(err, "Unable to parse shared channel from config map.")
 		}
@@ -102,12 +159,11 @@ var UnblockBootstrap = xstorev1reconcile.NewStepBinder("UnblockBootstrap",
 			return flow.Error(err, "Unable to get pods.")
 		}
 
-		if featuregate.EnableXStoreWithHeadlessService.Enabled() {
-			sharedChannel.Nodes = transformPodsIntoNodesWithHeadlessServices(rc.Namespace(), pods)
+		if featuregate.EnableXStoreWithPodService.Enabled() {
+			sharedChannel.Nodes = transformPodsIntoNodesWithServices(rc, pods)
 		} else {
-			sharedChannel.Nodes = transformPodsIntoNodes(rc.Namespace(), pods)
+			sharedChannel.Nodes = TransformPodsIntoNodes(rc.Namespace(), pods)
 		}
-
 		// update configmap.
 		sharedCm.Data[channel.SharedChannelKey] = sharedChannel.String()
 		err = rc.Client().Update(rc.Context(), sharedCm)

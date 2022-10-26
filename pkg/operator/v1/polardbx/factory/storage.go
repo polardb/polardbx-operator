@@ -19,12 +19,12 @@ package factory
 import (
 	"errors"
 	"fmt"
-	"strconv"
-
 	"gopkg.in/ini.v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	"strconv"
 
 	polardbxv1 "github.com/alibaba/polardbx-operator/api/v1"
 	polardbxv1common "github.com/alibaba/polardbx-operator/api/v1/common"
@@ -211,39 +211,66 @@ func (f *objectFactory) newXStoreNodeSets(polardbx *polardbxv1.PolarDBXCluster,
 			// Set default node to be single nodes if engine is galaxy
 			// and cluster mode isn't enabled.
 			if template.Engine == "galaxy" {
-				return []polardbxv1xstore.NodeSet{
-					{
-						Role:     polardbxv1xstore.RoleCandidate,
-						Replicas: 1,
-						Template: xstoreNodeTemplateWithResources(
-							nodeTemplate,
-							f.newXStoreNodeResources(template, polardbxv1xstore.RoleCandidate),
-						),
-					},
-				}, nil
+				if !polardbx.Spec.Readonly {
+					return []polardbxv1xstore.NodeSet{
+						{
+							Role:     polardbxv1xstore.RoleCandidate,
+							Replicas: 1,
+							Template: xstoreNodeTemplateWithResources(
+								nodeTemplate,
+								f.newXStoreNodeResources(template, polardbxv1xstore.RoleCandidate),
+							),
+						},
+					}, nil
+				} else {
+					return []polardbxv1xstore.NodeSet{
+						{
+							Role:     polardbxv1xstore.RoleLearner,
+							Replicas: 1,
+							Template: xstoreNodeTemplateWithResources(
+								nodeTemplate,
+								f.newXStoreNodeResources(template, polardbxv1xstore.RoleLearner),
+							),
+						},
+					}, nil
+				}
 			}
 		}
 
-		return []polardbxv1xstore.NodeSet{
-			{
-				Name:     "cand",
-				Role:     polardbxv1xstore.RoleCandidate,
-				Replicas: 2,
-				Template: xstoreNodeTemplateWithResources(
-					nodeTemplate,
-					f.newXStoreNodeResources(template, polardbxv1xstore.RoleCandidate),
-				),
-			},
-			{
-				Name:     "log",
-				Role:     polardbxv1xstore.RoleVoter,
-				Replicas: 1,
-				Template: xstoreNodeTemplateWithResources(
-					nodeTemplate,
-					f.newXStoreNodeResources(template, polardbxv1xstore.RoleVoter),
-				),
-			},
-		}, nil
+		if !polardbx.Spec.Readonly {
+			return []polardbxv1xstore.NodeSet{
+				{
+					Name:     "cand",
+					Role:     polardbxv1xstore.RoleCandidate,
+					Replicas: 2,
+					Template: xstoreNodeTemplateWithResources(
+						nodeTemplate,
+						f.newXStoreNodeResources(template, polardbxv1xstore.RoleCandidate),
+					),
+				},
+				{
+					Name:     "log",
+					Role:     polardbxv1xstore.RoleVoter,
+					Replicas: 1,
+					Template: xstoreNodeTemplateWithResources(
+						nodeTemplate,
+						f.newXStoreNodeResources(template, polardbxv1xstore.RoleVoter),
+					),
+				},
+			}, nil
+		} else {
+			return []polardbxv1xstore.NodeSet{
+				{
+					Name:     "learner",
+					Role:     polardbxv1xstore.RoleLearner,
+					Replicas: 1,
+					Template: xstoreNodeTemplateWithResources(
+						nodeTemplate,
+						f.newXStoreNodeResources(template, polardbxv1xstore.RoleLearner),
+					),
+				},
+			}, nil
+		}
 	} else if rule.Rolling != nil {
 		rs := rule.Rolling
 		if rs.Replicas&1 == 0 {
@@ -265,7 +292,9 @@ func (f *objectFactory) newXStoreNodeSets(polardbx *polardbxv1.PolarDBXCluster,
 		nodeSets := make([]polardbxv1xstore.NodeSet, 0, int(rs.Replicas))
 		for i := 0; i < int(rs.Replicas); i++ {
 			name, role := fmt.Sprintf("cand-%d", i), polardbxv1xstore.RoleCandidate
-			if i != 0 && i == int(rs.Replicas-1) {
+			if polardbx.Spec.Readonly {
+				name, role = fmt.Sprintf("lear-%d", i), polardbxv1xstore.RoleLearner
+			} else if i != 0 && i == int(rs.Replicas-1) {
 				name, role = fmt.Sprintf("log-%d", i), polardbxv1xstore.RoleVoter
 			}
 
@@ -294,12 +323,14 @@ func (f *objectFactory) newXStoreNodeSets(polardbx *polardbxv1.PolarDBXCluster,
 	} else {
 		// Validate the rule
 		nodeSetNames := make(map[string]struct{})
-		candidatesCnt, votersCnt := 0, 0
+		candidatesCnt, votersCnt, learnerCnt := 0, 0, 0
 		for _, ns := range rule.NodeSets {
 			if ns.Role == polardbxv1xstore.RoleCandidate {
 				candidatesCnt += int(ns.Replicas)
 			} else if ns.Role == polardbxv1xstore.RoleVoter {
 				votersCnt += int(ns.Replicas)
+			} else if ns.Role == polardbxv1xstore.RoleLearner {
+				learnerCnt += int(ns.Replicas)
 			}
 			if ns.Replicas == 0 {
 				return nil, errors.New("invalid xstore topology rule: replicas is zero")
@@ -309,11 +340,20 @@ func (f *objectFactory) newXStoreNodeSets(polardbx *polardbxv1.PolarDBXCluster,
 			}
 			nodeSetNames[ns.Name] = struct{}{}
 		}
-		if candidatesCnt == 0 {
-			return nil, errors.New("invalid xstore topology rule: no candidate found")
-		}
-		if (candidatesCnt+votersCnt)&1 == 0 {
-			return nil, errors.New("invalid xstore topology rule: even voters")
+		if polardbx.Spec.Readonly {
+			if learnerCnt == 0 {
+				return nil, errors.New("invalid readonly xstore topology rule: no learner found")
+			}
+			if candidatesCnt != 0 || votersCnt != 0 {
+				return nil, errors.New("invalid readonly xstore topoly rule: containing votes")
+			}
+		} else {
+			if candidatesCnt == 0 {
+				return nil, errors.New("invalid xstore topology rule: no candidate found")
+			}
+			if (candidatesCnt+votersCnt)&1 == 0 {
+				return nil, errors.New("invalid xstore topology rule: even voters")
+			}
 		}
 
 		// Build node sets.
@@ -343,6 +383,7 @@ func (f *objectFactory) newXStoreNodeSets(polardbx *polardbxv1.PolarDBXCluster,
 func (f *objectFactory) newXStore(
 	polardbx *polardbxv1.PolarDBXCluster,
 	name string,
+	restoreName string,
 	rule *polardbxv1polardbx.XStoreTopologyRule,
 	template *polardbxv1polardbx.XStoreTemplate,
 	mycnfOverlay string,
@@ -354,9 +395,18 @@ func (f *objectFactory) newXStore(
 	// Determine log purge interval
 	dnConfig := polardbx.Spec.Config.DN
 	logPurgeInterval := dnConfig.LogPurgeInterval
+	logDataSeparation := dnConfig.LogDataSeparation
+	staticConfig := polardbx.Spec.Config.CN.Static
+	rpcProtocolVersion := intstr.FromInt(1)
+	if staticConfig != nil {
+		rpcProtocolVersion = staticConfig.RPCProtocolVersion
+	}
 
 	// Determine version.
 	engine := template.Engine
+
+	// Determine parameter template.
+	templateName := polardbx.Spec.ParameterTemplate.Name
 
 	// Build
 	affinity := f.newXStoreNodeSetAffinity(polardbx, nil)
@@ -382,6 +432,16 @@ func (f *objectFactory) newXStore(
 		return nil, err
 	}
 
+	primaryXStoreName := name
+
+	if polardbx.Spec.Readonly {
+		primaryPolardbx, err := f.rc.GetPrimaryPolarDBX()
+		if err != nil {
+			return nil, err
+		}
+		primaryXStoreName = convention.NewDNName(primaryPolardbx, rollingNodeIndex)
+	}
+
 	xstore := &polardbxv1.XStore{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -390,6 +450,7 @@ func (f *objectFactory) newXStore(
 				copyutil.CopyStrMap(labels),
 				map[string]string{
 					polardbxmeta.LabelGeneration: strconv.FormatInt(polardbx.Status.ObservedGeneration, 10),
+					xstoremeta.LabelPrimaryName:  primaryXStoreName,
 				},
 			),
 			Annotations: map[string]string{
@@ -399,13 +460,18 @@ func (f *objectFactory) newXStore(
 			Finalizers: []string{polardbxmeta.Finalizer},
 		},
 		Spec: polardbxv1.XStoreSpec{
-			Engine:        template.Engine,
-			ServiceLabels: labels,
-			ServiceType:   template.ServiceType,
+			Engine:         template.Engine,
+			ServiceLabels:  labels,
+			ServiceType:    template.ServiceType,
+			Readonly:       polardbx.Spec.Readonly,
+			PrimaryCluster: polardbx.Spec.PrimaryCluster,
+			PrimaryXStore:  primaryXStoreName,
 			Config: polardbxv1xstore.Config{
 				Dynamic: polardbxv1xstore.ControllerConfig{
-					LogPurgeInterval: &logPurgeInterval,
-					DiskQuota:        template.DiskQuota,
+					LogPurgeInterval:   &logPurgeInterval,
+					DiskQuota:          template.DiskQuota,
+					LogDataSeparation:  logDataSeparation,
+					RpcProtocolVersion: rpcProtocolVersion,
 				},
 				Engine: polardbxv1xstore.EngineConfig{
 					Override: &polardbxv1common.Value{
@@ -416,12 +482,67 @@ func (f *objectFactory) newXStore(
 			Topology: polardbxv1xstore.Topology{
 				NodeSets: nodeSets,
 			},
+			ParameterTemplate: polardbxv1xstore.ParameterTemplate{
+				Name: templateName,
+			},
 		},
 	}
+	restoreOpt := polardbx.Spec.Restore
+	if polardbx.Status.Phase == polardbxv1polardbx.PhaseRestoring && restoreOpt != nil {
+		if restoreOpt.BackupSet == "" || len(restoreOpt.BackupSet) == 0 {
+			xstore.Spec.Restore = &polardbxv1.XStoreRestoreSpec{
+				From: polardbxv1.XStoreRestoreFrom{
+					XStoreName: restoreName,
+				},
+				Time:     restoreOpt.Time,
+				TimeZone: restoreOpt.TimeZone,
+			}
+		} else {
+			backupSet, err := f.GetXStoreBackupName(restoreOpt.BackupSet, restoreName)
+			if err != nil {
+				return nil, err
+			}
+			xstore.Spec.Restore = &polardbxv1.XStoreRestoreSpec{
+				BackupSet: backupSet,
+				From: polardbxv1.XStoreRestoreFrom{
+					XStoreName: restoreName,
+				},
+			}
 
-	// TODO restore when polardbx cluster is restoring.
+		}
+	}
 
 	return xstore, nil
+}
+
+func (f *objectFactory) GetXStoreName(polardbx polardbxv1.PolarDBXCluster, name string) (string, error) {
+	backup := &polardbxv1.PolarDBXBackup{}
+	if polardbx.Spec.Restore.BackupSet == "" && len(polardbx.Spec.Restore.BackupSet) == 0 {
+		backup, _ = f.rc.GetCompletedPXCBackup(map[string]string{polardbxmeta.LabelName: polardbx.Spec.Restore.From.PolarBDXName})
+	} else {
+		backup, _ = f.rc.GetPXCBackupByName(polardbx.Spec.Restore.BackupSet)
+	}
+	if backup == nil {
+		return "", nil
+	}
+	for _, xstoreName := range backup.Status.XStores {
+		if xstoreName[len(xstoreName)-4:] == name[len(name)-4:] {
+			return xstoreName, nil
+		}
+	}
+	return "", nil
+}
+
+func (f *objectFactory) GetXStoreBackupName(backupName, xstoreName string) (string, error) {
+	backup, err := f.rc.GetPXCBackupByName(backupName)
+	if err != nil {
+		return "", err
+	}
+	xstoreBackupName, ok := backup.Status.Backups[xstoreName]
+	if ok {
+		return xstoreBackupName, nil
+	}
+	return "", errors.New("not found xstoreBackup")
 }
 
 func (f *objectFactory) newMycnfOverlayInfFile(polardbxstore *polardbxv1.PolarDBXCluster, enforceTso bool) (*ini.File, error) {
@@ -452,6 +573,17 @@ func (f *objectFactory) newMycnfOverlayInfFile(polardbxstore *polardbxv1.PolarDB
 		file.Section("").Key("loose_enable_gts").SetValue("1")
 	}
 
+	staticConfig := polardbxstore.Spec.Config.CN.Static
+	var useNewRpc string
+	if staticConfig != nil {
+		if staticConfig.RPCProtocolVersion.String() == "1" {
+			useNewRpc = "off"
+		} else {
+			useNewRpc = "on"
+		}
+	}
+	file.Section("").Key("loose_new_rpc").SetValue(useNewRpc)
+
 	return file, nil
 }
 
@@ -476,7 +608,6 @@ func (f *objectFactory) NewXStoreGMS() (*polardbxv1.XStore, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	template := f.getTopologyNodeTemplateForGMS(polardbx)
 	rule := f.getTopologyNodeRuleForGMS(polardbx)
 
@@ -484,10 +615,20 @@ func (f *objectFactory) NewXStoreGMS() (*polardbxv1.XStore, error) {
 	if err != nil {
 		return nil, err
 	}
+	xstoreName := convention.NewGMSName(polardbx)
+
+	restoreName := ""
+	if polardbx.Status.Phase == polardbxv1polardbx.PhaseRestoring {
+		restoreName, err = f.GetXStoreName(*polardbx, xstoreName)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	return f.newXStore(
 		polardbx,
-		convention.NewGMSName(polardbx),
+		xstoreName,
+		restoreName,
 		rule,
 		template,
 		mycnfOverlay,
@@ -519,9 +660,18 @@ func (f *objectFactory) NewXStoreDN(idx int) (*polardbxv1.XStore, error) {
 		return nil, err
 	}
 
-	return f.newXStore(
+	xstoreName := convention.NewDNName(polardbx, idx)
+	restoreName := ""
+	if polardbx.Status.Phase == polardbxv1polardbx.PhaseRestoring {
+		restoreName, err = f.GetXStoreName(*polardbx, xstoreName)
+		if err != nil {
+			return nil, err
+		}
+	}
+	xstore, err := f.newXStore(
 		polardbx,
-		convention.NewDNName(polardbx, idx),
+		xstoreName,
+		restoreName,
 		topology.Rules.Components.DN,
 		template,
 		mycnfOverlay,
@@ -529,4 +679,10 @@ func (f *objectFactory) NewXStoreDN(idx int) (*polardbxv1.XStore, error) {
 		f.newPodAnnotations(polardbx),
 		idx,
 	)
+
+	if err == nil && xstore != nil {
+		convention.AddLabelHash(xstoremeta.LabelHash, xstore)
+	}
+
+	return xstore, err
 }

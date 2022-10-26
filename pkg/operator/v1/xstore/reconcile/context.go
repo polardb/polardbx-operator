@@ -17,9 +17,16 @@ limitations under the License.
 package reconcile
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/alibaba/polardbx-operator/pkg/meta/core/gms"
+	"github.com/alibaba/polardbx-operator/pkg/util"
+	"k8s.io/utils/pointer"
 	"strings"
+	"time"
+
+	polardbxmeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/meta"
 
 	"google.golang.org/grpc"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -48,14 +55,15 @@ type Context struct {
 	*control.BaseReconcileContext
 
 	// Caches
-	xstoreKey        types.NamespacedName
-	xstoreChanged    bool
-	xstore           *polardbxv1.XStore
-	xstoreStatus     *polardbxv1.XStoreStatus
-	pods             []corev1.Pod
-	headlessServices map[string]corev1.Service
-	nodes            []corev1.Node
-	objectCache      cache.ObjectLoadingCache
+	xstoreKey     types.NamespacedName
+	xstoreChanged bool
+	xstore        *polardbxv1.XStore
+	primaryXstore *polardbxv1.XStore
+	xstoreStatus  *polardbxv1.XStoreStatus
+	pods          []corev1.Pod
+	podServices   map[string]corev1.Service
+	nodes         []corev1.Node
+	objectCache   cache.ObjectLoadingCache
 
 	// Hint cache
 	controllerHints []string
@@ -66,6 +74,17 @@ type Context struct {
 
 	// Config
 	configLoader func() config.Config
+
+	taskConfigMap *corev1.ConfigMap
+
+	// Parameter Template
+	polardbxParameterTemplate *polardbxv1.PolarDBXParameterTemplate
+	polardbxTemplateParams    map[string]map[string]polardbxv1.TemplateParams
+	polardbxParamsRoleMap     map[string]map[string]polardbxv1.Params
+
+	polardbxParameter       *polardbxv1.PolarDBXParameter
+	polardbxParameterKey    types.NamespacedName
+	polardbxParameterStatus *polardbxv1.PolarDBXParameterStatus
 }
 
 func (rc *Context) Debug() bool {
@@ -90,6 +109,71 @@ func (rc *Context) GetNodes() ([]corev1.Node, error) {
 
 func (rc *Context) SetXStoreKey(key types.NamespacedName) {
 	rc.xstoreKey = key
+}
+
+func (rc *Context) CountCreatingLearners() (int, error) {
+	xstore := rc.MustGetXStore()
+
+	var readonlyXstoreList polardbxv1.XStoreList
+
+	err := rc.Client().List(
+		rc.Context(),
+		&readonlyXstoreList,
+		client.MatchingLabels(
+			k8shelper.PatchLabels(
+				map[string]string{
+					xstoremeta.LabelPrimaryName: xstore.Name,
+				},
+			),
+		),
+	)
+
+	if err != nil {
+		return 0, fmt.Errorf("failed to fetch readonly xstore list: %w", err)
+	}
+
+	creatingCnt := 0
+
+	for _, readonlyXstore := range readonlyXstoreList.Items {
+		if readonlyXstore.Status.Phase == polardbxv1xstore.PhaseCreating {
+			creatingCnt++
+		}
+	}
+
+	return creatingCnt, nil
+}
+
+func (rc *Context) GetPrimaryXStore() (*polardbxv1.XStore, error) {
+	xstore := rc.MustGetXStore()
+
+	if !xstore.Spec.Readonly {
+		return nil, errors.New("current xstore is not readonly")
+	}
+
+	if rc.primaryXstore == nil {
+		primaryXStoreKey := types.NamespacedName{
+			Namespace: rc.xstoreKey.Namespace,
+			Name:      xstore.Spec.PrimaryXStore,
+		}
+		primaryXstore, err := rc.objectCache.GetObject(
+			rc.Context(),
+			primaryXStoreKey,
+			&polardbxv1.XStore{})
+		if err != nil {
+			return nil, err
+		}
+		rc.primaryXstore = primaryXstore.(*polardbxv1.XStore)
+		// TODO: maintain primaryXstoreStatus
+	}
+	return rc.primaryXstore, nil
+}
+
+func (rc *Context) MustGetPrimaryXStore() *polardbxv1.XStore {
+	xstore, err := rc.GetPrimaryXStore()
+	if err != nil {
+		panic(err)
+	}
+	return xstore
 }
 
 func (rc *Context) GetXStore() (*polardbxv1.XStore, error) {
@@ -245,16 +329,55 @@ func (rc *Context) GetXStoreSecret() (*corev1.Secret, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get xstore object: %w", err)
 	}
+	if xstore.Spec.Readonly {
+		xstore, err = rc.GetPrimaryXStore()
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	secretKey := types.NamespacedName{Namespace: xstore.Namespace, Name: convention.NewSecretName(xstore)}
 	secret, err := rc.objectCache.GetObject(rc.Context(), secretKey, &corev1.Secret{})
 	if err != nil {
 		return nil, err
 	}
-	if err := k8shelper.CheckControllerReference(secret, rc.MustGetXStore()); err != nil {
+	if err := k8shelper.CheckControllerReference(secret, xstore); err != nil {
 		return nil, err
 	}
 	return secret.(*corev1.Secret), nil
+}
+
+func (rc *Context) CreateSecretByXStore(xstore *polardbxv1.XStore) (*corev1.Secret, error) {
+	secretKey := types.NamespacedName{}
+	if xstore.Spec.Restore.BackupSet == "" || len(xstore.Spec.Restore.BackupSet) == 0 {
+		backup, err := rc.GetLastCompletedXStoreBackup(map[string]string{
+			xstoremeta.LabelName: xstore.Spec.Restore.From.XStoreName,
+		}, rc.MustParseRestoreTime())
+		if err != nil {
+			return nil, err
+		}
+		secretKey = types.NamespacedName{Namespace: rc.Namespace(), Name: backup.Name}
+	} else {
+		secretKey = types.NamespacedName{Namespace: rc.Namespace(), Name: xstore.Spec.Restore.BackupSet}
+	}
+	secret, err := rc.objectCache.GetObject(rc.Context(), secretKey, &corev1.Secret{})
+	if err != nil {
+		return nil, err
+	}
+	data := make(map[string][]byte)
+	for user, passwd := range secret.(*corev1.Secret).Data {
+		data[user] = passwd
+	}
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      convention.NewSecretName(xstore),
+			Namespace: xstore.Namespace,
+			Labels:    convention.ConstLabels(xstore),
+		},
+		Immutable: pointer.Bool(true),
+		Type:      corev1.SecretTypeOpaque,
+		Data:      data,
+	}, nil
 }
 
 func (rc *Context) GetXStoreAccountPassword(user string) (string, error) {
@@ -301,6 +424,20 @@ func (rc *Context) GetXStoreConfigMap(cmType convention.ConfigMapType) (*corev1.
 	return cm.(*corev1.ConfigMap), nil
 }
 
+func (rc *Context) GetXStorePodByPrefix(name string) (*corev1.Pod, error) {
+	xstore := rc.MustGetXStore()
+	pods, err := rc.GetXStorePods()
+	if err != nil {
+		return nil, err
+	}
+	for _, pod := range pods {
+		if strings.HasPrefix(pod.Name, convention.NewJobName(xstore, name)) {
+			return &pod, nil
+		}
+	}
+	return nil, apierrors.NewNotFound(schema.GroupResource{}, "")
+}
+
 func (rc *Context) GetXStorePod(name string) (*corev1.Pod, error) {
 	pods, err := rc.GetXStorePods()
 	if err != nil {
@@ -314,50 +451,72 @@ func (rc *Context) GetXStorePod(name string) (*corev1.Pod, error) {
 	return nil, apierrors.NewNotFound(schema.GroupResource{}, "")
 }
 
+func (rc *Context) getXStorePods(xstore *polardbxv1.XStore) ([]corev1.Pod, error) {
+	podLabels := convention.ConstLabels(xstore)
+
+	var podList corev1.PodList
+	err := rc.Client().List(rc.Context(), &podList, client.InNamespace(rc.Namespace()),
+		client.MatchingLabels(podLabels))
+	if err != nil {
+		return nil, err
+	}
+
+	// Branch pod isn't owned by this xstore, just ignore it.
+	pods := make([]corev1.Pod, 0, len(podList.Items))
+	for _, pod := range podList.Items {
+		if err := k8shelper.CheckControllerReference(&pod, xstore); err != nil {
+			continue
+		}
+		pods = append(pods, pod)
+	}
+
+	return pods, nil
+}
+
 func (rc *Context) GetXStorePods() ([]corev1.Pod, error) {
 	if rc.pods == nil {
 		xstore := rc.MustGetXStore()
-
-		podLabels := convention.ConstLabels(xstore)
-
-		var podList corev1.PodList
-		err := rc.Client().List(rc.Context(), &podList, client.InNamespace(rc.Namespace()),
-			client.MatchingLabels(podLabels))
+		pods, err := rc.getXStorePods(xstore)
 		if err != nil {
 			return nil, err
 		}
 
-		// Branch pod isn't owned by this xstore, just ignore it.
-		pods := make([]corev1.Pod, 0, len(podList.Items))
-		for _, pod := range podList.Items {
-			if err := k8shelper.CheckControllerReference(&pod, rc.MustGetXStore()); err != nil {
-				continue
-			}
-			pods = append(pods, pod)
-		}
 		rc.pods = pods
 	}
 
 	return rc.pods, nil
 }
 
-func (rc *Context) GetXStoreHeadlessServiceForPod(pod string) (*corev1.Service, error) {
-	svcList, err := rc.GetXStoreHeadlessServices()
+func (rc *Context) GetPrimaryXStorePods() ([]corev1.Pod, error) {
+	xstore, err := rc.GetPrimaryXStore()
 	if err != nil {
 		return nil, err
 	}
-	svc, ok := svcList[convention.NewHeadlessServiceName(pod)]
+	pods, err := rc.getXStorePods(xstore)
+	if err != nil {
+		return nil, err
+	}
+
+	return pods, nil
+}
+
+func (rc *Context) GetXStoreServiceForPod(pod string) (*corev1.Service, error) {
+	svcList, err := rc.GetXStorePodServices()
+	if err != nil {
+		return nil, err
+	}
+	svc, ok := svcList[pod]
 	if !ok {
 		return nil, apierrors.NewNotFound(schema.GroupResource{}, "")
 	}
 	return &svc, nil
 }
 
-func (rc *Context) GetXStoreHeadlessServices() (map[string]corev1.Service, error) {
-	if rc.headlessServices == nil {
+func (rc *Context) GetXStorePodServices() (map[string]corev1.Service, error) {
+	if rc.podServices == nil {
 		svcLabels := convention.ConstLabels(rc.MustGetXStore())
 		svcLabels = k8shelper.PatchLabels(svcLabels, map[string]string{
-			xstoremeta.LabelServiceType: string(convention.ServiceTypeHeadless),
+			xstoremeta.LabelServiceType: string(convention.ServiceTypeClusterIp),
 		})
 
 		var svcList corev1.ServiceList
@@ -368,7 +527,7 @@ func (rc *Context) GetXStoreHeadlessServices() (map[string]corev1.Service, error
 			return nil, err
 		}
 
-		headlessServices := make(map[string]corev1.Service)
+		podServices := make(map[string]corev1.Service)
 		for _, svc := range svcList.Items {
 			// Ignore not owned
 			if err := k8shelper.CheckControllerReference(&svc, rc.MustGetXStore()); err != nil {
@@ -380,17 +539,34 @@ func (rc *Context) GetXStoreHeadlessServices() (map[string]corev1.Service, error
 			if !ok {
 				continue
 			}
-			headlessServices[pod] = svc
+			podServices[pod] = svc
 		}
-		rc.headlessServices = headlessServices
+		rc.podServices = podServices
 	}
-	return rc.headlessServices, nil
+	return rc.podServices, nil
 }
 
 func (rc *Context) TryGetXStoreLeaderPod() (*corev1.Pod, error) {
 	xstore := rc.MustGetXStore()
+	readonly := xstore.Spec.Readonly
+	var err error
+
+	if readonly {
+		xstore, err = rc.GetPrimaryXStore()
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	leaderPodName := xstore.Status.LeaderPod
-	pods, err := rc.GetXStorePods()
+
+	var pods []corev1.Pod
+
+	if readonly {
+		pods, err = rc.GetPrimaryXStorePods()
+	} else {
+		pods, err = rc.GetXStorePods()
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -499,10 +675,228 @@ func (rc *Context) Close() error {
 	return nil
 }
 
+func (rc *Context) ParseRestoreTime() (time.Time, error) {
+	xcluster := rc.MustGetXStore()
+	if xcluster.Spec.Restore == nil {
+		return time.Time{}, nil
+	}
+
+	location, err := time.LoadLocation(gms.StrOrDefault(xcluster.Spec.Restore.TimeZone, "Asia/Shanghai"))
+	if err != nil {
+		return time.Time{}, nil
+	}
+
+	return time.ParseInLocation("2006-01-02 15:04:05", xcluster.Spec.Restore.Time, location)
+}
+
+func (rc *Context) MustParseRestoreTime() time.Time {
+	t, err := rc.ParseRestoreTime()
+	if err != nil {
+		panic(err)
+	}
+	return t
+}
+
+func (rc *Context) GetLastCompletedXStoreBackup(matchLabels map[string]string, beforeTime time.Time) (*polardbxv1.XStoreBackup, error) {
+	xstoreBackupList := &polardbxv1.XStoreBackupList{}
+	err := rc.Client().List(rc.Context(), xstoreBackupList, client.InNamespace(rc.Namespace()),
+		client.MatchingLabels(matchLabels))
+	if err != nil || len(xstoreBackupList.Items) == 0 {
+		return nil, err
+	}
+
+	// Get the last backup, skip those not finished and before specified time
+	var lastBackup *polardbxv1.XStoreBackup = nil
+	var lastBackupStartTime *time.Time = nil
+	for i := range xstoreBackupList.Items {
+		backup := &xstoreBackupList.Items[i]
+		if backup.Status.Phase != polardbxv1.XStoreBackupFinished {
+			continue
+		}
+		if backup.Status.EndTime.After(beforeTime) {
+			continue
+		}
+		if lastBackupStartTime == nil ||
+			lastBackupStartTime.Before(backup.Status.StartTime.Time) {
+			lastBackupStartTime = &backup.Status.StartTime.Time
+			lastBackup = backup
+		}
+	}
+
+	return lastBackup, nil
+}
+
+func (rc *Context) GetOrCreateXStoreTaskConfigMap() (*corev1.ConfigMap, error) {
+	if rc.taskConfigMap == nil {
+		xstore := rc.MustGetXStore()
+
+		var cm corev1.ConfigMap
+		err := rc.Client().Get(rc.Context(), types.NamespacedName{Namespace: rc.Namespace(), Name: util.StableName(xstore, "restore")}, &cm)
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				rc.taskConfigMap = NewTaskConfigMap(xstore)
+				err = rc.SetControllerRefAndCreate(rc.taskConfigMap)
+				if err != nil {
+					return nil, err
+				}
+				return rc.taskConfigMap, nil
+			}
+			return nil, err
+		}
+
+		rc.taskConfigMap = &cm
+	}
+	return rc.taskConfigMap, nil
+}
+
+func (rc *Context) SaveTaskContext(key string, t interface{}) error {
+	b, err := json.MarshalIndent(t, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	cm, err := rc.GetOrCreateXStoreTaskConfigMap()
+	if err != nil {
+		return err
+	}
+
+	if cm.Data == nil {
+		cm.Data = make(map[string]string)
+	}
+
+	if s, ok := cm.Data[key]; ok {
+		if s == string(b) {
+			return nil
+		}
+	}
+
+	cm.Data[key] = string(b)
+	return rc.Client().Update(rc.Context(), cm)
+}
+
+func (rc *Context) IsTaskContextExists(key string) (bool, error) {
+	cm, err := rc.GetOrCreateXStoreTaskConfigMap()
+	if err != nil {
+		return false, err
+	}
+	_, ok := cm.Data[key]
+	return ok, nil
+}
+
+func (rc *Context) GetTaskContext(key string, t interface{}) error {
+	cm, err := rc.GetOrCreateXStoreTaskConfigMap()
+	if err != nil {
+		return err
+	}
+
+	return json.Unmarshal([]byte(cm.Data[key]), t)
+}
+
+func (rc *Context) GetPolarDBXTemplateName() (parameterTemplateName string) {
+	xStore := rc.MustGetXStore()
+	return xStore.Spec.ParameterTemplate.Name
+}
+
+func (rc *Context) GetPolarDBXParameterTemplate(name string) (*polardbxv1.PolarDBXParameterTemplate, error) {
+	tmKey := types.NamespacedName{
+		Namespace: rc.xstoreKey.Namespace,
+		Name:      name,
+	}
+	if rc.polardbxParameterTemplate == nil {
+		polardbxParameterTemplate, err := rc.objectCache.GetObject(
+			rc.Context(),
+			tmKey,
+			&polardbxv1.PolarDBXParameterTemplate{},
+		)
+		if err != nil {
+			return nil, err
+		}
+		rc.polardbxParameterTemplate = polardbxParameterTemplate.(*polardbxv1.PolarDBXParameterTemplate)
+	}
+	return rc.polardbxParameterTemplate, nil
+}
+
+func (rc *Context) GetPolarDBXParameter() (*polardbxv1.PolarDBXParameter, error) {
+	if rc.polardbxParameter == nil {
+		polardbxParameter, err := rc.objectCache.GetObject(
+			rc.Context(),
+			rc.polardbxParameterKey,
+			&polardbxv1.PolarDBXParameter{},
+		)
+		if err != nil {
+			return nil, err
+		}
+		rc.polardbxParameter = polardbxParameter.(*polardbxv1.PolarDBXParameter)
+		rc.polardbxParameterStatus = rc.polardbxParameter.Status.DeepCopy()
+	}
+	return rc.polardbxParameter, nil
+}
+
+func (rc *Context) MustGetPolarDBXParameter() *polardbxv1.PolarDBXParameter {
+	polardbxparameter, err := rc.GetPolarDBXParameter()
+	if err != nil {
+		panic(err)
+	}
+	return polardbxparameter
+}
+
+func (rc *Context) GetXStoreRestarting() bool {
+	xstore := rc.MustGetXStore()
+	return xstore.Status.Restarting
+}
+
+func (rc *Context) GetXStoreUpdateConfingMap() bool {
+	xstore := rc.MustGetXStore()
+	return xstore.Status.UpdateConfigMap
+}
+
+func (rc *Context) SetPolarDBXParams(param map[string]map[string]polardbxv1.Params) {
+	rc.polardbxParamsRoleMap = param
+}
+
+func (rc *Context) GetPolarDBXParams() (params map[string]map[string]polardbxv1.Params) {
+	if rc.polardbxParamsRoleMap == nil {
+		param := make(map[string]map[string]polardbxv1.Params)
+		param[polardbxv1.DNReadOnly] = make(map[string]polardbxv1.Params)
+		param[polardbxv1.DNReadWrite] = make(map[string]polardbxv1.Params)
+		param[polardbxv1.DNRestart] = make(map[string]polardbxv1.Params)
+		param[polardbxv1.GMSReadOnly] = make(map[string]polardbxv1.Params)
+		param[polardbxv1.GMSReadWrite] = make(map[string]polardbxv1.Params)
+		param[polardbxv1.GMSRestart] = make(map[string]polardbxv1.Params)
+		rc.polardbxParamsRoleMap = param
+	}
+	return rc.polardbxParamsRoleMap
+}
+
+func (rc *Context) SetPolarDBXTemplateParams(templateParams map[string]map[string]polardbxv1.TemplateParams) {
+	rc.polardbxTemplateParams = templateParams
+}
+
+func (rc *Context) GetPolarDBXTemplateParams() (templateParams map[string]map[string]polardbxv1.TemplateParams) {
+	if rc.polardbxTemplateParams == nil {
+		templateParam := make(map[string]map[string]polardbxv1.TemplateParams)
+		templateParam[polardbxmeta.RoleDN] = make(map[string]polardbxv1.TemplateParams)
+		templateParam[polardbxmeta.RoleGMS] = make(map[string]polardbxv1.TemplateParams)
+		rc.polardbxTemplateParams = templateParam
+	}
+	return rc.polardbxTemplateParams
+}
+
 func NewContext(base *control.BaseReconcileContext, configLoader func() config.Config) *Context {
 	return &Context{
 		BaseReconcileContext: base,
 		objectCache:          cache.NewObjectCache(base.Client(), base.Scheme()),
 		configLoader:         configLoader,
+	}
+}
+
+func NewTaskConfigMap(xstore *polardbxv1.XStore) *corev1.ConfigMap {
+	return &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      convention.NewConfigMapName(xstore, "restore"),
+			Namespace: xstore.Namespace,
+			Labels:    k8shelper.PatchLabels(convention.ConstLabels(xstore), convention.LabelGeneration(xstore)),
+		},
+		Immutable: pointer.Bool(false),
 	}
 }
