@@ -122,3 +122,27 @@ var CheckDNs = polardbxv1reconcile.NewStepBinder("CheckDNs",
 		return flow.Pass()
 	},
 )
+
+// SyncSpecFromBackupSet aims to sync spec with original pxc cluster from backup set,
+// currently restore does not support change DN replicas
+var SyncSpecFromBackupSet = polardbxv1reconcile.NewStepBinder("SyncSpecFromBackupSet",
+	func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+		polardbx := rc.MustGetPolarDBX()
+		pxcBackup, err := rc.GetPXCBackupByName(polardbx.Spec.Restore.BackupSet)
+		if err != nil {
+			return flow.Error(err, "Unable to get polardbx backup {}", pxcBackup.Name)
+		}
+
+		// TODO(dengli): load spec from remote backup set
+		if polardbx.Spec.Restore.SyncSpecWithOriginalCluster {
+			polardbx.Spec = *pxcBackup.Status.ClusterSpecSnapshot
+		} else { // ensure that restored cluster have the same dn replicas with original cluster
+			polardbx.Spec.Topology.Nodes.DN.Replicas = pxcBackup.Status.ClusterSpecSnapshot.Topology.Nodes.DN.Replicas
+		}
+		err = rc.Client().Update(rc.Context(), polardbx)
+		if err != nil {
+			return flow.Error(err, "Failed to sync topology from backup set")
+		}
+		return flow.Pass()
+	},
+)

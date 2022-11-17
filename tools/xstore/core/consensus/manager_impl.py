@@ -411,9 +411,8 @@ class ConsensusManager(AbstractConsensusManager):
             return self._consensus_node_from_local_row(r)
 
     def change_leader(self, target: Union[str, ConsensusNode]):
-        target_server_id = self._get_server_id(target)
         with self._conn.cursor() as cur:
-            cur.execute('call dbms_consensus.change_leader(%d)' % target_server_id)
+            cur.execute('call dbms_consensus.change_leader("%s")' % target)
 
     def configure_follower(self, target: Union[str, ConsensusNode], election_weight: int, force_sync: bool):
         addr = self._get_address(target)

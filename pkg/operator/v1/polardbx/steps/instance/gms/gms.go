@@ -215,6 +215,18 @@ func SyncDynamicConfigs(force bool) control.BindFunc {
 	})
 }
 
+// For trailing stores which should be deleted,
+// we only care about their id, rather than other infos
+func transformIntoTrailingStorageInfosWithOnlyId(xstores []*polardbxv1.XStore) []gms.StorageNodeInfo {
+	storageInfos := make([]gms.StorageNodeInfo, 0, len(xstores))
+	for _, xstore := range xstores {
+		storageInfos = append(storageInfos, gms.StorageNodeInfo{
+			Id: xstore.Name,
+		})
+	}
+	return storageInfos
+}
+
 func transformIntoStorageInfos(rc *polardbxreconcile.Context, polardbx *polardbxv1.PolarDBXCluster, xstores []*polardbxv1.XStore) ([]gms.StorageNodeInfo, error) {
 	topology := polardbx.Status.SpecSnapshot.Topology
 	cpuLimit := topology.Nodes.DN.Template.Resources.Limits.Cpu().Value()
@@ -366,16 +378,13 @@ var DisableTrailingDNs = polardbxreconcile.NewStepBinder("DisableTrailingDNs",
 			return flow.Pass()
 		}
 
-		storageInfos, err := transformIntoStorageInfos(rc, polardbx, trailingStores)
-		if err != nil {
-			return flow.Error(err, "Unable to transform xstores into storage infos.")
-		}
+		storageInfoIds := transformIntoTrailingStorageInfosWithOnlyId(trailingStores)
 
 		mgr, err := rc.GetPolarDBXGMSManager()
 		if err != nil {
 			return flow.Error(err, "Unable to get GMS manager.")
 		}
-		err = mgr.DisableStorageNodes(storageInfos...)
+		err = mgr.DisableStorageNodes(storageInfoIds...)
 		if err != nil {
 			return flow.Error(err, "Unable to enable trailing storage nodes in GMS.")
 		}

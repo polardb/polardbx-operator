@@ -40,8 +40,8 @@ var RollingRestartPods = polardbxreconcile.NewStepBinder("RollingRestartPods",
 
 		lastDeletedPod := polardbx.Status.RestartingPods.LastDeletedPod
 		if lastDeletedPod != "" {
-			s := strings.Split(lastDeletedPod, "-")
-			podNum := s[len(s)-3]
+			delName := strings.Split(lastDeletedPod, "-")
+			podNum := delName[len(delName)-3]
 			podDel := corev1.Pod{}
 			var podList corev1.PodList
 			err := rc.Client().List(
@@ -54,15 +54,15 @@ var RollingRestartPods = polardbxreconcile.NewStepBinder("RollingRestartPods",
 				return flow.Error(err, "Error getting pods")
 			}
 			for _, podTemp := range podList.Items {
-				ss := strings.Split(podTemp.Name, "-")
-				num := s[len(ss)-3]
-				if num == podNum {
+				tempName := strings.Split(podTemp.Name, "-")
+				num := tempName[len(tempName)-3]
+				if num == podNum && podTemp.Name != lastDeletedPod {
 					podDel = podTemp
 					break
 				}
 			}
 			if !helper.IsPodReady(&podDel) || podDel.Name == "" || !podDel.DeletionTimestamp.IsZero() {
-				return flow.Retry("Pod hasn't been deleted")
+				return flow.Retry("Pod hasn't been deleted", "pod", podDel.Name)
 			}
 		}
 

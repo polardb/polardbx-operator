@@ -73,6 +73,28 @@ type DDLPlanStatus struct {
 	Progress int    `json:"progress,omitempty"` // Progress
 }
 
+// SlaveStatus describes slave status for xstore follower/logger
+type SlaveStatus struct {
+	SlaveSQLRunning string `json:"slave_sql_running,omitempty"` // Slave_SQL_Running
+	LastError       string `json:"last_error,omitempty"`        // Last_Error
+}
+
+// ClusterStatus describes status of xstore cluster
+type ClusterStatus struct {
+	ServerId       int    `json:"server_id,omitempty"`       // SERVER_ID
+	IPPort         string `json:"ip_port,omitempty"`         // IP_PORT
+	MatchIndex     int64  `json:"match_index,omitempty"`     // MATCH_INDEX
+	NextIndex      int64  `json:"next_index,omitempty"`      // NEXT_INDEX
+	Role           string `json:"role,omitempty"`            // ROLE
+	HasVoted       string `json:"has_voted,omitempty"`       // HAS_VOTED
+	ForceSync      string `json:"force_sync,omitempty"`      // FORCE_SYNC
+	ElectionWeight int64  `json:"election_weight,omitempty"` // ELECTION_WEIGHT
+	LearnerSource  int64  `json:"learner_source,omitempty"`  // LEARNER_SOURCE
+	AppliedIndex   int64  `json:"applied_index,omitempty"`   // APPLIED_INDEX
+	Pipelining     string `json:"pipelining,omitempty"`      // PIPELINING
+	SendApplied    string `json:"send_applied,omitempty"`    // SEND_APPLIED
+}
+
 func (s *DDLPlanStatus) IsSuccess() bool {
 	return strings.ToUpper(s.State) == "SUCCESS"
 }
@@ -101,6 +123,8 @@ type GroupManager interface {
 	ListFileStorage() ([]polardbx.FileStorageInfo, error)
 	CreateFileStorage(info polardbx.FileStorageInfo, config config.Config) error
 	DropFileStorage(fileStorageName string) error
+	ShowSlaveStatus() (*SlaveStatus, error)
+	ShowClusterStatus() ([]*ClusterStatus, error)
 }
 
 type groupManager struct {
@@ -831,6 +855,76 @@ func (m *groupManager) SetGlobalVariables(variables map[string]string) error {
 	}
 
 	return nil
+}
+
+// ShowSlaveStatus aims to check slave status, which should only be used for follower/logger of xstore
+func (m *groupManager) ShowSlaveStatus() (*SlaveStatus, error) {
+	conn, err := m.getConn("")
+	if err != nil {
+		return nil, err
+	}
+	defer dbutil.DeferClose(conn)
+
+	rs, err := conn.QueryContext(m.ctx, fmt.Sprintf("SHOW SLAVE STATUS"))
+	if err != nil {
+		return nil, err
+	}
+	defer dbutil.DeferClose(rs)
+
+	if !rs.Next() {
+		return nil, nil
+	}
+
+	status := &SlaveStatus{}
+	dest := map[string]interface{}{
+		"Slave_SQL_Running": &status.SlaveSQLRunning,
+		"Last_Error":        &status.LastError,
+	}
+	err = dbutil.Scan(rs, dest, dbutil.ScanOpt{CaseInsensitive: true})
+	if err != nil {
+		return nil, err
+	}
+	return status, nil
+}
+
+// ShowClusterStatus aims to check global status of xstore cluster
+func (m *groupManager) ShowClusterStatus() ([]*ClusterStatus, error) {
+	conn, err := m.getConn("")
+	if err != nil {
+		return nil, err
+	}
+	defer dbutil.DeferClose(conn)
+
+	rs, err := conn.QueryContext(m.ctx, fmt.Sprintf("SELECT * FROM INFORMATION_SCHEMA.ALISQL_CLUSTER_GLOBAL"))
+	if err != nil {
+		return nil, err
+	}
+	defer dbutil.DeferClose(rs)
+
+	var statusList []*ClusterStatus
+	for rs.Next() {
+		status := &ClusterStatus{}
+		dest := map[string]interface{}{
+			"SERVER_ID":       &status.ServerId,
+			"IP_PORT":         &status.IPPort,
+			"MATCH_INDEX":     &status.MatchIndex,
+			"NEXT_INDEX":      &status.NextIndex,
+			"ROLE":            &status.Role,
+			"HAS_VOTED":       &status.HasVoted,
+			"FORCE_SYNC":      &status.ForceSync,
+			"ELECTION_WEIGHT": &status.ElectionWeight,
+			"LEARNER_SOURCE":  &status.LearnerSource,
+			"APPLIED_INDEX":   &status.AppliedIndex,
+			"PIPELINING":      &status.Pipelining,
+			"SEND_APPLIED":    &status.SendApplied,
+		}
+		err = dbutil.Scan(rs, dest, dbutil.ScanOpt{CaseInsensitive: true})
+		if err != nil {
+			return nil, err
+		}
+		statusList = append(statusList, status)
+	}
+	return statusList, nil
 }
 
 func NewGroupManagerWithDB(ctx context.Context, db *sql.DB, caseInsensitive bool) GroupManager {

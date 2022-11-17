@@ -37,7 +37,7 @@ func handleErr(w http.ResponseWriter, err error) {
 			log.Println("Timeout!")
 			w.WriteHeader(http.StatusRequestTimeout)
 		} else {
-			log.Println("Failed!")
+			log.Println("Failed!" + err.Error())
 			w.WriteHeader(http.StatusInternalServerError)
 		}
 	}

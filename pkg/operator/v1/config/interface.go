@@ -44,8 +44,8 @@ type ClusterConfig interface {
 	EnableExporters() bool
 	EnableAliyunAckResourceController() bool
 	EnableDebugModeForComputeNodes() bool
-
 	ContainerPrivileged() bool
+	ForceCGroup() bool
 }
 
 type StoreConfig interface {

@@ -71,6 +71,7 @@ controllerManager:
     # Container settings of PolarDB-X pods.
     container:
       privileged: false
+      forceCGroup: false
 
   nodeSelector: { }
   affinity: { }

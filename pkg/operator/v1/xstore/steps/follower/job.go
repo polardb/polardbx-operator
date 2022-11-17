@@ -260,6 +260,7 @@ out:
 	var jobParallelism int32 = 1
 	var completions int32 = 1
 	var backOffLimit int32 = 0
+	var jobTTL int32 = 3600 * 24 * 7
 	job := batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      ctx.jobName,
@@ -271,9 +272,10 @@ out:
 			},
 		},
 		Spec: batchv1.JobSpec{
-			Parallelism:  &jobParallelism,
-			Completions:  &completions,
-			BackoffLimit: &backOffLimit,
+			TTLSecondsAfterFinished: &jobTTL,
+			Parallelism:             &jobParallelism,
+			Completions:             &completions,
+			BackoffLimit:            &backOffLimit,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: ctx.jobTargetPod.Namespace,

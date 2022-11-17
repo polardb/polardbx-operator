@@ -87,7 +87,7 @@ func matches(a, b map[string]model.PaxosNode) bool {
 		if !ok {
 			return false
 		}
-		if v.PaxosInnerNode != vb.PaxosInnerNode {
+		if !v.DeepEquals(&vb) {
 			return false
 		}
 	}

@@ -346,6 +346,7 @@ func (f *DefaultExtraPodFactory) ExtraLabels(ctx *PodFactoryContext) map[string]
 	}
 	config := xstoremeta.RebuildConfig{
 		LogSeparation: strconv.FormatBool(ctx.xstore.Spec.Config.Dynamic.LogDataSeparation),
+		NodeName:      ctx.volumes[0].Host,
 	}
 	extraLabels[xstoremeta.LabelConfigHash] = config.ComputeHash()
 	return extraLabels

@@ -19,7 +19,7 @@ package reconcilers
 import (
 	xstorev1 "github.com/alibaba/polardbx-operator/api/v1"
 	"github.com/alibaba/polardbx-operator/pkg/k8s/control"
-	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/backupreconciler"
+	xstorev1reconcile "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/reconcile"
 	backupsteps "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/steps/backup"
 	"github.com/go-logr/logr"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -28,7 +28,7 @@ import (
 type GalaxyBackupReconciler struct {
 }
 
-func (r *GalaxyBackupReconciler) Reconcile(rc *backupreconciler.Context, log logr.Logger, request reconcile.Request) (reconcile.Result, error) {
+func (r *GalaxyBackupReconciler) Reconcile(rc *xstorev1reconcile.BackupContext, log logr.Logger, request reconcile.Request) (reconcile.Result, error) {
 	backup := rc.MustGetXStoreBackup()
 	log = log.WithValues("phase", backup.Status.Phase)
 
@@ -40,7 +40,7 @@ func (r *GalaxyBackupReconciler) Reconcile(rc *backupreconciler.Context, log log
 	return control.NewExecutor(log).Execute(rc, task)
 }
 
-func (r *GalaxyBackupReconciler) newReconcileTask(rc *backupreconciler.Context, xstoreBackup *xstorev1.XStoreBackup, log logr.Logger) (*control.Task, error) {
+func (r *GalaxyBackupReconciler) newReconcileTask(rc *xstorev1reconcile.BackupContext, xstoreBackup *xstorev1.XStoreBackup, log logr.Logger) (*control.Task, error) {
 
 	task := control.NewTask()
 
@@ -64,6 +64,7 @@ func (r *GalaxyBackupReconciler) newReconcileTask(rc *backupreconciler.Context, 
 		backupsteps.WaitPXCSeekCpJobFinished(task)
 		backupsteps.StartBinlogBackupJob(task)
 		backupsteps.WaitBinlogBackupJobFinished(task)
+		backupsteps.ExtractLastEventTimestamp(task)
 		backupsteps.UpdatePhaseTemplate(xstorev1.XStoreBinlogWaiting)(task)
 	case xstorev1.XStoreBinlogWaiting:
 		backupsteps.WaitPXCBackupFinished(task)

@@ -207,11 +207,11 @@ func (o *aliyunOssFs) UploadFile(ctx context.Context, reader io.Reader, path str
 			pageNumber := 1
 			copiedParts := make([]oss.UploadPart, 0)
 			if totalSize%limitReaderSize != 0 {
+				imur, err = bucket.InitiateMultipartUpload(path, opts...)
+				if err != nil {
+					return
+				}
 				for {
-					imur, err = bucket.InitiateMultipartUpload(path, opts...)
-					if err != nil {
-						return
-					}
 					partSize := totalSize - copyPosition
 					if partSize >= MaxPartSize {
 						partSize = MaxPartSize

@@ -83,11 +83,12 @@ func (p *Planner) buildExpectedNodes() map[string]model.PaxosNode {
 	if p.selfHeal {
 		topology = p.xstore.Status.ObservedTopology
 	}
-	nodeRebuildConfig := p.createNodeRebuildConfig()
+
 	nodes := make(map[string]model.PaxosNode)
 	for _, ns := range topology.NodeSets {
 		for i := 0; i < int(ns.Replicas); i++ {
 			name := xstoreconvention.NewPodName(p.xstore, &ns, i)
+			nodeRebuildConfig := p.createNodeRebuildConfig(name)
 			nodes[name] = model.PaxosNode{
 				PaxosInnerNode: model.PaxosInnerNode{
 					Pod:        name,
@@ -104,10 +105,11 @@ func (p *Planner) buildExpectedNodes() map[string]model.PaxosNode {
 	return nodes
 }
 
-func (p *Planner) createNodeRebuildConfig() map[string]interface{} {
+func (p *Planner) createNodeRebuildConfig(podName string) map[string]interface{} {
 	rebuildConfig := make(map[string]interface{})
 	config := xstoremeta.RebuildConfig{
 		LogSeparation: strconv.FormatBool(p.xstore.Spec.Config.Dynamic.LogDataSeparation),
+		NodeName:      p.xstore.Status.BoundVolumes[podName].Host,
 	}
 	rebuildConfig[xstoremeta.LabelConfigHash] = config.ComputeHash()
 	return rebuildConfig

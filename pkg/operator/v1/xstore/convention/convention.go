@@ -223,7 +223,7 @@ const (
 	FileStreamRootDir               = "/filestream"
 	XClusterBackupBinFilepath       = "/u01/xcluster_xtrabackup/bin/innobackupex"
 	XClusterBackupSetPrepareArg     = "--apply-log"
-	GalaxyEngineBackupSlaveInfoArgs = "--slave-info"
+	GalaxyEngineBackupSlaveInfoArgs = "--slave-info --lock-ddl "
 	XClusterBackupSlaveInfoArgs     = ""
 	GalaxyEngineBackupStreamArgs    = "--stream=xbstream"
 	XClusterBackupStreamArgs        = "--stream=tar"

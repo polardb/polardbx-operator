@@ -762,6 +762,16 @@ func (rc *Context) GetDN(i int) (*polardbxv1.XStore, error) {
 	return xstore, nil
 }
 
+func (rc *Context) GetLeaderOfDN(xstore *polardbxv1.XStore) (*corev1.Pod, error) {
+	var leaderPod corev1.Pod
+	leadrPodName := types.NamespacedName{Namespace: rc.Namespace(), Name: xstore.Status.LeaderPod}
+	err := rc.Client().Get(rc.Context(), leadrPodName, &leaderPod)
+	if err != nil {
+		return nil, err
+	}
+	return &leaderPod, nil
+}
+
 func (rc *Context) getDeploymentMap(polardbx *polardbxv1.PolarDBXCluster, role string) (map[string]*appsv1.Deployment, error) {
 	var deploymentList appsv1.DeploymentList
 	err := rc.Client().List(rc.Context(), &deploymentList,
@@ -1080,17 +1090,17 @@ func (rc *Context) GetPolarDBXCNGroupManager(backup *polardbxv1.PolarDBXBackup) 
 	return rc.groupManager, nil
 }
 
-func (rc *Context) GetPolarDBXGroupManagerByXStore(backupPod corev1.Pod) (group.GroupManager, *polardbxv1.XStore, error) {
+func (rc *Context) GetPolarDBXGroupManagerByXStorePod(pod corev1.Pod) (group.GroupManager, *polardbxv1.XStore, error) {
 	var xstore polardbxv1.XStore
 	var serviceList corev1.ServiceList
 	err := rc.Client().List(rc.Context(), &serviceList, client.InNamespace(rc.Namespace()), client.MatchingLabels{
-		xstoremeta.LabelPod: backupPod.Name,
+		xstoremeta.LabelPod: pod.Name,
 	})
 	if err != nil || len(serviceList.Items) == 0 {
 		return nil, nil, err
 	}
-	host := serviceList.Items[0].Name + "." + backupPod.Namespace
-	xstoreSpec := types.NamespacedName{Namespace: backupPod.Namespace, Name: backupPod.Labels[xstoremeta.LabelName]}
+	host := serviceList.Items[0].Name + "." + pod.Namespace
+	xstoreSpec := types.NamespacedName{Namespace: pod.Namespace, Name: pod.Labels[xstoremeta.LabelName]}
 	err = rc.Client().Get(rc.Context(), xstoreSpec, &xstore)
 	if err != nil {
 		return nil, nil, err
@@ -1099,7 +1109,7 @@ func (rc *Context) GetPolarDBXGroupManagerByXStore(backupPod corev1.Pod) (group.
 	if err != nil {
 		return nil, nil, err
 	}
-	port, err := strconv.Atoi(backupPod.Labels[xstoremeta.LabelPortLock])
+	port, err := strconv.Atoi(pod.Labels[xstoremeta.LabelPortLock])
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1225,6 +1235,7 @@ func (rc *Context) UpdatePolarDBXBackupStatus() error {
 	rc.polardbxBackupStatusSnapshot = rc.polardbxBackup.Status.DeepCopy()
 	return nil
 }
+
 func (rc *Context) IsPXCBackupStatusChanged() bool {
 	if rc.polardbxBackupStatusSnapshot == nil {
 		return false
@@ -1375,6 +1386,7 @@ func (rc *Context) GetPXCBackupByName(name string) (*polardbxv1.PolarDBXBackup, 
 	}
 	return polardbxBackup, nil
 }
+
 func (rc *Context) SaveTaskContext(key string, t interface{}) error {
 	b, err := json.MarshalIndent(t, "", "  ")
 	if err != nil {

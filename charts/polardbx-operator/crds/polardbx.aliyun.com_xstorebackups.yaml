@@ -64,9 +64,11 @@ spec:
                 description: Engine is the engine used by xstore. Default is "galaxy".
                 type: string
               retentionTime:
+                description: RetentionTime defines how long will this backup set be
+                  kept
                 type: string
               storageProvider:
-                description: file storage
+                description: StorageProvider defines backup storage configuration
                 properties:
                   sink:
                     description: Sink defines the storage configuration choose to

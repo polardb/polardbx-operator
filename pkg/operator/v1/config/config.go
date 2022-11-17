@@ -159,6 +159,7 @@ type clusterConfig struct {
 	OptionEnableAliyunAckResourceController bool `json:"enable_aliyun_ack_resource_controller,omitempty"`
 	OptionEnableDebugModeForComputeNodes    bool `json:"enable_debug_mode_for_compute_nodes,omitempty"`
 	OptionEnablePrivilegedContainer         bool `json:"enable_privileged_container,omitempty"`
+	OptionForceCGroup                       bool `json:"force_cgroup,omitempty"`
 }
 
 func (c *clusterConfig) EnableExporters() bool {
@@ -175,6 +176,10 @@ func (c *clusterConfig) EnableDebugModeForComputeNodes() bool {
 
 func (c *clusterConfig) ContainerPrivileged() bool {
 	return c.OptionEnablePrivilegedContainer
+}
+
+func (c *clusterConfig) ForceCGroup() bool {
+	return c.OptionForceCGroup
 }
 
 type storeConfig struct {

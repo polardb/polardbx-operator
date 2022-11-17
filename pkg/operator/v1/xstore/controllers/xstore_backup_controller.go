@@ -22,8 +22,8 @@ import (
 	"github.com/alibaba/polardbx-operator/pkg/k8s/control"
 	"github.com/alibaba/polardbx-operator/pkg/operator/hint"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/config"
-	backupxstorev1reconcile "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/backupreconciler"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/plugin"
+	xstorev1reconcile "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/reconcile"
 	"github.com/go-logr/logr"
 	"golang.org/x/time/rate"
 	batchv1 "k8s.io/api/batch/v1"
@@ -41,7 +41,6 @@ type XStoreBackupReconciler struct {
 	BaseRc *control.BaseReconcileContext
 	Logger logr.Logger
 	config.LoaderFactory
-
 	MaxConcurrency int
 }
 
@@ -52,10 +51,9 @@ func (r *XStoreBackupReconciler) Reconcile(ctx context.Context, request reconcil
 		log.Info("Reconciling is paused, skip")
 		return reconcile.Result{}, nil
 	}
-	rc := backupxstorev1reconcile.NewContext(
+	rc := xstorev1reconcile.NewBackupContext(
 		control.NewBaseReconcileContextFrom(r.BaseRc, ctx, request),
 	)
-
 	defer rc.Close()
 
 	// Verify the existence of the xstore.
@@ -69,6 +67,21 @@ func (r *XStoreBackupReconciler) Reconcile(ctx context.Context, request reconcil
 			return reconcile.Result{}, err
 		}
 	}
+
+	// Record the context of the corresponding xstore
+	xstore, err := rc.GetXStore()
+	if err != nil {
+		log.Error(err, "Unable to get corresponding xstore")
+		return reconcile.Result{}, err
+	}
+	xstoreRequest := request
+	xstoreRequest.Name = xstore.Name
+	xstoreRc := xstorev1reconcile.NewContext(
+		control.NewBaseReconcileContextFrom(r.BaseRc, ctx, xstoreRequest),
+		r.LoaderFactory(),
+	)
+	xstoreRc.SetXStoreKey(xstoreRequest.NamespacedName)
+	rc.SetXStoreContext(xstoreRc)
 
 	engine := xstoreBackup.Spec.Engine
 	reconciler := plugin.GetXStoreBackupReconciler(engine)

@@ -45,7 +45,6 @@ spec:
       - name: cgroups-blkio
         hostPath:
           path: /sys/fs/cgroup/blkio
-          type: Directory
       - name: tmpfs
         emptyDir: {}
       - name: config

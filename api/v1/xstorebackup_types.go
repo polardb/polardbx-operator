@@ -33,12 +33,12 @@ type XStoreBackupSpec struct {
 
 	// Engine is the engine used by xstore. Default is "galaxy".
 	// +optional
-	Engine string `json:"engine,omitempty"`
-
-	XStore        XStoreReference `json:"xstore,omitempty"`
-	Timezone      string          `json:"timezone,omitempty"`
+	Engine   string          `json:"engine,omitempty"`
+	XStore   XStoreReference `json:"xstore,omitempty"`
+	Timezone string          `json:"timezone,omitempty"`
+	// RetentionTime defines how long will this backup set be kept
 	RetentionTime metav1.Duration `json:"retentionTime,omitempty"`
-	// file storage
+	// StorageProvider defines backup storage configuration
 	StorageProvider BackupStorageProvider `json:"storageProvider,omitempty"`
 }
 
