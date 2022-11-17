@@ -25,8 +25,8 @@ import (
 	"github.com/alibaba/polardbx-operator/pkg/k8s/control"
 	k8shelper "github.com/alibaba/polardbx-operator/pkg/k8s/helper"
 	polardbxmeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/meta"
-	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/backupreconciler"
 	xstoremeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/meta"
+	xstorev1reconcile "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/reconcile"
 	xstorectrlerrors "github.com/alibaba/polardbx-operator/pkg/util/error"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -51,8 +51,8 @@ type BackupJobContext struct {
 }
 
 func UpdatePhaseTemplate(phase xstorev1.XStoreBackupPhase, requeue ...bool) control.BindFunc {
-	return backupreconciler.NewStepBinder("UpdatePhaseTo"+string(phase),
-		func(rc *backupreconciler.Context, flow control.Flow) (reconcile.Result, error) {
+	return NewStepBinder("UpdatePhaseTo"+string(phase),
+		func(rc *xstorev1reconcile.BackupContext, flow control.Flow) (reconcile.Result, error) {
 			xstoreBackup := rc.MustGetXStoreBackup()
 
 			xstoreBackup.Status.Phase = phase
@@ -70,8 +70,8 @@ func GenerateJobName(targetPod *corev1.Pod, JobLabel string) string {
 	return jobName
 }
 
-var PersistentStatusChanges = backupreconciler.NewStepBinder("PersistentStatusChanges",
-	func(rc *backupreconciler.Context, flow control.Flow) (reconcile.Result, error) {
+var PersistentStatusChanges = NewStepBinder("PersistentStatusChanges",
+	func(rc *xstorev1reconcile.BackupContext, flow control.Flow) (reconcile.Result, error) {
 		if debug.IsDebugEnabled() {
 			xstoreBackup := rc.MustGetXStoreBackup()
 			err := rc.Client().Status().Update(rc.Context(), xstoreBackup)
@@ -89,8 +89,8 @@ var PersistentStatusChanges = backupreconciler.NewStepBinder("PersistentStatusCh
 		return flow.Continue("Backup status not changed!")
 	})
 
-var UpdateBackupStartInfo = backupreconciler.NewStepBinder("UpdateBackupStartInfo",
-	func(rc *backupreconciler.Context, flow control.Flow) (reconcile.Result, error) {
+var UpdateBackupStartInfo = NewStepBinder("UpdateBackupStartInfo",
+	func(rc *xstorev1reconcile.BackupContext, flow control.Flow) (reconcile.Result, error) {
 		xstoreBackup := rc.MustGetXStoreBackup()
 
 		if xstoreBackup.Status.StartTime == nil {
@@ -116,8 +116,8 @@ var UpdateBackupStartInfo = backupreconciler.NewStepBinder("UpdateBackupStartInf
 		return flow.Continue("Update backup start info!")
 	})
 
-var CreateBackupConfigMap = backupreconciler.NewStepBinder("CreateBackupConfigMap",
-	func(rc *backupreconciler.Context, flow control.Flow) (reconcile.Result, error) {
+var CreateBackupConfigMap = NewStepBinder("CreateBackupConfigMap",
+	func(rc *xstorev1reconcile.BackupContext, flow control.Flow) (reconcile.Result, error) {
 		const backupJobkey = "backup"
 		exists, err := rc.IsTaskContextExists(backupJobkey)
 		if err != nil {
@@ -156,8 +156,8 @@ var CreateBackupConfigMap = backupreconciler.NewStepBinder("CreateBackupConfigMa
 		return flow.Continue("Job context for backup prepared!")
 	})
 
-var StartXStoreFullBackupJob = backupreconciler.NewStepBinder("StartXStoreFullBackupJob",
-	func(rc *backupreconciler.Context, flow control.Flow) (reconcile.Result, error) {
+var StartXStoreFullBackupJob = NewStepBinder("StartXStoreFullBackupJob",
+	func(rc *xstorev1reconcile.BackupContext, flow control.Flow) (reconcile.Result, error) {
 		const backupJobKey = "backup"
 		backupJobContext := &BackupJobContext{}
 		err := rc.GetTaskContext(backupJobKey, &backupJobContext)
@@ -172,6 +172,9 @@ var StartXStoreFullBackupJob = backupreconciler.NewStepBinder("StartXStoreFullBa
 		}
 		if targetPod == nil {
 			return flow.Wait("Unable to find target pod!")
+		}
+		if targetPod.Labels[xstoremeta.LabelRole] == xstoremeta.RoleLeader { // warning when backup on leader pod
+			flow.Logger().Info("Warning: performing backup on leader", "leader pod", targetPod.Name)
 		}
 
 		job, err := rc.GetXStoreBackupJob()
@@ -197,8 +200,8 @@ var StartXStoreFullBackupJob = backupreconciler.NewStepBinder("StartXStoreFullBa
 		return flow.Continue("Full Backup job started!", "job-name", jobName)
 	})
 
-var WaitFullBackupJobFinished = backupreconciler.NewStepBinder("WaitFullBackupJobFinished",
-	func(rc *backupreconciler.Context, flow control.Flow) (reconcile.Result, error) {
+var WaitFullBackupJobFinished = NewStepBinder("WaitFullBackupJobFinished",
+	func(rc *xstorev1reconcile.BackupContext, flow control.Flow) (reconcile.Result, error) {
 		xstoreBackup := rc.MustGetXStoreBackup()
 
 		job, err := rc.GetXStoreBackupJob()
@@ -244,8 +247,8 @@ var WaitFullBackupJobFinished = backupreconciler.NewStepBinder("WaitFullBackupJo
 		return flow.Continue("Full Backup job wait finished!", "job-name", job.Name)
 	})
 
-var RemoveFullBackupJob = backupreconciler.NewStepBinder("RemoveFullBackupJob",
-	func(rc *backupreconciler.Context, flow control.Flow) (reconcile.Result, error) {
+var RemoveFullBackupJob = NewStepBinder("RemoveFullBackupJob",
+	func(rc *xstorev1reconcile.BackupContext, flow control.Flow) (reconcile.Result, error) {
 		job, err := rc.GetXStoreBackupJob()
 		if client.IgnoreNotFound(err) != nil {
 			return flow.Error(err, "Unable to get full backup job!")
@@ -262,8 +265,8 @@ var RemoveFullBackupJob = backupreconciler.NewStepBinder("RemoveFullBackupJob",
 		return flow.Continue("Full backup job removed!", "job-name", job.Name)
 	})
 
-var WaitBinlogOffsetCollected = backupreconciler.NewStepBinder("WaitBinlogCollected",
-	func(rc *backupreconciler.Context, flow control.Flow) (reconcile.Result, error) {
+var WaitBinlogOffsetCollected = NewStepBinder("WaitBinlogCollected",
+	func(rc *xstorev1reconcile.BackupContext, flow control.Flow) (reconcile.Result, error) {
 		polardbxBackup, err := rc.GetPolarDBXBackup()
 		if err != nil {
 			flow.Error(err, "Unable to find polardbxBackup")
@@ -274,8 +277,8 @@ var WaitBinlogOffsetCollected = backupreconciler.NewStepBinder("WaitBinlogCollec
 		return flow.Continue("Binlog Collected!")
 	})
 
-var StartCollectBinlogJob = backupreconciler.NewStepBinder("StartCollectBinlogJob",
-	func(rc *backupreconciler.Context, flow control.Flow) (reconcile.Result, error) {
+var StartCollectBinlogJob = NewStepBinder("StartCollectBinlogJob",
+	func(rc *xstorev1reconcile.BackupContext, flow control.Flow) (reconcile.Result, error) {
 		const backupJobKey = "backup"
 		backupJobContext := &BackupJobContext{}
 		err := rc.GetTaskContext(backupJobKey, &backupJobContext)
@@ -323,8 +326,8 @@ var StartCollectBinlogJob = backupreconciler.NewStepBinder("StartCollectBinlogJo
 		return flow.Continue("collect binlog job started!", "job-name", jobName)
 	})
 
-var WaitCollectBinlogJobFinished = backupreconciler.NewStepBinder("WaitBackupJobFinished",
-	func(rc *backupreconciler.Context, flow control.Flow) (reconcile.Result, error) {
+var WaitCollectBinlogJobFinished = NewStepBinder("WaitBackupJobFinished",
+	func(rc *xstorev1reconcile.BackupContext, flow control.Flow) (reconcile.Result, error) {
 		xstore, err := rc.GetXStore()
 		if err != nil {
 			return flow.Error(err, "Unable to find xstore")
@@ -349,8 +352,8 @@ var WaitCollectBinlogJobFinished = backupreconciler.NewStepBinder("WaitBackupJob
 		return flow.Continue("Collect binlog wait finished!", "job-name", job.Name)
 	})
 
-var RemoveCollectBinlogJob = backupreconciler.NewStepBinder("RemoveCollectBinlogJob",
-	func(rc *backupreconciler.Context, flow control.Flow) (reconcile.Result, error) {
+var RemoveCollectBinlogJob = NewStepBinder("RemoveCollectBinlogJob",
+	func(rc *xstorev1reconcile.BackupContext, flow control.Flow) (reconcile.Result, error) {
 		job, err := rc.GetCollectBinlogJob()
 		if client.IgnoreNotFound(err) != nil {
 			return flow.Error(err, "Unable to get collect binlog job!")
@@ -367,8 +370,8 @@ var RemoveCollectBinlogJob = backupreconciler.NewStepBinder("RemoveCollectBinlog
 		return flow.Continue("Collect binlog job removed!", "job-name", job.Name)
 	})
 
-var WaitPXCSeekCpJobFinished = backupreconciler.NewStepBinder("WaitPXCSeekCpJobFinished",
-	func(rc *backupreconciler.Context, flow control.Flow) (reconcile.Result, error) {
+var WaitPXCSeekCpJobFinished = NewStepBinder("WaitPXCSeekCpJobFinished",
+	func(rc *xstorev1reconcile.BackupContext, flow control.Flow) (reconcile.Result, error) {
 		polardbxBackup, err := rc.GetPolarDBXBackup()
 		if err != nil {
 			flow.Error(err, "Unable to find polardbxBackup")
@@ -382,8 +385,8 @@ var WaitPXCSeekCpJobFinished = backupreconciler.NewStepBinder("WaitPXCSeekCpJobF
 		return flow.Continue("Binlog Collected!")
 	})
 
-var StartBinlogBackupJob = backupreconciler.NewStepBinder("StartBinlogBackupJob",
-	func(rc *backupreconciler.Context, flow control.Flow) (reconcile.Result, error) {
+var StartBinlogBackupJob = NewStepBinder("StartBinlogBackupJob",
+	func(rc *xstorev1reconcile.BackupContext, flow control.Flow) (reconcile.Result, error) {
 		const backupJobKey = "backup"
 		backupJobContext := &BackupJobContext{}
 		err := rc.GetTaskContext(backupJobKey, &backupJobContext)
@@ -426,23 +429,27 @@ var StartBinlogBackupJob = backupreconciler.NewStepBinder("StartBinlogBackupJob"
 		return flow.Continue("collect binlog job started!", "job-name", jobName)
 	})
 
-var WaitBinlogBackupJobFinished = backupreconciler.NewStepBinder("WaitBinlogBackupJobFinished",
-	func(rc *backupreconciler.Context, flow control.Flow) (reconcile.Result, error) {
-		backup := rc.MustGetXStoreBackup()
+var WaitBinlogBackupJobFinished = NewStepBinder("WaitBinlogBackupJobFinished",
+	func(rc *xstorev1reconcile.BackupContext, flow control.Flow) (reconcile.Result, error) {
 		job, err := rc.GetBackupBinlogJob()
 		if client.IgnoreNotFound(err) != nil {
 			return flow.Error(err, "Unable to get binlog backup job!")
 		}
 		if job == nil {
+			flow.Logger().Info("Binlog backup job nil!", "err", err)
 			return flow.Continue("Binlog backup job removed!")
 		}
-
 		if !k8shelper.IsJobCompleted(job) {
 			return flow.Wait("Binlog backup job is still running!", "job-name", job.Name)
 		}
+		return flow.Continue("Binlog backup job wait finished!", "job-name", job.Name)
+	})
+
+var ExtractLastEventTimestamp = NewStepBinder("ExtractLastEventTimestamp",
+	func(rc *xstorev1reconcile.BackupContext, flow control.Flow) (reconcile.Result, error) {
+		backup := rc.MustGetXStoreBackup()
 		nowTime := metav1.Now()
 		backup.Status.EndTime = &nowTime
-		flow.Logger().Info("Binlog backup job completed!", "job-name", job.Name)
 
 		targetPod, err := rc.GetXStoreTargetPod()
 		if err != nil {
@@ -472,11 +479,11 @@ var WaitBinlogBackupJobFinished = backupreconciler.NewStepBinder("WaitBinlogBack
 		}
 		timestamp := metav1.Unix(timestampNum, 0)
 		backup.Status.BackupSetTimestamp = &timestamp
-		return flow.Continue("Binlog backup job wait finished!", "job-name", job.Name)
+		return flow.Continue("Extract binlog last event timestamp finished!", "pod", targetPod.Name)
 	})
 
-var RemoveBinlogBackupJob = backupreconciler.NewStepBinder("RemoveBinlogBackupJob",
-	func(rc *backupreconciler.Context, flow control.Flow) (reconcile.Result, error) {
+var RemoveBinlogBackupJob = NewStepBinder("RemoveBinlogBackupJob",
+	func(rc *xstorev1reconcile.BackupContext, flow control.Flow) (reconcile.Result, error) {
 		job, err := rc.GetBackupBinlogJob()
 		if client.IgnoreNotFound(err) != nil {
 			return flow.Error(err, "Unable to get binlog backup job!")
@@ -493,8 +500,8 @@ var RemoveBinlogBackupJob = backupreconciler.NewStepBinder("RemoveBinlogBackupJo
 		return flow.Continue("Binlog backup job removed!", "job-name", job.Name)
 	})
 
-var RemoveXSBackupOverRetention = backupreconciler.NewStepBinder("RemoveXSBackupOverRetention",
-	func(rc *backupreconciler.Context, flow control.Flow) (reconcile.Result, error) {
+var RemoveXSBackupOverRetention = NewStepBinder("RemoveXSBackupOverRetention",
+	func(rc *xstorev1reconcile.BackupContext, flow control.Flow) (reconcile.Result, error) {
 		backup := rc.MustGetXStoreBackup()
 		if backup.Spec.RetentionTime.Duration.Seconds() > 0 {
 			toCleanTime := backup.Status.EndTime.Add(backup.Spec.RetentionTime.Duration)
@@ -525,8 +532,8 @@ var RemoveXSBackupOverRetention = backupreconciler.NewStepBinder("RemoveXSBackup
 		return flow.Continue("PolarDBX backup deleted!", "XSBackup-name", backup.Name)
 	})
 
-var WaitPXCBackupFinished = backupreconciler.NewStepBinder("WaitPXCBackupFinished",
-	func(rc *backupreconciler.Context, flow control.Flow) (reconcile.Result, error) {
+var WaitPXCBackupFinished = NewStepBinder("WaitPXCBackupFinished",
+	func(rc *xstorev1reconcile.BackupContext, flow control.Flow) (reconcile.Result, error) {
 		polardbxBackup, err := rc.GetPolarDBXBackup()
 		if err != nil {
 			flow.Error(err, "Unable to find polardbxBackup")
@@ -537,8 +544,8 @@ var WaitPXCBackupFinished = backupreconciler.NewStepBinder("WaitPXCBackupFinishe
 		return flow.Continue("Backup Finished!")
 	})
 
-var SaveXStoreSecrets = backupreconciler.NewStepBinder("SaveXStoreSecrets",
-	func(rc *backupreconciler.Context, flow control.Flow) (reconcile.Result, error) {
+var SaveXStoreSecrets = NewStepBinder("SaveXStoreSecrets",
+	func(rc *xstorev1reconcile.BackupContext, flow control.Flow) (reconcile.Result, error) {
 		backup := rc.MustGetXStoreBackup()
 		backupSecret, err := rc.GetSecret(backup.Name)
 		if backupSecret != nil {

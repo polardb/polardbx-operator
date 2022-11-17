@@ -98,6 +98,7 @@ type PolarDBXBackupStatus struct {
 	// XStores represents the backup xstore name.
 	// +optional
 	XStores []string `json:"xstores,omitempty"`
+
 	// ClusterSpecSnapshot records the snapshot of polardbx cluster spec
 	// +optional
 	ClusterSpecSnapshot *PolarDBXClusterSpec `json:"clusterSpecSnapshot,omitempty"`

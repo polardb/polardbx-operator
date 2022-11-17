@@ -267,6 +267,15 @@ spec:
                           this polardbx is restored from. Optional.
                         type: string
                     type: object
+                  syncSpecWithOriginalCluster:
+                    default: false
+                    description: SyncSpecWithOriginalCluster identifies whether restored
+                      cluster should use the same spec as the original cluster. If
+                      the field is set to true, spec of original cluster is used;
+                      otherwise users have to declare spec manually or use default
+                      spec, but replicas of dn will be forced to sync with original
+                      cluster now. Default is false
+                    type: boolean
                   time:
                     description: Time defines the specified time of the restored data,
                       in the format of 'yyyy-MM-dd HH:mm:ss'. Required.

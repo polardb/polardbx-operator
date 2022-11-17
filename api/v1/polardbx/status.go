@@ -168,6 +168,6 @@ type ParameterPhase string
 const (
 	ParameterStatusNew       ParameterPhase = ""
 	ParameterStatusCreating  ParameterPhase = "Creating"
-	ParameterStatusRunning   ParameterPhase = "Running"
+	ParameterStatusFinished  ParameterPhase = "Finished"
 	ParameterStatusModifying ParameterPhase = "Modifying"
 )

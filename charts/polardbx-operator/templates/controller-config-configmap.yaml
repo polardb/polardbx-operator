@@ -48,6 +48,7 @@ data:
       enable_aliyun_ack_resource_controller: {{ .Values.controllerManager.config.scheduler.enableAliyunAckResourceController }}
       enable_debug_mode_for_compute_nodes: false
       enable_privileged_container: {{ .Values.controllerManager.config.container.privileged }}
+      force_cgroup: {{ .Values.controllerManager.config.container.forceCGroup }}
     store:
       enable_privileged_container: {{ .Values.controllerManager.config.container.privileged }}
       host_paths:

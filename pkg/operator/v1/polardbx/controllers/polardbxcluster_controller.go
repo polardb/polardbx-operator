@@ -126,6 +126,8 @@ func (r *PolarDBXReconciler) newReconcileTask(rc *polardbxreconcile.Context, pol
 		commonsteps.InitializePolardbxLabel(task)
 		commonsteps.GenerateRandInStatus(task)
 		commonsteps.InitializeServiceName(task)
+		control.When(polardbx.Spec.Restore != nil,
+			commonsteps.SyncSpecFromBackupSet)(task)
 		commonsteps.TransferPhaseTo(polardbxv1polardbx.PhasePending, true)(task)
 
 	case polardbxv1polardbx.PhasePending:

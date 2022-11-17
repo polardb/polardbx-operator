@@ -4,9 +4,9 @@ logstash:
     #image repo of logstash
     repo: polardbx
     #image name of logstash
-    name: logstash
+    name: polardbx-logstash
     #image tag of logstash
-    version: 8.1.2-polardbx-20220624153221
+    version: v1.3.0
   #the name of the logstash deployment
   name: logstash
   #the exported port the logstash. filebeat will access this port.
@@ -18,10 +18,10 @@ logstash:
   #the resource configuration of one logstash replica
   resources:
     limits:
-      cpu: "2"
+      cpu: "1"
       memory: "1200Mi"
     requests:
-      cpu: "2"
+      cpu: "1"
       memory: "1200Mi"
   elastic:
     #the name of elastic cert secret, which will be need when logtash upload data to an elastic search cluster.

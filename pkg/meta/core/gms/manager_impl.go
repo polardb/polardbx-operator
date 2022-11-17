@@ -612,7 +612,7 @@ func (meta *manager) RestoreSchemas(fromPxcCluster, fromPxcHash, PxcHash string)
 
 	// Reset the single group's storage id
 	//goland:noinspection SqlNoDataSourceInspection,SqlResolve
-	_, err = conn.ExecContext(ctx, "UPDATE inst_config SET param_val=REPLACE(param_val, ?, ?) where param_key='SINGLE_GROUP_STORAGE_INST_LIST'", fromPxcCluster+"-"+fromPxcHash, meta.getClusterID()+"-"+fromPxcHash)
+	_, err = conn.ExecContext(ctx, "UPDATE inst_config SET param_val=REPLACE(param_val, ?, ?) where param_key='SINGLE_GROUP_STORAGE_INST_LIST'", fromPxcCluster+"-"+fromPxcHash, meta.getClusterID()+"-"+PxcHash)
 	if err != nil {
 		return errors.New("unable to reset single group's storage id: " + err.Error())
 	}

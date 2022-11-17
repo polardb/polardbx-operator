@@ -14,17 +14,21 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package backupreconciler
+package reconcile
 
 import (
 	"encoding/json"
-	xstorev1 "github.com/alibaba/polardbx-operator/api/v1"
+	"errors"
+	polardbxv1 "github.com/alibaba/polardbx-operator/api/v1"
 	"github.com/alibaba/polardbx-operator/pkg/k8s/control"
 	k8shelper "github.com/alibaba/polardbx-operator/pkg/k8s/helper"
+	"github.com/alibaba/polardbx-operator/pkg/meta/core/group"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/meta"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/convention"
+	xstoreconvention "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/convention"
 	xstoremeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/meta"
 	"github.com/alibaba/polardbx-operator/pkg/util"
+	dbutil "github.com/alibaba/polardbx-operator/pkg/util/database"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -34,23 +38,25 @@ import (
 	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"strconv"
 )
 
-type Context struct {
+type BackupContext struct {
 	*control.BaseReconcileContext
-	xstore                     *xstorev1.XStore
-	xstoreBackup               *xstorev1.XStoreBackup
-	xstoreBackupStatusSnapshot *xstorev1.XStoreBackupStatus
+	xStoreContext              *Context
+	xstore                     *polardbxv1.XStore
+	xstoreBackup               *polardbxv1.XStoreBackup
+	xstoreBackupStatusSnapshot *polardbxv1.XStoreBackupStatus
 	xstorePods                 []corev1.Pod
 	xstoreTargetPod            *corev1.Pod
 	xstoreBackupJob            *batchv1.Job
 	xstoreCollectJob           *batchv1.Job
 	xstoreBinlogBackupJob      *batchv1.Job
-	polardbxBackup             *xstorev1.PolarDBXBackup
+	polardbxBackup             *polardbxv1.PolarDBXBackup
 	taskConfigMap              *corev1.ConfigMap
 }
 
-func (rc *Context) SetControllerRef(obj metav1.Object) error {
+func (rc *BackupContext) SetControllerRef(obj metav1.Object) error {
 	if obj == nil {
 		return nil
 	}
@@ -58,14 +64,22 @@ func (rc *Context) SetControllerRef(obj metav1.Object) error {
 	return ctrl.SetControllerReference(backup, obj, rc.Scheme())
 }
 
-func (rc *Context) SetControllerRefAndCreate(obj client.Object) error {
+func (rc *BackupContext) SetControllerRefAndCreate(obj client.Object) error {
 	if err := rc.SetControllerRef(obj); err != nil {
 		return err
 	}
 	return rc.Client().Create(rc.Context(), obj)
 }
 
-func (rc *Context) MustGetXStoreBackup() *xstorev1.XStoreBackup {
+func (rc *BackupContext) SetXStoreContext(xstoreContext *Context) {
+	rc.xStoreContext = xstoreContext
+}
+
+func (rc *BackupContext) XStoreContext() *Context {
+	return rc.xStoreContext
+}
+
+func (rc *BackupContext) MustGetXStoreBackup() *polardbxv1.XStoreBackup {
 	xstoreBackup, err := rc.GetXStoreBackup()
 	if err != nil {
 		panic(err)
@@ -73,9 +87,9 @@ func (rc *Context) MustGetXStoreBackup() *xstorev1.XStoreBackup {
 	return xstoreBackup
 }
 
-func (rc *Context) GetXStoreBackup() (*xstorev1.XStoreBackup, error) {
+func (rc *BackupContext) GetXStoreBackup() (*polardbxv1.XStoreBackup, error) {
 	if rc.xstoreBackup == nil {
-		var xstoreBackup xstorev1.XStoreBackup
+		var xstoreBackup polardbxv1.XStoreBackup
 		err := rc.Client().Get(rc.Context(), rc.Request().NamespacedName, &xstoreBackup)
 		if err != nil {
 			return nil, err
@@ -86,13 +100,13 @@ func (rc *Context) GetXStoreBackup() (*xstorev1.XStoreBackup, error) {
 	return rc.xstoreBackup, nil
 }
 
-func (rc *Context) GetPolarDBXBackup() (*xstorev1.PolarDBXBackup, error) {
+func (rc *BackupContext) GetPolarDBXBackup() (*polardbxv1.PolarDBXBackup, error) {
 	if rc.polardbxBackup == nil {
 		xstoreBackup, err := rc.GetXStoreBackup()
 		if err != nil {
 			return nil, err
 		}
-		var polardbxBackup xstorev1.PolarDBXBackup
+		var polardbxBackup polardbxv1.PolarDBXBackup
 		pxcBackupKey := types.NamespacedName{
 			Namespace: xstoreBackup.Namespace,
 			Name:      xstoreBackup.Labels[meta.LabelTopBackup],
@@ -106,7 +120,7 @@ func (rc *Context) GetPolarDBXBackup() (*xstorev1.PolarDBXBackup, error) {
 	return rc.polardbxBackup, nil
 }
 
-func (rc *Context) GetXStoreBackupJob() (*batchv1.Job, error) {
+func (rc *BackupContext) GetXStoreBackupJob() (*batchv1.Job, error) {
 	if rc.xstoreBackupJob == nil {
 		xstoreBackup := rc.MustGetXStoreBackup()
 
@@ -144,10 +158,10 @@ func (rc *Context) GetXStoreBackupJob() (*batchv1.Job, error) {
 	return rc.xstoreBackupJob, nil
 }
 
-func (rc *Context) GetXStore() (*xstorev1.XStore, error) {
+func (rc *BackupContext) GetXStore() (*polardbxv1.XStore, error) {
 	if rc.xstore == nil {
 		backup := rc.MustGetXStoreBackup()
-		var xstore xstorev1.XStore
+		var xstore polardbxv1.XStore
 		xstoreSpec := types.NamespacedName{Namespace: rc.Request().Namespace, Name: backup.Spec.XStore.Name}
 		err := rc.Client().Get(rc.Context(), xstoreSpec, &xstore)
 		if err != nil {
@@ -158,7 +172,7 @@ func (rc *Context) GetXStore() (*xstorev1.XStore, error) {
 	return rc.xstore, nil
 }
 
-func (rc *Context) UpdateXStoreBackupStatus() error {
+func (rc *BackupContext) UpdateXStoreBackupStatus() error {
 	if rc.xstoreBackupStatusSnapshot == nil {
 		return nil
 	}
@@ -170,14 +184,14 @@ func (rc *Context) UpdateXStoreBackupStatus() error {
 	return nil
 }
 
-func (rc *Context) IsXStoreBackupStatusChanged() bool {
+func (rc *BackupContext) IsXStoreBackupStatusChanged() bool {
 	if rc.xstoreBackupStatusSnapshot == nil {
 		return false
 	}
 	return !equality.Semantic.DeepEqual(rc.xstoreBackup.Status, *rc.xstoreBackupStatusSnapshot)
 }
 
-func (rc *Context) GetXStorePods() ([]corev1.Pod, error) {
+func (rc *BackupContext) GetXStorePods() ([]corev1.Pod, error) {
 	xstore, err := rc.GetXStore()
 	if err != nil {
 		return nil, err
@@ -211,7 +225,7 @@ func (rc *Context) GetXStorePods() ([]corev1.Pod, error) {
 	return rc.xstorePods, nil
 }
 
-func (rc *Context) GetXStoreTargetPod() (*corev1.Pod, error) {
+func (rc *BackupContext) GetXStoreTargetPod() (*corev1.Pod, error) {
 	if rc.xstoreTargetPod == nil {
 		xstoreBackup := rc.MustGetXStoreBackup()
 
@@ -239,7 +253,8 @@ func (rc *Context) GetXStoreTargetPod() (*corev1.Pod, error) {
 		}
 
 		// TODO: Take health info and delay into consideration
-		// If not found, find any follower/learner/leader
+		// set target pod for XStoreBackup on which backup will be performed
+		// priority of the target pod: choice made by user > follower > leader
 		pods, err := rc.GetXStorePods()
 		if err != nil {
 			return nil, err
@@ -251,19 +266,41 @@ func (rc *Context) GetXStoreTargetPod() (*corev1.Pod, error) {
 			rolePodMap[p.Labels[xstoremeta.LabelRole]] = p
 		}
 
-		for _, r := range []string{xstoremeta.RoleLeader, xstoremeta.RoleFollower, xstoremeta.RoleLearner} {
-			if p, ok := rolePodMap[r]; ok {
-				rc.xstoreTargetPod = p
-				return p, nil
+		preferred, _ := xstoreBackup.Labels[meta.LabelPreferredBackupNode]
+		if preferred == xstoremeta.RoleLeader { // preferred backup node is leader, just set it
+			p, ok := rolePodMap[xstoremeta.RoleLeader]
+			if !ok {
+				return nil, errors.New("target pod is leader, but leader not found")
 			}
+			rc.xstoreTargetPod = p
+			return p, nil
 		}
 
-		return nil, nil
+		// if `PreferredBackupNode` has not been set or set to something other than leader, then we pick follower as backup pod
+		p, ok := rolePodMap[xstoremeta.RoleFollower]
+		if !ok {
+			return nil, errors.New("target pod is follower, but follower not found")
+		}
+		manager, err := rc.GetXstoreGroupManagerByPod(p)
+		if err != nil {
+			return nil, err
+		}
+		if manager == nil {
+			return nil, errors.New("fail to connect to follower")
+		}
+		status, err := manager.ShowSlaveStatus()
+		if err != nil {
+			return nil, err
+		}
+		if status.SlaveSQLRunning == "No" || status.LastError != "" {
+			return nil, errors.New("follower status abnormal")
+		}
+		rc.xstoreTargetPod = p
 	}
 	return rc.xstoreTargetPod, nil
 }
 
-func (rc *Context) UpdateXStoreBackup() error {
+func (rc *BackupContext) UpdateXStoreBackup() error {
 	if rc.xstoreBackup == nil {
 		return nil
 	}
@@ -277,7 +314,7 @@ func (rc *Context) UpdateXStoreBackup() error {
 	return nil
 }
 
-func (rc *Context) GetCollectBinlogJob() (*batchv1.Job, error) {
+func (rc *BackupContext) GetCollectBinlogJob() (*batchv1.Job, error) {
 	if rc.xstoreCollectJob == nil {
 		xstoreBackup := rc.MustGetXStoreBackup()
 
@@ -315,7 +352,7 @@ func (rc *Context) GetCollectBinlogJob() (*batchv1.Job, error) {
 	return rc.xstoreCollectJob, nil
 }
 
-func (rc *Context) GetBackupBinlogJob() (*batchv1.Job, error) {
+func (rc *BackupContext) GetBackupBinlogJob() (*batchv1.Job, error) {
 	if rc.xstoreBinlogBackupJob == nil {
 		xstoreBackup := rc.MustGetXStoreBackup()
 
@@ -353,13 +390,13 @@ func (rc *Context) GetBackupBinlogJob() (*batchv1.Job, error) {
 	return rc.xstoreBinlogBackupJob, nil
 }
 
-func NewContext(base *control.BaseReconcileContext) *Context {
-	return &Context{
+func NewBackupContext(base *control.BaseReconcileContext) *BackupContext {
+	return &BackupContext{
 		BaseReconcileContext: base,
 	}
 }
 
-func (rc *Context) GetOrCreateXStoreBackupTaskConfigMap() (*corev1.ConfigMap, error) {
+func (rc *BackupContext) GetOrCreateXStoreBackupTaskConfigMap() (*corev1.ConfigMap, error) {
 	if rc.taskConfigMap == nil {
 		xstorebackup := rc.MustGetXStoreBackup()
 
@@ -367,7 +404,7 @@ func (rc *Context) GetOrCreateXStoreBackupTaskConfigMap() (*corev1.ConfigMap, er
 		err := rc.Client().Get(rc.Context(), types.NamespacedName{Namespace: rc.Namespace(), Name: util.XStoreBackupStableName(xstorebackup, "backup")}, &cm)
 		if err != nil {
 			if apierrors.IsNotFound(err) {
-				rc.taskConfigMap = NewTaskConfigMap(xstorebackup)
+				rc.taskConfigMap = NewBackupTaskConfigMap(xstorebackup)
 				err = rc.SetControllerRefAndCreate(rc.taskConfigMap)
 				if err != nil {
 					return nil, err
@@ -382,7 +419,7 @@ func (rc *Context) GetOrCreateXStoreBackupTaskConfigMap() (*corev1.ConfigMap, er
 	return rc.taskConfigMap, nil
 }
 
-func NewTaskConfigMap(xstoreBackup *xstorev1.XStoreBackup) *corev1.ConfigMap {
+func NewBackupTaskConfigMap(xstoreBackup *polardbxv1.XStoreBackup) *corev1.ConfigMap {
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      convention.NewBackupConfigMapName(xstoreBackup, "backup"),
@@ -392,7 +429,7 @@ func NewTaskConfigMap(xstoreBackup *xstorev1.XStoreBackup) *corev1.ConfigMap {
 	}
 }
 
-func (rc *Context) SaveTaskContext(key string, t interface{}) error {
+func (rc *BackupContext) SaveTaskContext(key string, t interface{}) error {
 	b, err := json.MarshalIndent(t, "", "  ")
 	if err != nil {
 		return err
@@ -417,7 +454,7 @@ func (rc *Context) SaveTaskContext(key string, t interface{}) error {
 	return rc.Client().Update(rc.Context(), cm)
 }
 
-func (rc *Context) IsTaskContextExists(key string) (bool, error) {
+func (rc *BackupContext) IsTaskContextExists(key string) (bool, error) {
 	cm, err := rc.GetOrCreateXStoreBackupTaskConfigMap()
 	if err != nil {
 		return false, err
@@ -426,7 +463,7 @@ func (rc *Context) IsTaskContextExists(key string) (bool, error) {
 	return ok, nil
 }
 
-func (rc *Context) GetTaskContext(key string, t interface{}) error {
+func (rc *BackupContext) GetTaskContext(key string, t interface{}) error {
 	cm, err := rc.GetOrCreateXStoreBackupTaskConfigMap()
 	if err != nil {
 		return err
@@ -435,7 +472,7 @@ func (rc *Context) GetTaskContext(key string, t interface{}) error {
 	return json.Unmarshal([]byte(cm.Data[key]), t)
 }
 
-func (rc *Context) GetSecret(name string) (*corev1.Secret, error) {
+func (rc *BackupContext) GetSecret(name string) (*corev1.Secret, error) {
 	secretKey := types.NamespacedName{
 		Namespace: rc.Namespace(),
 		Name:      name,
@@ -448,7 +485,7 @@ func (rc *Context) GetSecret(name string) (*corev1.Secret, error) {
 	return secret, nil
 }
 
-func (rc *Context) NewSecretFromXStore(secret *corev1.Secret) (*corev1.Secret, error) {
+func (rc *BackupContext) NewSecretFromXStore(secret *corev1.Secret) (*corev1.Secret, error) {
 	backup := rc.MustGetXStoreBackup()
 	data := make(map[string][]byte)
 	for user, passwd := range secret.Data {
@@ -461,4 +498,38 @@ func (rc *Context) NewSecretFromXStore(secret *corev1.Secret) (*corev1.Secret, e
 		},
 		Data: data,
 	}, nil
+}
+
+func (rc *BackupContext) GetXstoreGroupManagerByPod(pod *corev1.Pod) (group.GroupManager, error) {
+	var serviceList corev1.ServiceList
+	err := rc.Client().List(rc.Context(), &serviceList, client.InNamespace(rc.Namespace()), client.MatchingLabels{
+		xstoremeta.LabelPod: pod.Name,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(serviceList.Items) == 0 {
+		return nil, errors.New("no service found related to xstore " + rc.xstore.Name)
+	}
+	host := serviceList.Items[0].Name + "." + pod.Namespace
+	port, err := strconv.Atoi(pod.Labels[xstoremeta.LabelPortLock])
+	secret, err := rc.GetSecret(pod.Labels[xstoremeta.LabelName])
+	if err != nil {
+		return nil, err
+	}
+	user := xstoreconvention.SuperAccount
+	passwd, ok := secret.Data[user]
+	if !ok {
+		return nil, errors.New("can not get passwd for xsotre " + rc.xstore.Name)
+	}
+	return group.NewGroupManager(
+		rc.Context(),
+		dbutil.MySQLDataSource{
+			Host:     host,
+			Port:     port,
+			Username: user,
+			Password: string(passwd),
+		},
+		true,
+	), nil
 }

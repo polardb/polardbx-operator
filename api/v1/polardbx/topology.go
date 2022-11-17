@@ -207,7 +207,6 @@ type TopologyNodes struct {
 	CN TopologyNodeCN `json:"cn,omitempty"`
 
 	// +kubebuilder:default={replicas:2,template:{hostNetwork:true,resources:{limits:{cpu:4,memory:"8Gi"}}}}
-
 	DN TopologyNodeDN `json:"dn,omitempty"`
 
 	CDC *TopologyNodeCDC `json:"cdc,omitempty"`

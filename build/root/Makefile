@@ -62,6 +62,8 @@ ifneq (, $(TARGET))
 	BUILD_IMAGE_ARGS:=${BUILD_IMAGE_ARGS} $(TARGET)
 endif
 
+E2E_PARALLELISM=3
+
 define BUILD_IMAGES_HELP_INFO
 # Build images.
 #
@@ -165,7 +167,7 @@ e2e-test:
 else
 # @go test ./test/e2e -v -args timeout 6000 -ginkgo.progress -ginkgo.v
 e2e-test:
-	@ginkgo -v -progress -p ./test/e2e
+	@ginkgo -nodes=${E2E_PARALLELISM} -v -progress -p ./test/e2e
 endif
 
 .PHONY: manifests

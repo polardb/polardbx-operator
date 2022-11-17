@@ -58,9 +58,9 @@ monitors:
   # kube-state-metrics (KSM) is a simple service that listens to the Kubernetes API server and generates metrics
   # about the state of the objects.
   kubeStateMetrics:
-    repo: quay.io/coreos
+    repo: kubesphere
     image: kube-state-metrics
-    version: v1.9.7
+    version: v2.3.0
     replicas: 1
 
     # The node selector labels, KubeStateMetrics pod will deploy only on the nodes with such labels

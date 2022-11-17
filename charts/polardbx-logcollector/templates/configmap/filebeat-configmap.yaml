@@ -1,6 +1,11 @@
 apiVersion: v1
 data:
   filebeat.yml: |-
+    queue:
+       mem:
+         events: 4096
+         flush.min_events: 2048
+         flush.timeout: 5s
     filebeat.autodiscover:
       providers:
         - type: kubernetes
@@ -15,6 +20,8 @@ data:
     
               config:
                 - type: log
+                  scan_frequency: 0.3s
+                  harvester_buffer_size: 10485760
                   fields:
                     log_type: cn_sql_log
                     instance_id: ${data.kubernetes.labels.polardbx/name}

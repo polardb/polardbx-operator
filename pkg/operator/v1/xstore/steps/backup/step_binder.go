@@ -14,24 +14,23 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package backupreconciler
+package backup
 
 import (
-	"github.com/go-logr/logr"
-
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-
 	"github.com/alibaba/polardbx-operator/pkg/k8s/control"
+	xstorev1reconcile "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/reconcile"
+	"github.com/go-logr/logr"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-type ConditionFunc func(rc *Context, log logr.Logger) (bool, error)
-type StepFunc func(rc *Context, flow control.Flow) (reconcile.Result, error)
+type ConditionFunc func(rc *xstorev1reconcile.BackupContext, log logr.Logger) (bool, error)
+type StepFunc func(rc *xstorev1reconcile.BackupContext, flow control.Flow) (reconcile.Result, error)
 
 func NewStepBinder(name string, f StepFunc) control.BindFunc {
 	return control.NewStepBinder(
 		control.NewStep(
 			name, func(rc control.ReconcileContext, flow control.Flow) (reconcile.Result, error) {
-				return f(rc.(*Context), flow)
+				return f(rc.(*xstorev1reconcile.BackupContext), flow)
 			},
 		),
 	)
@@ -40,7 +39,7 @@ func NewStepBinder(name string, f StepFunc) control.BindFunc {
 func NewStepIfBinder(conditionName string, condFunc ConditionFunc, binders ...control.BindFunc) control.BindFunc {
 	condition := control.NewCachedCondition(
 		control.NewCondition(conditionName, func(rc control.ReconcileContext, log logr.Logger) (bool, error) {
-			return condFunc(rc.(*Context), log)
+			return condFunc(rc.(*xstorev1reconcile.BackupContext), log)
 		}),
 	)
 

@@ -26,7 +26,7 @@ func CreatePolarDBXParameterAndWaitUntilRunningOrFail(f *framework.Framework, po
 	pxmframework.WaitPolarDBXParameterInPhase(f.Client,
 		polardbxparameter.Name, polardbxparameter.Namespace,
 		[]polardbxv1polardbx.ParameterPhase{
-			polardbxv1polardbx.ParameterStatusRunning,
+			polardbxv1polardbx.ParameterStatusFinished,
 		},
 		timeout)
 	framework.ExpectNoError(err)

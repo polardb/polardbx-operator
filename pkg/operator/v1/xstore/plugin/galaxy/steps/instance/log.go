@@ -43,7 +43,7 @@ func PurgeLogsTemplate(d time.Duration) control.BindFunc {
 
 			// if Purge binlog Locked
 			if xstore.Labels[xstoremeta.LabelBinlogPurgeLock] == xstoremeta.BinlogPurgeLock {
-				flow.Pass()
+				return flow.Pass()
 			}
 
 			// avoid duplicated purge request from learner

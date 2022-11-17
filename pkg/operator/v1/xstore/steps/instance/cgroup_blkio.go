@@ -135,6 +135,10 @@ var SyncBlkioCgroupResourceLimits = xstorev1reconcile.NewStepBinder("SyncBlkioCg
 			// Sync via hpfs.
 			err := SyncBlkioCgroupValuesViaHpfs(ctx, hpfsClient, &pod, volumes[pod.Name], resources)
 			if err != nil {
+				if !rc.Config().Cluster().ForceCGroup() {
+					flow.Error(err, "Failed to SyncBlkioCgroupValues")
+					return flow.Continue("Skip syncing cgroup blkio values.")
+				}
 				return flow.Error(err, "Failed to sync blkio cgroup values.", "host", pod.Spec.NodeName,
 					"pod", pod.Name, "blkio", blkioVal)
 			}

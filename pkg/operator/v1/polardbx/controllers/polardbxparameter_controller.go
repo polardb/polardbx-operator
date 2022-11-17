@@ -108,9 +108,10 @@ func (r *PolarDBXParameterReconciler) newReconcileTask(rc *polardbxreconcile.Con
 	if polardbx.Status.Phase == polardbxv1polardbx.PhaseRunning {
 		switch parameter.Status.Phase {
 		case polardbxv1polardbx.ParameterStatusNew:
+			parametersteps.AddLabels(task)
 			parametersteps.SyncPolarDBXParameterStatus(task)
 			parametersteps.TransferParameterPhaseTo(polardbxv1polardbx.ParameterStatusModifying, true)(task)
-		case polardbxv1polardbx.ParameterStatusRunning:
+		case polardbxv1polardbx.ParameterStatusFinished:
 			// Schedule after 10 seconds.
 			defer control.ScheduleAfter(10*time.Second)(task, true)
 
@@ -143,7 +144,8 @@ func (r *PolarDBXParameterReconciler) newReconcileTask(rc *polardbxreconcile.Con
 			parametersteps.GMSRestart(task)
 
 			parametersteps.SyncPolarDBXParameterStatus(task)
-			parametersteps.TransferParameterPhaseTo(polardbxv1polardbx.ParameterStatusRunning, true)(task)
+			parametersteps.SyncModifiedTimestamp(task)
+			parametersteps.TransferParameterPhaseTo(polardbxv1polardbx.ParameterStatusFinished, true)(task)
 
 		}
 	}

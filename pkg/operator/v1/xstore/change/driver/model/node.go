@@ -80,6 +80,7 @@ func (s *PaxosNodeStatus) FromPod(pod *corev1.Pod) error {
 	if configHash, ok := pod.Labels[xstoremeta.LabelConfigHash]; ok {
 		s.RebuildConfig[xstoremeta.LabelConfigHash] = configHash
 	}
+	s.RebuildConfig["NodeName"] = pod.Spec.NodeName
 	if xStoreRole, ok := pod.Labels[xstoremeta.LabelRole]; ok {
 		s.XStoreRole = xStoreRole
 	}

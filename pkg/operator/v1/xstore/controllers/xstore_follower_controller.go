@@ -160,6 +160,7 @@ func (r *XStoreFollowerReconciler) newReconcileTask(rc *xstorev1reconcile.Follow
 		followersteps.TryCleanHostPathVolumeIfRemote(task)
 		followersteps.RemoveFinalizer(task)
 	case xstore.FollowerPhaseSuccess:
+		followersteps.TryCleanHostPathVolumeIfRemote(task)
 	case xstore.FollowerPhaseFailed:
 
 	}

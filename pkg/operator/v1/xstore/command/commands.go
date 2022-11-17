@@ -102,6 +102,14 @@ func (b *nullCommandBuilder) Consensus() *commandConsensusBuilder {
 	}
 }
 
+func (b *commandConsensusBuilder) List(full bool) *CommandBuilder {
+	b.args = append(b.args, "list")
+	if full {
+		b.args = append(b.args, "--full")
+	}
+	return b.end()
+}
+
 func (b *commandConsensusBuilder) This(full bool) *CommandBuilder {
 	b.args = append(b.args, "this")
 	if full {

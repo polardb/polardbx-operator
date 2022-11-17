@@ -58,7 +58,7 @@ func (p *probeConfigure) ConfigureForCNEngine(container *corev1.Container, ports
 		InitialDelaySeconds: 10,
 		TimeoutSeconds:      10,
 		PeriodSeconds:       10,
-		FailureThreshold:    18,
+		FailureThreshold:    6,
 		Handler:             p.newProbeWithProber("/liveness", ports),
 	}
 	container.LivenessProbe = &corev1.Probe{

@@ -211,12 +211,12 @@ func setupXStoreBackupControllers(opts controllerOptions) error {
 // to handle signals correctly. The second parameter opts defines the configurable options of controllers.
 //
 // Currently, these controllers are included:
-//  1. Controller for PolarDBXCluster (v1)
-//  2. Controller for XStore (v1)
-//  3. Controllers for PolarDBXBackup, PolarDBXBinlogBackup (v1)
-//  4. Controllers for XStoreBackup, XStoreBinlogBackup (v1)
-//  5. Controllers for PolarDBXBackupSchedule, PolarDBXBinlogBackupSchedule (v1)
-//  6. Controllers for PolarDBXParameter (v1)
+//   1. Controller for PolarDBXCluster (v1)
+//   2. Controller for XStore (v1)
+//   3. Controllers for PolarDBXBackup, PolarDBXBinlogBackup (v1)
+//   4. Controllers for XStoreBackup, XStoreBinlogBackup (v1)
+//   5. Controllers for PolarDBXBackupSchedule, PolarDBXBinlogBackupSchedule (v1)
+//   6. Controllers for PolarDBXParameter (v1)
 func Start(ctx context.Context, opts Options) {
 	// Start instruction loader.
 	hint.StartLoader(ctx)

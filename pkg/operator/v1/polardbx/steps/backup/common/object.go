@@ -18,6 +18,7 @@ package common
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	polardbxv1 "github.com/alibaba/polardbx-operator/api/v1"
 	xstorev1 "github.com/alibaba/polardbx-operator/api/v1"
@@ -35,6 +36,8 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"math"
+	"modernc.org/mathutil"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"strconv"
@@ -62,6 +65,14 @@ var UpdateBackupStartInfo = polardbxv1reconcile.NewStepBinder("UpdateBackupStart
 		}
 		backup.Labels[polardbxmeta.LabelName] = backup.Spec.Cluster.Name
 		backup.Status.BackupRootPath = util.BackupRootPath(backup)
+
+		// record topology of original pxc
+		pxc, err := rc.GetPolarDBX()
+		if err != nil {
+			return flow.Error(err, "Unable to get original pxc")
+		}
+		backup.Status.ClusterSpecSnapshot = pxc.Spec.DeepCopy()
+
 		if err := rc.UpdatePolarDBXBackup(); err != nil {
 			return flow.Error(err, "Unable to update PXC backup.")
 		}
@@ -247,7 +258,7 @@ var CollectBinlogStartIndex = polardbxv1reconcile.NewStepBinder("CollectBinlogSt
 			return flow.Error(err, "Unable to get XStore list")
 		}
 		for _, backupPod := range backupPodList {
-			groupManager, xstore, err := rc.GetPolarDBXGroupManagerByXStore(backupPod)
+			groupManager, xstore, err := rc.GetPolarDBXGroupManagerByXStorePod(backupPod)
 			if err != nil {
 				return flow.Error(err, "get DataSource Failed")
 			}
@@ -289,53 +300,6 @@ var CollectBinlogStartIndex = polardbxv1reconcile.NewStepBinder("CollectBinlogSt
 		return flow.Continue("Collect Binlog Start Offset!")
 	})
 
-var CollectBinlogEndIndex = polardbxv1reconcile.NewStepBinder("CollectBinlogEndIndex",
-	func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
-		backupPodList, err := rc.GetXStoreBackupPods()
-		pxcBackup, err := rc.GetPolarDBXBackup()
-		if err != nil {
-			return flow.Error(err, "Unable to get XStore list")
-		}
-		for _, backupPod := range backupPodList {
-			groupManager, xstore, err := rc.GetPolarDBXGroupManagerByXStore(backupPod)
-			if err != nil {
-				return flow.Error(err, "get DN DataSource Failed", "podName:", backupPod)
-			}
-			binlogOffset, err := groupManager.GetBinlogOffset()
-			if err != nil {
-				return flow.Error(err, "get binlogoffset Failed")
-			}
-			err = rc.Close()
-			if err != nil {
-				return flow.Error(err, "Close Database Failed")
-			}
-
-			binlogOffset = fmt.Sprintf("%s\ntimestamp:%s", binlogOffset, time.Now().Format("2006-01-02 15:04:05"))
-			backupRootPath := pxcBackup.Status.BackupRootPath
-			remotePath := fmt.Sprintf("%s/%s/%s-end", backupRootPath, polardbxmeta.BinlogOffsetPath, xstore.Name)
-			command := command.NewCanonicalCommandBuilder().Collect().
-				UploadOffset(binlogOffset, remotePath, string(pxcBackup.Spec.StorageProvider.StorageName), pxcBackup.Spec.StorageProvider.Sink).Build()
-			stdout := &bytes.Buffer{}
-			stderr := &bytes.Buffer{}
-			err = rc.ExecuteCommandOn(&backupPod, "engine", command, control.ExecOptions{
-				Logger:  flow.Logger(),
-				Stdin:   nil,
-				Stdout:  stdout,
-				Stderr:  stderr,
-				Timeout: 1 * time.Minute,
-			})
-			if err != nil {
-				if ee, ok := xstorectrlerrors.ExitError(err); ok {
-					if ee.ExitStatus() != 0 {
-						return flow.Retry("Failed to upload binlog end index", "pod", backupPod.Name, "exit-status", ee.ExitStatus())
-					}
-				}
-				return flow.Error(err, "Failed to upload binlog end index", "pod", backupPod.Name, "stdout", stdout.String(), "stderr", stderr.String())
-			}
-		}
-		return flow.Continue("Collect Binlog End Offset!")
-	})
-
 var DrainCommittingTrans = polardbxv1reconcile.NewStepBinder("DrainCommittingTrans",
 	func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
 		backup := rc.MustGetPolarDBXBackup()
@@ -345,6 +309,7 @@ var DrainCommittingTrans = polardbxv1reconcile.NewStepBinder("DrainCommittingTra
 		if err != nil {
 			return flow.Error(err, "get CN DataSource Failed")
 		}
+		flow.Logger().Info("Waiting trans commited")
 		err = cnManager.IsTransCommited("TRX_ID", "INNODB_TRX")
 		if err != nil {
 			return flow.Error(err, "Drain Committing Trans Failed")
@@ -382,6 +347,141 @@ var SendHeartBeat = polardbxv1reconcile.NewStepBinder("SendHeartBeat",
 
 		backup.Status.HeartBeatName = sname
 		return flow.Continue("HeartBeat Send!")
+	})
+
+var WaitHeartbeatSentToFollower = polardbxv1reconcile.NewStepBinder("WaitHeartbeatSentToFollower",
+	func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+		backupPodList, err := rc.GetXStoreBackupPods()
+		if err != nil {
+			return flow.Error(err, "Unable to get backup pods")
+		}
+
+		// check whether backup happened on follower, if so, wait heartbeat sent to them
+		// waitingPodMap records followers with their leader
+		waitingPodMap := make(map[*corev1.Pod]*corev1.Pod)
+		for i, backupPod := range backupPodList {
+			if backupPod.Labels[xstoremeta.LabelRole] == xstoremeta.RoleLeader {
+				continue
+			}
+
+			// get its leader
+			var xstore xstorev1.XStore
+			xstoreName := types.NamespacedName{
+				Namespace: backupPod.Namespace,
+				Name:      backupPod.Labels[xstoremeta.LabelName],
+			}
+			flow.Logger().Info("Try to get xstore for backup pod", "pod", backupPod.Name, "xstore", xstoreName)
+			err := rc.Client().Get(rc.Context(), xstoreName, &xstore)
+			if err != nil {
+				return flow.Error(err, "Unable to get xstore for backup pod", "backup pod", backupPod.Name)
+			}
+			leaderPod, err := rc.GetLeaderOfDN(&xstore)
+			if err != nil {
+				return flow.Error(err, "Unable to get leader for backup pod", "backup pod", backupPod.Name)
+			}
+			waitingPodMap[&backupPodList[i]] = leaderPod
+		}
+		if len(waitingPodMap) == 0 {
+			return flow.Continue("No backup happened on follower, skip waiting")
+		}
+
+		// get APPLIED_INDEX of leader, and wait APPLIED_INDEX of follower sync with it
+		flow.Logger().Info("Waiting heartbeat sent to follower pods")
+		timeout := time.After(120 * time.Minute)   // timeout after 120 min TODO(dengli): calculate timeout by delay
+		tick := time.Tick(1 * time.Minute)         // check period
+		targetIndex := make(map[*corev1.Pod]int64) // record APPLIED_INDEX of leader per follower
+		for {
+			select {
+			case <-timeout:
+				return flow.Error(errors.New("timeout"), "waiting heartbeat sync timeout")
+			case <-tick:
+				for waitingPod, leaderPod := range waitingPodMap {
+					manager, _, err := rc.GetPolarDBXGroupManagerByXStorePod(*leaderPod)
+					if err != nil || manager == nil {
+						return flow.Error(err, "unable to connect to leader", "leader pod", leaderPod.Name)
+					}
+					clusterStatusList, err := manager.ShowClusterStatus()
+					if err != nil {
+						return flow.Error(err, "unable to get cluster status", "leader pod", leaderPod.Name)
+					}
+
+					// leader may hava changed, just abort the backup
+					if len(clusterStatusList) != 3 {
+						return flow.Error(errors.New("global cluster status incorrect, leader may have changed"),
+							"leader pod", leaderPod.Name)
+					}
+
+					var currentIndex int64 = math.MaxInt64
+					for _, status := range clusterStatusList {
+						if status.Role == "Leader" {
+							if _, ok := targetIndex[waitingPod]; !ok {
+								targetIndex[waitingPod] = status.AppliedIndex
+							}
+						} else if status.Role == "Follower" { // to avoid checking per pod, just wait for all followers
+							currentIndex = mathutil.MinInt64(currentIndex, status.AppliedIndex)
+						}
+					}
+					if currentIndex >= targetIndex[waitingPod] {
+						delete(waitingPodMap, waitingPod)
+						flow.Logger().Info("Waiting finished", "waiting pod", waitingPod.Name,
+							"target index", targetIndex[waitingPod], "current index", currentIndex)
+						continue
+					}
+					flow.Logger().Info("Still waiting", "pod", waitingPod.Name,
+						"target index", targetIndex[waitingPod], "current index", currentIndex)
+				}
+				if len(waitingPodMap) == 0 {
+					return flow.Continue("Heartbeat has already been sent to all the followers")
+				}
+			}
+		}
+	})
+
+var CollectBinlogEndIndex = polardbxv1reconcile.NewStepBinder("CollectBinlogEndIndex",
+	func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+		backupPodList, err := rc.GetXStoreBackupPods()
+		pxcBackup, err := rc.GetPolarDBXBackup()
+		if err != nil {
+			return flow.Error(err, "Unable to get XStore list")
+		}
+		for _, backupPod := range backupPodList {
+			groupManager, xstore, err := rc.GetPolarDBXGroupManagerByXStorePod(backupPod)
+			if err != nil {
+				return flow.Error(err, "get DN DataSource Failed", "podName:", backupPod)
+			}
+			binlogOffset, err := groupManager.GetBinlogOffset()
+			if err != nil {
+				return flow.Error(err, "get binlogoffset Failed")
+			}
+			err = rc.Close()
+			if err != nil {
+				return flow.Error(err, "Close Database Failed")
+			}
+
+			binlogOffset = fmt.Sprintf("%s\ntimestamp:%s", binlogOffset, time.Now().Format("2006-01-02 15:04:05"))
+			backupRootPath := pxcBackup.Status.BackupRootPath
+			remotePath := fmt.Sprintf("%s/%s/%s-end", backupRootPath, polardbxmeta.BinlogOffsetPath, xstore.Name)
+			command := command.NewCanonicalCommandBuilder().Collect().
+				UploadOffset(binlogOffset, remotePath, string(pxcBackup.Spec.StorageProvider.StorageName), pxcBackup.Spec.StorageProvider.Sink).Build()
+			stdout := &bytes.Buffer{}
+			stderr := &bytes.Buffer{}
+			err = rc.ExecuteCommandOn(&backupPod, "engine", command, control.ExecOptions{
+				Logger:  flow.Logger(),
+				Stdin:   nil,
+				Stdout:  stdout,
+				Stderr:  stderr,
+				Timeout: 1 * time.Minute,
+			})
+			if err != nil {
+				if ee, ok := xstorectrlerrors.ExitError(err); ok {
+					if ee.ExitStatus() != 0 { // TODO(dengli): whether need to retry here
+						return flow.Retry("Failed to upload binlog end index", "pod", backupPod.Name, "exit-status", ee.ExitStatus())
+					}
+				}
+				return flow.Error(err, "Failed to upload binlog end index", "pod", backupPod.Name, "stdout", stdout.String(), "stderr", stderr.String())
+			}
+		}
+		return flow.Continue("Collect Binlog End Offset!")
 	})
 
 var WaitAllCollectBinlogJobFinished = polardbxv1reconcile.NewStepBinder("WaitAllCollectBinlogJobFinished",

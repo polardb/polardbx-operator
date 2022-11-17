@@ -17,6 +17,7 @@ limitations under the License.
 package parameter
 
 import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"time"
 
 	"github.com/alibaba/polardbx-operator/pkg/util/gms"
@@ -27,6 +28,8 @@ import (
 	"gopkg.in/ini.v1"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+
+	conventionXstore "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/convention"
 
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/steps/instance/common"
 
@@ -52,6 +55,16 @@ var SyncPolarDBXParameterStatus = polardbxv1reconcile.NewStepBinder("SyncPolarDB
 		// sync spec snapshot
 		polardbxParameter.Status.ParameterSpecSnapshot = polardbxParameter.Spec.DeepCopy()
 
+		return flow.Pass()
+	},
+)
+
+var AddLabels = polardbxv1reconcile.NewStepBinder("AddLabels",
+	func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+		polardbxParameter := rc.MustGetPolarDBXParameter()
+		labels := conventionXstore.GetParameterLabel()
+		labels[polardbxmeta.LabelName] = polardbxParameter.Spec.ClusterName
+		polardbxParameter.SetLabels(labels)
 		return flow.Pass()
 	},
 )
@@ -548,6 +561,14 @@ var GetRolesToRestart = polardbxv1reconcile.NewStepBinder("GetRolesToRestart",
 
 		rc.SetRoleToRestart(roleToRestart)
 
+		return flow.Pass()
+	},
+)
+
+var SyncModifiedTimestamp = polardbxv1reconcile.NewStepBinder("SyncModifiedTimestamp",
+	func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+		polardbxParameter := rc.MustGetPolarDBXParameter()
+		polardbxParameter.Status.ModifiedTimestamp = metav1.Now().Format("2006-01-02 15:04:05")
 		return flow.Pass()
 	},
 )

@@ -25,3 +25,7 @@ import (
 type Reconciler interface {
 	Reconcile(rc *Context, log logr.Logger, request reconcile.Request) (reconcile.Result, error)
 }
+
+type BackupReconciler interface {
+	Reconcile(rc *BackupContext, log logr.Logger, request reconcile.Request) (reconcile.Result, error)
+}

@@ -28,6 +28,7 @@ import (
 	"golang.org/x/time/rate"
 	batchv1 "k8s.io/api/batch/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -68,6 +69,11 @@ func (r *PolarDBXBackupReconciler) Reconcile(ctx context.Context, request reconc
 		return reconcile.Result{}, err
 	}
 
+	rc.SetPolarDBXKey(types.NamespacedName{
+		Namespace: request.Namespace,
+		Name:      polardbxBackup.Spec.Cluster.Name,
+	})
+
 	return r.reconcile(rc, polardbxBackup, log)
 }
 
@@ -96,6 +102,7 @@ func (r *PolarDBXBackupReconciler) newReconcileTask(rc *polardbxreconcile.Contex
 		commonsteps.CollectBinlogStartIndex(task)
 		commonsteps.DrainCommittingTrans(task)
 		commonsteps.SendHeartBeat(task)
+		commonsteps.WaitHeartbeatSentToFollower(task)
 		commonsteps.CollectBinlogEndIndex(task)
 		commonsteps.TransferPhaseTo(polardbxv1.BackupCalculating, false)(task)
 	case polardbxv1.BackupCalculating:

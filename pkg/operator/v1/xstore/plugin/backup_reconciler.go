@@ -17,16 +17,16 @@ limitations under the License.
 package plugin
 
 import (
-	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/backupreconciler"
+	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/reconcile"
 	"sync"
 )
 
 var (
-	xstoreBackupReconcilerMap = map[string]backupreconciler.Reconciler{}
+	xstoreBackupReconcilerMap = map[string]reconcile.BackupReconciler{}
 	xstoreBackupReconcilerMu  sync.RWMutex
 )
 
-func RegisterXStoreBackupReconciler(engine string, reconciler backupreconciler.Reconciler) {
+func RegisterXStoreBackupReconciler(engine string, reconciler reconcile.BackupReconciler) {
 	xstoreBackupReconcilerMu.Lock()
 	defer xstoreBackupReconcilerMu.Unlock()
 
@@ -37,7 +37,7 @@ func RegisterXStoreBackupReconciler(engine string, reconciler backupreconciler.R
 	xstoreBackupReconcilerMap[engine] = reconciler
 }
 
-func GetXStoreBackupReconciler(engine string) backupreconciler.Reconciler {
+func GetXStoreBackupReconciler(engine string) reconcile.BackupReconciler {
 	xstoreBackupReconcilerMu.RLock()
 	defer xstoreBackupReconcilerMu.RUnlock()
 

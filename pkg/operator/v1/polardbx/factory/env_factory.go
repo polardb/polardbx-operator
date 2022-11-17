@@ -246,7 +246,7 @@ func (e *envFactory) newJvmInjectionEnvVarForCNEngine(debugPort int) corev1.EnvV
 	staticConfig := e.polardbx.Spec.Config.CN.Static
 	if staticConfig != nil {
 		if staticConfig.EnableCoroutine {
-			tddlOpts = append(tddlOpts, "-XX:+UseWisp2", "-Dio.grpc.netty.shaded.io.netty.transport.noNative=true", "-Dio.netty.transport.noNative=true")
+			tddlOpts = append(tddlOpts, "-XX:+UnlockExperimentalVMOptions", "-XX:+UseWisp2", "-Dio.grpc.netty.shaded.io.netty.transport.noNative=true", "-Dio.netty.transport.noNative=true")
 		}
 		if staticConfig.EnableJvmRemoteDebug {
 			tddlOpts = append(tddlOpts, fmt.Sprintf("-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=%d", debugPort))

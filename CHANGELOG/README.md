@@ -1,5 +1,30 @@
 # Changelog
 
+## 2022-11-17
+
+Release v1.3.0
+
++ Enhancement & New Features
+  + Support backup and restore.
+  + Support multiple architecture: linux/amd64, linux/arm64.
+  + Support log(audit, error) collection.
+  + Support read only cluster.
+  + Support parameter template and configuration.
+  + Support XStore node rebuild.
+  + Support splitting dn data and log into different directories.
+  + Support archiving cold data into OSS and NFS.
++ Bug Fix
+  + Fix `mycnfOverwrite` not working issue.
+  + Fix issue of cn topology rules not working in host network mode.
+  + Fix XStore node not ready when ip changed in container network mode.
+  + Fix logstash oom
+  + Fix rebuild job does continue, when the instance is upgrading
+  + Fix failing to create readonly pxc when dnReplicas is less than 2
+  + Fix xstore topology of restored instance not in sync with original instance
+  + Fix binlog purge lock not working during backup
+  + Fix change leader command issue for xsl.
+  + Fix backup progress hang in binlogbackuping phase.
+
 ## 2022-10-26
 
 Release v1.3.0-alpha.1

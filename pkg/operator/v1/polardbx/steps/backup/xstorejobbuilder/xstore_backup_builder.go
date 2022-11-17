@@ -46,6 +46,11 @@ func NewXStoreBackup(scheme *runtime.Scheme, backup *polardbxv1.PolarDBXBackup, 
 		},
 	}
 
+	// set preferred backup node
+	if node, ok := backup.Labels[meta.LabelPreferredBackupNode]; ok {
+		xstoreBackup.Labels[meta.LabelPreferredBackupNode] = node
+	}
+
 	if err := ctrl.SetControllerReference(backup, xstoreBackup, scheme); err != nil {
 		return nil, err
 	}

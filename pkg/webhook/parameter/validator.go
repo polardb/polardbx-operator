@@ -33,10 +33,6 @@ type Validator struct {
 func (v *Validator) validateObject(ctx context.Context, obj *polardbxv1.PolarDBXParameter, polardbxcluster *polardbxv1.PolarDBXCluster) field.ErrorList {
 	var errList field.ErrorList
 
-	if obj.Labels[convention.ParameterName] != convention.ParameterType {
-		errList = append(errList, field.Required(field.NewPath("labels", "convention.ParameterType"), "parameter's label must add \"parameter: dynamic\""))
-	}
-
 	polarDBXParameterList := polardbxv1.PolarDBXParameterList{}
 	err := v.List(context.Background(), &polarDBXParameterList,
 		client.InNamespace(obj.Namespace),

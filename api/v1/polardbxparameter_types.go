@@ -59,6 +59,9 @@ type PolarDBXParameterStatus struct {
 	// Phase is the current phase of the cluster.
 	Phase polardbxv1polardbx.ParameterPhase `json:"phase,omitempty"`
 
+	// ModifiedTimestamp is timestamp of the last modified
+	ModifiedTimestamp string `json:"modifiedTimestamp,omitempty"`
+
 	// PrevParameterSpecSnapshot represents the previous version snapshot of the parameter.
 	PrevParameterSpecSnapshot *PolarDBXParameterSpec `json:"prevParameterSpecSnapshot,omitempty"`
 
@@ -69,7 +72,10 @@ type PolarDBXParameterStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:shortName=pxp;polardbxp;polardbxparameter
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="CLUSTER NAME",type=string,JSONPath=`.spec.clusterName`
+// +kubebuilder:printcolumn:name="LAST MODIFIED",type=string,JSONPath=`.status.modifiedTimestamp`
 // +kubebuilder:printcolumn:name="PHASE",type=string,JSONPath=`.status.phase`
+// +kubebuilder:printcolumn:name="AGE",type=date,JSONPath=`.metadata.creationTimestamp`
 
 type PolarDBXParameter struct {
 	metav1.TypeMeta   `json:",inline"`

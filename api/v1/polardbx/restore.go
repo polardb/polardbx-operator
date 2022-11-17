@@ -17,8 +17,9 @@ limitations under the License.
 package polardbx
 
 type RestoreSpec struct {
-	//BackupSet defines the source of backup set
+	// BackupSet defines the source of backup set
 	BackupSet string `json:"backupset,omitempty"`
+
 	// From defines the source information, either backup sets, snapshot or an running cluster.
 	From PolarDBXRestoreFrom `json:"from,omitempty"`
 
@@ -28,6 +29,14 @@ type RestoreSpec struct {
 	// TimeZone defines the specified time zone of the restore time. Default is the location of current cluster.
 	// +optional
 	TimeZone string `json:"timezone,omitempty"`
+
+	// +kubebuilder:default=false
+
+	// SyncSpecWithOriginalCluster identifies whether restored cluster should use the same spec as the original cluster.
+	// If the field is set to true, spec of original cluster is used; otherwise users have to declare spec manually or
+	// use default spec, but replicas of dn will be forced to sync with original cluster now. Default is false
+	// +optional
+	SyncSpecWithOriginalCluster bool `json:"syncSpecWithOriginalCluster,omitempty"`
 }
 
 // PolarDBXRestoreFrom defines the source information of the restored cluster.

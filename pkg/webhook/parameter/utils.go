@@ -100,47 +100,47 @@ func calculate(s string) int64 {
 }
 
 /*
-* 支持变量
+	* 支持变量
 
-AllocatedStorage：实例购买的存储空间大小，整数型
-DBInstanceClassMemory：实例规格的内存大小，整数型
-DBInstanceClassCPU：实例规格的CPU核数，整数型
+	AllocatedStorage：实例购买的存储空间大小，整数型
+	DBInstanceClassMemory：实例规格的内存大小，整数型
+	DBInstanceClassCPU：实例规格的CPU核数，整数型
 
-* 支持公式
+	* 支持公式
 
-数据库参数公式支持两个运算符：除法和乘法。
-除法运算符：/
-用除数除以被除数，返回整数型商。商中的小数不四舍五入，直接截断。
-语法
-dividend / divisor
-被除数和除数参数必须是整数型表达式。
-乘法运算符：*
-用除数除以被除数，返回整数型商。商中的小数不四舍五入，直接截断。
-语法
-expression * expression
-两个表达式必须都是整数型。
+	数据库参数公式支持两个运算符：除法和乘法。
+	除法运算符：/
+	用除数除以被除数，返回整数型商。商中的小数不四舍五入，直接截断。
+	语法
+	dividend / divisor
+	被除数和除数参数必须是整数型表达式。
+	乘法运算符：*
+	用除数除以被除数，返回整数型商。商中的小数不四舍五入，直接截断。
+	语法
+	expression * expression
+	两个表达式必须都是整数型。
 
-* 支持函数
+	* 支持函数
 
-GREATEST()
-返回整数型或者参数公式列表中最大的值。
-语法
-GREATEST(argument1, argument2,...argumentn)
-返回整数。
-LEAST()
-返回整数型或者参数公式列表中最小的值。
-语法
-LEAST(argument1, argument2,...argumentn)
-返回整数。
-SUM()
-添加指定整数型或者参数公式的值。
-语法
-SUM(argument1, argument2,...argumentn)
-返回整数。
+	GREATEST()
+	返回整数型或者参数公式列表中最大的值。
+	语法
+	GREATEST(argument1, argument2,...argumentn)
+	返回整数。
+	LEAST()
+	返回整数型或者参数公式列表中最小的值。
+	语法
+	LEAST(argument1, argument2,...argumentn)
+	返回整数。
+	SUM()
+	添加指定整数型或者参数公式的值。
+	语法
+	SUM(argument1, argument2,...argumentn)
+	返回整数。
 
-例如
-innodb_buffer_pool_size = {DBInstanceClassMemory*3/4}
-read_buffer_size = {LEAST(DBInstanceClassMemory/1048576*128, 262144)}
+	例如
+	innodb_buffer_pool_size = {DBInstanceClassMemory*3/4}
+	read_buffer_size = {LEAST(DBInstanceClassMemory/1048576*128, 262144)}
 */
 func formulaComputing(valueStr string, polardbxcluster *polardbxv1.PolarDBXCluster) (int64, error) {
 	if valueStr[len(valueStr)-1] != '}' {

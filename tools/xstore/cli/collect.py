@@ -47,10 +47,10 @@ def get_binlog_list(context, start_binlog_name, end_binlog_name):
     log_dir = context.volume_path(VOLUME_DATA, "log")
     binlog_list = binlog.get_local_binlog(min_binlog_name=start_binlog_name, max_binglog_name=end_binlog_name,
                                           left_contain=True, right_contain=True)
-    binlog_list_str = ""
+    binlog_path_list = []
     for i, (logname, start_log_index) in enumerate(binlog_list):
-        binlog_list_str = binlog_list_str + os.path.join(log_dir, logname) + " "
-    return binlog_list, binlog_list_str.strip()
+        binlog_path_list.append(os.path.join(log_dir, logname))
+    return binlog_list, binlog_path_list
 
 
 def seekhb_and_upload(filstream_client, file_path, context, binlog_list, heartbeat_name, backup_dir, logger):
@@ -71,7 +71,7 @@ def seekhb_and_upload(filstream_client, file_path, context, binlog_list, heartbe
                 break
 
 
-def collect_and_upload(context, start_binlog_name, start_offset, end_binlog_name, end_offset, binlog_list_name,
+def collect_and_upload(context, start_binlog_name, start_offset, end_binlog_name, end_offset, binlog_path_list,
                        file_path, filestream_client, backup_dir, logger):
     collect_local_file = os.path.join(backup_dir, "collect")
     os.makedirs(collect_local_file, exist_ok=True)
@@ -81,9 +81,8 @@ def collect_and_upload(context, start_binlog_name, start_offset, end_binlog_name
     collect_cmd = [context.bb_home, 'txdump',
                    '--start-offset', start_binlog,
                    '--end-offset', end_binlog,
-                   '--bin', '--output', local_collect_file_path,
-                   binlog_list_name
-                   ]
+                   '--bin', '--output', local_collect_file_path
+                   ] + binlog_path_list
     check_run_process(collect_cmd, logger=logger)
     filestream_client.upload_from_file(remote=file_path, local=local_collect_file_path, logger=logger)
 
@@ -123,12 +122,14 @@ def collect_binlog_index(backup_context, heartbeat_name):
     start_binlog_name, start_offset, end_binlog_name, end_offset = download_binlog_offset_to_local(offsetfile_name,
                                                                                                    filestream_client,
                                                                                                    backup_dir)
-    binlog_list, binlog_list_name = get_binlog_list(context, start_binlog_name, end_binlog_name)
+    # binlog_list only records binlog name, while binlog_path_list contains absolute path for each binlog
+    binlog_list, binlog_path_list = get_binlog_list(context, start_binlog_name, end_binlog_name)
+
     logger.info("start_binlog_name:%s, start_offset:%s, end_binlog_name:%s, end_offset:%s",
                 start_binlog_name, start_offset, end_binlog_name, end_offset)
     seekhb_and_upload(filestream_client, collect_file, context, binlog_list, heartbeat_name, backup_dir, logger)
 
-    collect_and_upload(context, start_binlog_name, start_offset, end_binlog_name, end_offset, binlog_list_name,
+    collect_and_upload(context, start_binlog_name, start_offset, end_binlog_name, end_offset, binlog_path_list,
                        collect_file, filestream_client, backup_dir, logger)
 
 
