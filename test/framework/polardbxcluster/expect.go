@@ -1056,7 +1056,7 @@ func (e *Expectation) ExpectRestartOk(c client.Client, name, namespace string, t
 			if err != nil {
 				return true, err // stop wait with error
 			}
-			updated = updated && len(xstore.Status.RestartingPods.ToDeletePod) == 0 && xstore.Status.RestartingPods.LastDelectedPod == ""
+			updated = updated && len(xstore.Status.RestartingPods.ToDeletePod) == 0 && xstore.Status.RestartingPods.LastDeletedPod == ""
 		}
 		gmsName := convention.NewGMSName(&polardbxcluster)
 		var xstore polardbxv1.XStore
@@ -1067,7 +1067,7 @@ func (e *Expectation) ExpectRestartOk(c client.Client, name, namespace string, t
 		if err != nil {
 			return true, err // stop wait with error
 		}
-		updated = updated && len(xstore.Status.RestartingPods.ToDeletePod) == 0 && xstore.Status.RestartingPods.LastDelectedPod == ""
+		updated = updated && len(xstore.Status.RestartingPods.ToDeletePod) == 0 && xstore.Status.RestartingPods.LastDeletedPod == ""
 		return updated, nil
 	})
 	common.ExpectNoError(err, "not connectable")
