@@ -53,7 +53,7 @@ type DDLStatus struct {
 	Schema    string    `json:"schema,omitempty"`     // OBJECT_SCHEMA
 	Object    string    `json:"object,omitempty"`     // OBJECT_NAME
 	Type      string    `json:"type,omitempty"`       // DDL_TYPE
-	State     string    `json:"status,omitempty"`     // STATE
+	State     string    `json:"state,omitempty"`      // STATE
 	Progress  int       `json:"progress,omitempty"`   // PROGRESS
 	StartTime time.Time `json:"start_time,omitempty"` // START_TIME
 }
