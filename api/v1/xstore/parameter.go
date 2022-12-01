@@ -23,6 +23,6 @@ type ParameterTemplate struct {
 }
 
 type RestartingPods struct {
-	LastDelectedPod string   `json:"lastDeletedPod,omitempty"`
-	ToDeletePod     []string `json:"toDeletePod,omitempty"`
+	LastDeletedPod string   `json:"lastDeletedPod,omitempty"`
+	ToDeletePod    []string `json:"toDeletePod,omitempty"`
 }
