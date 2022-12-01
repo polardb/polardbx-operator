@@ -650,7 +650,7 @@ var CloseXStoreUpdatePhase = xstorev1reconcile.NewStepBinder("CloseXStoreUpdateP
 var GetRestartingPods = xstorev1reconcile.NewStepBinder("GetRestartingPods",
 	func(rc *xstorev1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
 		xstore := rc.MustGetXStore()
-		if len(xstore.Status.RestartingPods.ToDeletePod) == 0 && xstore.Status.RestartingPods.LastDelectedPod == "" {
+		if len(xstore.Status.RestartingPods.ToDeletePod) == 0 && xstore.Status.RestartingPods.LastDeletedPod == "" {
 			pods, err := rc.GetXStorePods()
 			if err != nil {
 				return flow.Error(err, "Unable to get pods fo XStore.", "XStore", xstore.Name)
@@ -682,7 +682,7 @@ var RollingRestartPods = plugin.NewStepBinder(galaxy.Engine, "RollingRestartPods
 	func(rc *xstorev1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
 		xstore := rc.MustGetXStore()
 
-		lastDeletedPod := xstore.Status.RestartingPods.LastDelectedPod
+		lastDeletedPod := xstore.Status.RestartingPods.LastDeletedPod
 		if lastDeletedPod != "" {
 			podDel := corev1.Pod{}
 			var podList corev1.PodList
@@ -706,7 +706,7 @@ var RollingRestartPods = plugin.NewStepBinder(galaxy.Engine, "RollingRestartPods
 			}
 		}
 
-		xstore.Status.RestartingPods.LastDelectedPod = ""
+		xstore.Status.RestartingPods.LastDeletedPod = ""
 
 		if len(xstore.Status.RestartingPods.ToDeletePod) == 0 {
 			return flow.Pass()
@@ -728,7 +728,7 @@ var RollingRestartPods = plugin.NewStepBinder(galaxy.Engine, "RollingRestartPods
 			return flow.Error(err, "Unable to delete pod", "pod name", pod.Name)
 		}
 
-		xstore.Status.RestartingPods.LastDelectedPod = deletePodName
+		xstore.Status.RestartingPods.LastDeletedPod = deletePodName
 
 		return flow.Retry("Rolling Restart...")
 	},
