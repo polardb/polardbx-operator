@@ -1,0 +1,79 @@
+name: Run e2e test case on ACK
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+# Environment variables available to all jobs and steps in this workflow.
+env:
+  REGION_ID: cn-zhangjiakou
+  REGISTRY: registry.cn-zhangjiakou.aliyuncs.com
+  NAMESPACE: polardbx-ci
+  TAG: ${{ github.sha }}
+  ACK_CLUSTER_ID: c5ef7e2fffca74f4286bd91d6a9a47b2f
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      # 1 Setup go environment
+      - name: Setup go environment
+        uses: actions/setup-go@v3
+        with:
+          go-version: '1.18'
+
+      # 2 Set ACK context
+      - name: Set K8s context
+        uses: aliyun/ack-set-context@v1
+        with:
+          access-key-id: "${{ secrets.ACK_ACCESS_KEY_ID }}"
+          access-key-secret: "${{ secrets.ACK_ACCESS_KEY_SECRET }}"
+          cluster-id: "${{ env.ACK_CLUSTER_ID }}"
+
+      # 3 Login to ACR
+      - name: Login to ACR with the AccessKey pair
+        uses: aliyun/acr-login@v1
+        with:
+          login-server: https://registry.cn-zhangjiakou.aliyuncs.com
+          username: "${{ secrets.ACR_USERNAME }}"
+          password: "${{ secrets.ACR_PASSWORD }}"
+          region-id: "${{ env.REGION_ID }}"
+
+      # 4 Build images and push to registry
+      - name: Build and push images
+        run: |-
+          make push REPO=$REGISTRY/$NAMESPACE TAG=$TAG
+
+      # 5 Generate helm chart
+      - name: Generate helm chart
+        run: |-
+          make helm-package
+
+      # 6 Install helm chart into ACK
+      - name: Install helm chart
+        run: |-
+          OPERATOR_FILE=$(ls target/charts | grep polardbx-operator)
+          helm upgrade --install --set imageRepo=$REGISTRY/$NAMESPACE --set imageTag=$TAG -f .github/config/values.yaml --namespace polardbx-operator-system polardbx-operator target/charts/$OPERATOR_FILE
+          MONITOR_HELM_FILE=$(ls target/charts | grep polardbx-monitor)
+          helm upgrade --install --namespace polardbx-monitor polardbx-monitor target/charts/$MONITOR_HELM_FILE
+
+      # 7 Run e2e test
+      - name: Run e2e test
+        run: |-
+          go install github.com/onsi/ginkgo/ginkgo@v1.16.5
+          ginkgo --skip="parameter template" --skip="read-write parameters" --skip="restart parameters" -nodes=2 -v -progress -p ./test/e2e
+
+      # 8 Uninstall helm chart and crds
+      - name: Uninstall helm chart
+        run: |-
+          helm uninstall polardbx-operator --namespace polardbx-operator-system
+          helm uninstall polardbx-monitor --namespace polardbx-monitor
+          kubectl get crd -o name | grep polardbx | xargs kubectl delete
+
