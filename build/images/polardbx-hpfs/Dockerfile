@@ -21,7 +21,7 @@ WORKDIR /workspace
 COPY go.mod go.mod
 COPY go.sum go.sum
 
-ENV GOPROXY=https://goproxy.cn
+ENV GOPROXY=https://goproxy.cn,direct
 # Cache deps before building and copying source
 RUN go mod download
 
