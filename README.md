@@ -1,4 +1,4 @@
-GalaxyKube -- PolarDB-X Operator
+PolarDB-X Operator
 ---
 
 PolarDB-X Operator is a Kubernetes extension that aims to create and manage PolarDB-X cluster on Kubernetes. It follows
@@ -7,11 +7,11 @@ tasks.
 
 ## Quick Start
 
-Follow the [[Quick Start](./docs/en/deploy/quick-start.md) / [快速开始](https://doc.polardbx.com/quickstart/topics/quickstart-k8s.html)] guide to start a testing Kubernetes cluster and play with PolarDB-X Operator.
+Follow the [快速开始](https://doc.polardbx.com/quickstart/topics/quickstart-k8s.html) guide to start a testing Kubernetes cluster and play with PolarDB-X Operator.
 
 ## Documentation
 
-**NOTE: v1.2.0 introduces a breaking change to support the new xpaxos galaxyengine. Please refer to the [CHANGELOG](./CHANGELOG.md) for upgrade guidance.**
+Please refer to the [CHANGELOG](./CHANGELOG.md) for the notable changes for each version.**
 
 Refer to the documentations for more details, such as CRD definitions and operation guides.
 
