@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"io"
 	"io/fs"
-	"io/ioutil"
 	"os"
 	"path"
 )
@@ -83,7 +82,7 @@ func (b *fileSystemBundle) ListPaths() ([]string, error) {
 }
 
 func (b *fileSystemBundle) Get(key string) (io.Reader, error) {
-	content, err := ioutil.ReadFile(path.Join(b.path, key))
+	content, err := os.ReadFile(path.Join(b.path, key))
 	if err != nil {
 		if err == os.ErrNotExist {
 			return nil, ErrNotFound

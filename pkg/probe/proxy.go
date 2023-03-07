@@ -19,7 +19,7 @@ package probe
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -127,7 +127,7 @@ func (server *ProxyServer) reloadRunmode() {
 	}
 	defer file.Close()
 
-	content, err := ioutil.ReadAll(file)
+	content, err := io.ReadAll(file)
 	if err != nil {
 		fmt.Println("Unknown error: " + err.Error())
 	}
