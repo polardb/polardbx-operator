@@ -18,7 +18,6 @@ package ssl
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"testing"
 )
@@ -35,7 +34,7 @@ func TestGenerateSelfCertificatedCertificates(t *testing.T) {
 	caPemBytes, _ := MarshalCert(caPem)
 	fmt.Println(string(caPemBytes))
 	_ = os.MkdirAll("/tmp/test-certs", 0755)
-	_ = ioutil.WriteFile("/tmp/test-certs/root.crt", caPemBytes, 0644)
+	_ = os.WriteFile("/tmp/test-certs/root.crt", caPemBytes, 0644)
 
 	_, priv, pem, err := GenerateSelfSignedCert(caCert, caPriv, 2048, domain)
 	if err != nil {
@@ -44,9 +43,9 @@ func TestGenerateSelfCertificatedCertificates(t *testing.T) {
 	fmt.Println("server.key: ")
 	keyBytes, _ := MarshalKey(priv)
 	fmt.Println(string(keyBytes))
-	_ = ioutil.WriteFile("/tmp/test-certs/server.key", keyBytes, 0644)
+	_ = os.WriteFile("/tmp/test-certs/server.key", keyBytes, 0644)
 	pemBytes, _ := MarshalCert(pem)
 	fmt.Println("server.crt: ")
 	fmt.Println(string(pemBytes))
-	_ = ioutil.WriteFile("/tmp/test-certs/server.crt", pemBytes, 0644)
+	_ = os.WriteFile("/tmp/test-certs/server.crt", pemBytes, 0644)
 }

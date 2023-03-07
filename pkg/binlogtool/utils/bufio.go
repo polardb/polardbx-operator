@@ -20,7 +20,6 @@ import (
 	"bufio"
 	"hash/crc32"
 	"io"
-	"io/ioutil"
 )
 
 type SeekableBufferReader struct {
@@ -99,7 +98,7 @@ func SkipBytes(r io.Reader, n int64) error {
 		_, err := seeker.Seek(n, io.SeekCurrent)
 		return err
 	} else {
-		_, err := io.CopyN(ioutil.Discard, r, n)
+		_, err := io.CopyN(io.Discard, r, n)
 		return err
 	}
 }

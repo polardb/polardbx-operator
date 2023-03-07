@@ -18,7 +18,7 @@ package hint
 
 import (
 	"context"
-	"io/ioutil"
+	"os"
 	"path"
 	"sync"
 	"time"
@@ -28,7 +28,7 @@ const rootPath = "/etc/operator/hints"
 
 func load(hint string) (string, error) {
 	instrPath := path.Join(rootPath, hint)
-	b, err := ioutil.ReadFile(instrPath)
+	b, err := os.ReadFile(instrPath)
 	if err != nil {
 		return "", err
 	}
