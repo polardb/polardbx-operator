@@ -8,109 +8,227 @@ metadata:
   namespace: polardbx-monitor
 spec:
   groups:
-    - name: polardbx-CN
+    - name: polardbx-cn
       rules:
-        - alert: Polardb-X-CN SQL Running Connection is High
+        - alert: PolarDB-X CN SQL Running Connection is Too High
           annotations:
-            summary: Polardb-X-CN SQL Running Connection is High
-            description: instance {{ $labels.instance }} schema {{ $labels.schema }} running count is high, over 200.
+            summary: PolarDB-X CN SQL Running Connection is Too High
+            description: PolarDB-X {{ $labels.polardbx_name}} pod {{ $labels.pod }} namespace {{ $labels.namespace }} running count is too high, over 1000 for 5m.
           expr: |
-            sum(polardbx_stats_running_count) by (instance, schema, service) >= 200
-          for: 3m
-          labels:
-            severity: critical
-        - alert: Polardb-X-CN Active Connection is High
-          annotations:
-            summary: Polardb-X-CN Active Connection is High
-            description: instance {{ $labels.instance }} schema {{ $labels.schema }} active count is high, over 900.
-          expr: |
-            sum(polardbx_stats_active_connections) by (instance, schema, service) >= 900
-          for: 3m
-          labels:
-            severity: critical
-        - alert: Polardb-X-CN Slow SQL Count is High
-          annotations:
-            summary: Polardb-X-CN Slow SQL Count is High
-            description: Pod {{ $labels.pod }} schema {{ $labels.schema }} slow sql count is high, over 50.
-          expr: |
-            sum(rate(polardbx_stats_slow_request_count_total[1m])) by (pod, service, schema) >= 50
-          for: 3m
-          labels:
-            severity: critical
-        - alert: Polardb-X-CN Error SQL Count is High
-          annotations:
-            summary: Polardb-X-CN Error SQL Count is High
-            description: Pod {{ $labels.pod }} schema {{ $labels.schema }} error sql count is high, over 50.
-          expr: |
-            sum(rate(polardbx_stats_error_count_total[1m])) by (pod, service, schema) >= 50
-          for: 3m
-          labels:
-            severity: critical
-    - name: polardbx-DN
-      rules:
-        - alert: Polardb-X-DN SQL Running Connection is High
-          annotations:
-            summary: Polardb-X-DN SQL Running Connection is High
-            description: instance {{ $labels.instance }} schema {{ $labels.schema }} running count is high, over 200.
-          expr: |
-            sum(mysql_global_status_threads_running) by (instance, schema, service) >= 200
-          for: 3m
-          labels:
-            severity: critical
-        - alert: Polardb-X-DN Active Connection is High
-          annotations:
-            summary: Polardb-X-DN Active Connection is High
-            description: instance {{ $labels.instance }} schema {{ $labels.schema }} active count is high, over 1000.
-          expr: |
-            sum(mysql_global_status_polarx_sessions) by (instance, schema, service) >= 1000
-          for: 3m
-          labels:
-            severity: critical
-        - alert: Polardb-X-DN Slow SQL Count is High
-          annotations:
-            summary: Polardb-X-DN Slow SQL Count is High
-            description: Pod {{ $labels.pod }} schema {{ $labels.schema }} running count is high, over 50.
-          expr: |
-            sum(mysql_global_status_slow_queries) by (pod, service, schema) >= 50
-          for: 3m
-          labels:
-            severity: critical
-    - name: polardbx-Node
-      rules:
-        - alert: Polardb-X-Node CPU Usage is High
-          annotations:
-            summary: Polardb-X-Node CPU is High
-            description: Pod {{ $labels.pod }} node {{ $labels.node }} polardbx_role {{ $labels.polardbx_role }} CPU is High, over 80%.
-          expr: |
-            sum by (pod, node, polardbx_role) (polardbx_container_cpu_usage_seconds_total:sum_rate{container="engine"}) >= 80
+            sum(polardbx_stats_running_count) by (pod, polardbx_name, namespace) >= 1000
           for: 5m
           labels:
             severity: critical
-        - alert: Polardb-X-Node Used Memory is High
+        - alert: PolarDB-X CN SQL Running Connection is High
           annotations:
-            summary: Polardb-X-Node Memory is High
-            description: Pod {{ $labels.pod }} node {{ $labels.node }} polardbx_role {{ $labels.polardbx_role }} Memory is High, over 80%.
+            summary: PolarDB-X CN SQL Running Connection is High
+            description: PolarDB-X {{ $labels.polardbx_name}} pod {{ $labels.pod }} namespace {{ $labels.namespace }} running count is high, over 500 for 5m.
           expr: |
-            sum by (pod, node) (container_memory_working_set_bytes{container="engine"}) /sum by (pod, node, polardbx_role) (kube_pod_container_resource_limits_memory_bytes{container="engine"}) * 100 >= 80
+            sum(polardbx_stats_running_count) by (pod, polardbx_name, namespace) >= 500
+          for: 5m
+          labels:
+            severity: warning
+        - alert: PolarDB-X CN Total Connection is Too High
+          annotations:
+            summary: PolarDB-X CN Total Connection is Too High
+            description: PolarDB-X {{ $labels.polardbx_name}} pod {{ $labels.pod }} namespace {{ $labels.namespace }} total connection is too high, over 10000.
+          expr: |
+            sum(polardbx_stats_active_connections) by (pod, polardbx_name, namespace) >= 10000
           for: 5m
           labels:
             severity: critical
-        - alert: Polardb-X-Node Disk Usage is High
+        - alert: PolarDB-X CN Total Connection is High
           annotations:
-            summary: Polardb-X-Node Disk Usage is High
-            description: Instance {{ $labels.instance }} mountpoint {{ $labels.mountpoint }} Disk Usage is High, over 80%.
+            summary: PolarDB-X CN Total Connection is High
+            description: PolarDB-X {{ $labels.polardbx_name}} pod {{ $labels.pod }} namespace {{ $labels.namespace }} total connection is high, over 5000.
+          expr: |
+            sum(polardbx_stats_active_connections) by (pod, polardbx_name, namespace) >= 5000
+          for: 5m
+          labels:
+            severity: warning
+        - alert: PolarDB-X CN Slow SQL Count is Too High
+          annotations:
+            summary: PolarDB-X CN Slow SQL Count is too High
+            description: PolarDB-X {{ $labels.polardbx_name}} pod {{ $labels.pod }} namespace {{ $labels.namespace }} slow sql count is too high, over 250 for 5m.
+          expr: |
+            sum(rate(polardbx_stats_slow_request_count_total[1m])) by (pod, polardbx_name, namespace) >= 250
+          for: 5m
+          labels:
+            severity: critical
+        - alert: PolarDB-X CN Slow SQL Count is High
+          annotations:
+            summary: PolarDB-X CN Slow SQL Count is High
+            description: PolarDB-X {{ $labels.polardbx_name}} pod {{ $labels.pod }} namespace {{ $labels.namespace }} slow sql count is high, over 200 for 5m.
+          expr: |
+            sum(rate(polardbx_stats_slow_request_count_total[1m])) by (pod, polardbx_name, namespace) >= 200
+          for: 5m
+          labels:
+            severity: warning
+        - alert: PolarDB-X CN Error SQL Count is Too High
+          annotations:
+            summary: PolarDB-X CN Error SQL Count is Too High
+            description: PolarDB-X {{ $labels.polardbx_name}} pod {{ $labels.pod }} namespace {{ $labels.namespace }} error sql count is too high, over 50 for 5m.
+          expr: |
+            sum(rate(polardbx_stats_error_count_total[1m])) by (pod, polardbx_name, namespace) >= 50
+          for: 5m
+          labels:
+            severity: critical
+        - alert: PolarDB-X CN Error SQL Count is High
+          annotations:
+            summary: PolarDB-X CN Error SQL Count is High
+            description: PolarDB-X {{ $labels.polardbx_name}} pod {{ $labels.pod }} namespace {{ $labels.namespace }} error sql count is high, over 20 for 5m.
+          expr: |
+            sum(rate(polardbx_stats_error_count_total[1m])) by (pod, polardbx_name, namespace) >= 20
+          for: 5m
+          labels:
+            severity: warning
+    - name: polardbx-dn
+      rules:
+        - alert: PolarDB-X DN SQL Running Connection is Too High
+          annotations:
+            summary: PolarDB-X DN SQL Running Connection is Too High
+            description: PolarDB-X {{ $labels.polardbx_name}} pod {{ $labels.pod }} namespace {{ $labels.namespace }} running count is too high, over 500.
+          expr: |
+            sum(mysql_global_status_threads_running) by (pod, polardbx_name, namespace) >= 500
+          for: 5m
+          labels:
+            severity: critical
+        - alert: PolarDB-X DN SQL Running Connection is High
+          annotations:
+            summary: PolarDB-X DN SQL Running Connection is High
+            description: PolarDB-X {{ $labels.polardbx_name}} pod {{ $labels.pod }} namespace {{ $labels.namespace }} running count is high, over 300.
+          expr: |
+            sum(mysql_global_status_threads_running) by (pod, polardbx_name, namespace) >= 300
+          for: 5m
+          labels:
+            severity: warning
+        - alert: PolarDB-X DN Connection Usage is Too High
+          annotations:
+            summary: PolarDB-X DN Connection Usage is too High
+            description: PolarDB-X {{ $labels.polardbx_name}} pod {{ $labels.pod }} namespace {{ $labels.namespace }} connection usage is too high, over 90% for 5m.
+          expr: |
+            sum (100 * mysql_global_status_threads_connected /mysql_global_variables_max_connections{polardbx_role="dn"}) by (pod, polardbx_name, namespace) >= 90
+          for: 5m
+          labels:
+            severity: critical
+        - alert: PolarDB-X DN Connection Usage is High
+          annotations:
+            summary: PolarDB-X DN Connection Usage is High
+            description: PolarDB-X {{ $labels.polardbx_name}} pod {{ $labels.pod }} namespace {{ $labels.namespace }} connection usage is high, over 80% for 5m.
+          expr: |
+            sum (100 * mysql_global_status_threads_connected /mysql_global_variables_max_connections{polardbx_role="dn"}) by (pod, polardbx_name, namespace) >= 80
+          for: 5m
+          labels:
+            severity: warning
+        - alert: PolarDB-X DN Slow SQL Count is Too High
+          annotations:
+            summary: PolarDB-X DN Slow SQL Count is Too High
+            description: PolarDB-X {{ $labels.polardbx_name}} pod {{ $labels.pod }} namespace {{ $labels.namespace }} running count is too high, over 50.
+          expr: |
+            sum(mysql_global_status_slow_queries) by (pod, polardbx_name, namespace) >= 50
+          for: 5m
+          labels:
+            severity: critical
+        - alert: PolarDB-X DN Slow SQL Count is High
+          annotations:
+            summary: PolarDB-X DN Slow SQL Count is High
+            description: PolarDB-X {{ $labels.polardbx_name}} pod {{ $labels.pod }} namespace {{ $labels.namespace }} running count is high, over 30.
+          expr: |
+            sum(mysql_global_status_slow_queries) by (pod, polardbx_name, namespace) >= 30
+          for: 5m
+          labels:
+            severity: warning
+    - name: polardbx-cdc
+      rules:
+        - alert: PolarDB-X CDC delay is Too High
+          annotations:
+            summary: PolarDB-X CDC delay is Too High
+            description: PolarDB-X {{ $labels.polardbx_name}} pod {{ $labels.pod }} namespace {{ $labels.namespace }} cdc delay is too high, over 30min.
+          expr: |
+            sum(polardbx_cdc_dumper_delay_in_millisecond) by (pod, polardbx_name, namespace) >= 1800000
+          for: 5m
+          labels:
+            severity: critical
+        - alert: PolarDB-X CDC delay is High
+          annotations:
+            summary: PolarDB-X CDC delay is High
+            description: PolarDB-X {{ $labels.polardbx_name}} pod {{ $labels.pod }} namespace {{ $labels.namespace }} cdc delay is high, over 10min.
+          expr: |
+            sum(polardbx_cdc_dumper_delay_in_millisecond) by (pod, polardbx_name, namespace) >= 600000
+          for: 5m
+          labels:
+            severity: warning
+    - name: polardbx-node-resources
+      rules:
+        - alert: PolarDB-X Node CPU Usage is Too High
+          annotations:
+            summary: PolarDB-X Node CPU is Too High
+            description: Namespace {{ $labels.namespace }} pod {{ $labels.pod }} CPU is too High, over 90% for 5m.
+          expr: |
+            sum by (namespace, pod) (polardbx_container_cpu_usage_seconds_total:sum_rate{container="engine"}) / sum by (namespace, pod) (kube_pod_container_resource_limits{resource="cpu", unit="core"}) * 100>= 90
+          for: 5m
+          labels:
+            severity: critical
+        - alert: PolarDB-X Node CPU Usage is High
+          annotations:
+            summary: PolarDB-X Node CPU is High
+            description: Namespace {{ $labels.namespace }} pod {{ $labels.pod }} CPU is High, over 80% for 5m.
+          expr: |
+            sum by (namespace, pod) (polardbx_container_cpu_usage_seconds_total:sum_rate{container="engine"}) / sum by (namespace, pod) (kube_pod_container_resource_limits{resource="cpu", unit="core"}) * 100 >= 80
+          for: 5m
+          labels:
+            severity: warning
+        - alert: PolarDB-X Node Used Memory is Too High
+          annotations:
+            summary: PolarDB-X Node Memory is Too High
+            description: Namespace {{ $labels.namespace }} pod {{ $labels.pod }} Memory is too high, over 95% for 5m.
+          expr: |
+            sum by (namespace, pod) (container_memory_working_set_bytes{container="engine", id=~"^/kubepods.*"}) /sum by (namespace, pod) (kube_pod_container_resource_limits{container="engine",resource="memory", unit="byte"}) * 100 >= 95
+          for: 5m
+          labels:
+            severity: critical
+        - alert: PolarDB-X Node Used Memory is High
+          annotations:
+            summary: PolarDB-X Node Memory is High
+            description: Namespace {{ $labels.namespace }} pod {{ $labels.pod }} Memory is too high, over 90% for 5m.
+          expr: |
+            sum by (namespace, pod) (container_memory_working_set_bytes{container="engine", id=~"^/kubepods.*"}) /sum by (namespace, pod) (kube_pod_container_resource_limits{container="engine",resource="memory", unit="byte"}) * 100 >= 90
+          for: 5m
+          labels:
+            severity: warning
+        - alert: PolarDB-X Node Disk Usage is Too High
+          annotations:
+            summary: PolarDB-X-Node Disk Usage is Too High
+            description: Instance {{ $labels.instance }} mountpoint {{ $labels.mountpoint }} Disk Usage is too high, over 90% for 5m.
+          expr: |
+            sum((node_filesystem_size_bytes{fstype=~"ext.*|xfs|nfs",mountpoint !~".*pod.*", mountpoint != "/boot"} - node_filesystem_free_bytes{fstype=~"ext.*|xfs|nfs",mountpoint !~".*pod.*", mountpoint != "/boot"}) * 100 /(node_filesystem_avail_bytes{fstype=~"ext.*|xfs|nfs", mountpoint !~".*pod.*", mountpoint != "/boot"} + (node_filesystem_size_bytes{fstype=~"ext.*|xfs|nfs",mountpoint !~".*pod.*", mountpoint != "/boot"}-node_filesystem_free_bytes{fstype=~"ext.*|xfs|nfs",mountpoint !~".*pod.*", mountpoint != "/boot"}))) by (instance, mountpoint) * 100 >= 90
+          for: 5m
+          labels:
+            severity: critical
+        - alert: PolarDB-X Node Disk Usage is High
+          annotations:
+            summary: PolarDB-X-Node Disk Usage is High
+            description: Instance {{ $labels.instance }} mountpoint {{ $labels.mountpoint }} Disk Usage is high, over 80% for 5m.
           expr: |
             sum((node_filesystem_size_bytes{fstype=~"ext.*|xfs|nfs",mountpoint !~".*pod.*", mountpoint != "/boot"} - node_filesystem_free_bytes{fstype=~"ext.*|xfs|nfs",mountpoint !~".*pod.*", mountpoint != "/boot"}) * 100 /(node_filesystem_avail_bytes{fstype=~"ext.*|xfs|nfs", mountpoint !~".*pod.*", mountpoint != "/boot"} + (node_filesystem_size_bytes{fstype=~"ext.*|xfs|nfs",mountpoint !~".*pod.*", mountpoint != "/boot"}-node_filesystem_free_bytes{fstype=~"ext.*|xfs|nfs",mountpoint !~".*pod.*", mountpoint != "/boot"}))) by (instance, mountpoint) * 100 >= 80
-          for: 3m
+          for: 5m
           labels:
-            severity: critical
-        - alert: Polardb-X-Node IO Usage is High
+            severity: warning
+        - alert: PolarDB-X-Node IO Usage is Too High
           annotations:
-            summary: Polardb-X-Node IO Usage is High
-            description: instance {{ $labels.instance }} device {{ $labels.device }} IO Usage is High, over 80%.
+            summary: PolarDB-X-Node IO Usage is Too High
+            description: instance {{ $labels.instance }} device {{ $labels.device }} IO Usage is too high, over 90% for 5m.
           expr: |
-            sum (rate(node_disk_io_time_seconds_total[5m]) ) by (device, instance) >= 80
+            sum (rate(node_disk_io_time_seconds_total[5m]) ) by (device, instance) >= 90
           for: 5m
           labels:
             severity: critical
-        
+        - alert: PolarDB-X-Node IO Usage is High
+          annotations:
+            summary: PolarDB-X-Node IO Usage is High
+            description: instance {{ $labels.instance }} device {{ $labels.device }} IO Usage is high, over 80% for 5m.
+          expr: |
+            sum (rate(node_disk_io_time_seconds_total[5m]) ) by (device, instance) >= 90
+          for: 5m
+          labels:
+            severity: warning
