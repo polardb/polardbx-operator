@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -131,7 +130,7 @@ func PerfDataPaths(pids []string) (map[string]string, error) {
 // the given user
 func UserPerfDataPaths(user string) (map[string]string, error) {
 	dir := filepath.Join(os.TempDir(), "hsperfdata_"+user)
-	files, err := ioutil.ReadDir(dir)
+	files, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
 	}
@@ -230,7 +229,7 @@ func removeNull(s []byte) []byte {
 // the "sun.os.hrt.frequency" key in the hsperfdata.
 func ReadPerfData(filepath string, parserTime bool) (map[string]interface{}, error) {
 	// read a snapshot into memory
-	data, err := ioutil.ReadFile(filepath)
+	data, err := os.ReadFile(filepath)
 	if err != nil {
 		if runtime.GOOS == "windows" {
 			// on windows, can not read the hsperfdata file when the java process is running, so we copy
@@ -239,7 +238,7 @@ func ReadPerfData(filepath string, parserTime bool) (map[string]interface{}, err
 			if err != nil {
 				return nil, err
 			}
-			data, err = ioutil.ReadFile(filepath + "_")
+			data, err = os.ReadFile(filepath + "_")
 			if err != nil {
 				return nil, err
 			}

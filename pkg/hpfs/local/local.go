@@ -19,7 +19,6 @@ package local
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -79,7 +78,7 @@ func (l *localFileService) loadBlockDevices() error {
 
 	// Read /sys/block
 	const sysBlockPath = "/sys/block"
-	dir, err := ioutil.ReadDir(sysBlockPath)
+	dir, err := os.ReadDir(sysBlockPath)
 	if err != nil {
 		return err
 	}
@@ -120,7 +119,7 @@ func (l *localFileService) loadBlockDevices() error {
 
 	// Read /sys/class/block
 	const sysClassBlockPath = "/sys/class/block"
-	dir, err = ioutil.ReadDir(sysClassBlockPath)
+	dir, err = os.ReadDir(sysClassBlockPath)
 	if err != nil {
 		return err
 	}
@@ -226,12 +225,25 @@ func (l *localFileService) checkPaths(paths ...*string) error {
 	return nil
 }
 
-func (l *localFileService) ListDirectory(path string) ([]os.FileInfo, error) {
+func (l *localFileService) ListDirectory(path string) (fileInfo []os.FileInfo, err error) {
 	if err := l.checkPaths(&path); err != nil {
 		return nil, err
 	}
 
-	return ioutil.ReadDir(path)
+	files, err := os.ReadDir(path)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, file := range files {
+		info, err := file.Info()
+		if err != nil {
+			return nil, err
+		}
+		fileInfo = append(fileInfo, info)
+	}
+
+	return fileInfo, nil
 }
 
 func (l *localFileService) isOperationOnFileOrDirectoryPermitted(path string) bool {
