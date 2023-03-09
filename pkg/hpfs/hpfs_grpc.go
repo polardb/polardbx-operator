@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"os/user"
@@ -731,7 +730,7 @@ func (r *rpcService) ControlCgroupsBlkio(ctx context.Context, request *proto.Con
 		// <major>:<minor> <limit>
 		value := fmt.Sprintf("%s %d", mm, ctrl.Value)
 		r.Info("writing blkio cgroups value", "pod", request.PodUid, "blkio-path", cgroupFile, "value", value)
-		err := ioutil.WriteFile(cgroupFile, []byte(fmt.Sprintf("%s %d", mm, ctrl.Value)), 000)
+		err := os.WriteFile(cgroupFile, []byte(fmt.Sprintf("%s %d", mm, ctrl.Value)), 000)
 		if err != nil {
 			r.Error(err, "failed to write blkio cgroups value", "pod", request.PodUid, "blkio-path", cgroupFile, "value", value)
 			return &proto.ControlCgroupsBlkioResponse{Status: r.fail(err)}, nil
