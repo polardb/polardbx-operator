@@ -26,7 +26,6 @@ import (
 	"github.com/alibaba/polardbx-operator/pkg/hpfs/local"
 	"github.com/alibaba/polardbx-operator/pkg/hpfs/proto"
 	"github.com/alibaba/polardbx-operator/pkg/hpfs/task"
-	"github.com/prometheus/common/log"
 	"net"
 	"os"
 	"strconv"
@@ -39,7 +38,7 @@ import (
 )
 
 var (
-	//hdfs
+	// hdfs
 	debug        bool
 	debugHosts   string
 	hostName     string
@@ -58,12 +57,14 @@ var (
 )
 
 var (
-	//flow control
+	// flow control
 	flowControlMinFlow    float64
 	flowControlMaxFlow    float64
 	flowControlTotalFLow  float64
 	flowControlBufferSize int
 )
+
+var log = zap.New(zap.UseDevMode(true))
 
 func init() {
 	flag.BoolVar(&debug, "debug", false, "Start in debug mode.")
@@ -201,8 +202,6 @@ func startFileStreamServer() {
 }
 
 func main() {
-	log := zap.New(zap.UseDevMode(true))
-
 	// Grab the file lock.
 	if len(lockFile) > 0 {
 		log.Info("getting file lock...")
@@ -215,7 +214,7 @@ func main() {
 	}
 
 	log.Info("starting grpc service...")
-	//init flow control
+	// init flow control
 	flowControl := filestream.NewFlowControl(filestream.FlowControlConfig{
 		MaxFlow:    flowControlMaxFlow,
 		TotalFlow:  flowControlTotalFLow,
@@ -224,7 +223,7 @@ func main() {
 	})
 	flowControl.Start()
 	filestream.GlobalFlowControl = flowControl
-	//start file stream server
+	// start file stream server
 	startFileStreamServer()
 	// Start hpfs.
 	startHpfs()
