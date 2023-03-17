@@ -17,9 +17,11 @@ limitations under the License.
 package gms
 
 import (
+	"errors"
 	"fmt"
 	"github.com/alibaba/polardbx-operator/pkg/util/network"
 	corev1 "k8s.io/api/core/v1"
+	"strings"
 	"time"
 
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -76,10 +78,58 @@ var InitializeSchemas = polardbxreconcile.NewStepBinder("InitializeSchemas",
 	},
 )
 
+func getHashFromXstoreName(xstoreNames interface{}) (string, error) {
+	switch xstoreNames.(type) {
+	case []string:
+		for _, xstoreName := range xstoreNames.([]string) {
+			splitXStoreName := strings.Split(xstoreName, "-")
+			if splitXStoreName[len(splitXStoreName)-2] == "dn" { // hack way to get pxc hash
+				return splitXStoreName[len(splitXStoreName)-3], nil
+			}
+		}
+	case map[string]string:
+		for xstoreName := range xstoreNames.(map[string]string) {
+			splitXStoreName := strings.Split(xstoreName, "-")
+			if splitXStoreName[len(splitXStoreName)-2] == "dn" { // hack way to get pxc hash
+				return splitXStoreName[len(splitXStoreName)-3], nil
+			}
+		}
+	}
+	return "", errors.New("failed to get hash from name of xstore")
+}
+
+// getOriginalPxcInfo is a helper function to extract hash and name of original pxc during restore
+func getOriginalPxcInfo(rc *polardbxreconcile.Context) (string, string, error) {
+	polardbx := rc.MustGetPolarDBX()
+	backup := &polardbxv1.PolarDBXBackup{}
+	var err error
+	if polardbx.Spec.Restore.BackupSet == "" && len(polardbx.Spec.Restore.BackupSet) == 0 {
+		backup, err = rc.GetCompletedPXCBackup(map[string]string{polardbxmeta.LabelName: polardbx.Spec.Restore.From.PolarBDXName})
+	} else {
+		backup, err = rc.GetPXCBackupByName(polardbx.Spec.Restore.BackupSet)
+	}
+	if err != nil {
+		return "", "", err
+	}
+
+	var pxcHash, pxcName string
+	if backup != nil {
+		pxcName = backup.Spec.Cluster.Name
+		for _, xstoreName := range backup.Status.XStores {
+			splitXStoreName := strings.Split(xstoreName, "-")
+			if splitXStoreName[len(splitXStoreName)-2] == "dn" { // hack way to get pxc hash
+				pxcHash = splitXStoreName[len(splitXStoreName)-3]
+			}
+		}
+		return pxcHash, pxcName, nil
+	}
+	return "", "", errors.New("failed to get hash from name of xstore")
+}
+
 var RestoreSchemas = polardbxreconcile.NewStepBinder("RestoreSchemas",
 	func(rc *polardbxreconcile.Context, flow control.Flow) (reconcile.Result, error) {
 		polarDBX := rc.MustGetPolarDBX()
-		oldPXCHash, oldPXCName, err := rc.GetXStoreNameForOldPXC()
+		originalPXCHash, originalPXCName, err := getOriginalPxcInfo(rc)
 		if err != nil {
 			return flow.Error(err, "Get oldXStoreName Failed")
 		}
@@ -94,7 +144,7 @@ var RestoreSchemas = polardbxreconcile.NewStepBinder("RestoreSchemas",
 		}
 
 		if !restored {
-			err = mgr.RestoreSchemas(oldPXCName, oldPXCHash, polarDBX.Status.Rand)
+			err = mgr.RestoreSchemas(originalPXCName, originalPXCHash, polarDBX.Status.Rand)
 			if err != nil {
 				return flow.Error(err, "Unable to restore GMS schemas.")
 			}
@@ -268,7 +318,8 @@ func transformIntoStorageInfos(rc *polardbxreconcile.Context, polardbx *polardbx
 			xProtocolPort = privateServicePort.Port
 		}
 
-		storageType, err := gms.GetStorageType(xstore.Spec.Engine, xstore.Status.EngineVersion)
+		annoStorageType, _ := polardbx.Annotations[polardbxmeta.AnnotationStorageType]
+		storageType, err := gms.GetStorageType(xstore.Spec.Engine, xstore.Status.EngineVersion, annoStorageType)
 		if err != nil {
 			return nil, err
 		}

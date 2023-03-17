@@ -16,6 +16,8 @@ limitations under the License.
 
 package meta
 
+import "strings"
+
 const AnnotationControllerHints = "xstore/controller.hints"
 
 const (
@@ -39,4 +41,23 @@ const (
 
 const (
 	AnnotationRebuildFromPod = "xstore/rebuild_from_pod"
+)
+
+const (
+	AnnotationAdapting = "xstore/adapting"
+)
+
+func IsAdaptingTrue(val string) bool {
+	val = strings.ToLower(val)
+	return val == "1" || val == "on" || val == "true"
+}
+
+// Annotations for backup for xstore
+const (
+	// AnnotationCollectJobProbeLimit denotes retry limit of getting collect job when waiting collect job finished
+	AnnotationCollectJobProbeLimit = "xstore-backup/collect-job-probe-limit"
+)
+
+const (
+	AnnotationAutoRebuild = "xstore/auto-rebuild"
 )

@@ -38,7 +38,7 @@ if [ ! -n "$2" ]; then
     exit
 fi
 
-TARGETS="xstore-tools polardbx-operator probe-proxy polardbx-exporter polardbx-init polardbx-hpfs polardbx-logstash"
+TARGETS="xstore-tools polardbx-operator probe-proxy polardbx-exporter polardbx-init polardbx-hpfs polardbx-job polardbx-logstash"
 
 # 构建镜像
 make build REPO="${REGISTRY}" ARCH=arm64 TAG="${TAG}"-arm64

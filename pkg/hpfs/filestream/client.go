@@ -20,7 +20,10 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	. "github.com/alibaba/polardbx-operator/pkg/hpfs/common"
+	"go.uber.org/atomic"
 	"io"
+	net2 "k8s.io/apimachinery/pkg/util/net"
 	"net"
 	"os"
 	"time"
@@ -33,6 +36,8 @@ type FileClient struct {
 	port        int
 	flowControl FlowControl
 	returnConn  net.Conn
+	waitChan    chan error
+	lastLen     atomic.Uint64
 }
 
 func NewFileClient(host string, port int, flowControl FlowControl) *FileClient {
@@ -41,6 +46,10 @@ func NewFileClient(host string, port int, flowControl FlowControl) *FileClient {
 		port:        port,
 		flowControl: flowControl,
 	}
+}
+
+func (f *FileClient) GetLastLen() uint64 {
+	return f.lastLen.Load()
 }
 
 func (f *FileClient) addr() string {
@@ -78,6 +87,9 @@ func (f *FileClient) Upload(reader io.Reader, actionMetadata ActionMetadata) (in
 			conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 			len, err := ReadInt64(conn)
 			if err != nil {
+				if net2.IsProbableEOF(err) && lastWrittenLen == written {
+					return lastWrittenLen, nil
+				}
 				return lastWrittenLen, err
 			}
 			lastWrittenLen = len
@@ -129,7 +141,15 @@ func (f *FileClient) Download(writer io.Writer, actionMetadata ActionMetadata) (
 		return len, err
 	}
 	bytes, err := ReadBytes(conn, 8)
+	if err != nil {
+		f.waitChan <- err
+		return 0, err
+	}
+	if f.waitChan != nil {
+		f.waitChan <- nil
+	}
 	len := binary.BigEndian.Uint64(bytes)
+	f.lastLen.Store(len)
 	copiedLen, err := f.copy(conn, writer)
 	if err != nil {
 		return copiedLen, err
@@ -138,6 +158,30 @@ func (f *FileClient) Download(writer io.Writer, actionMetadata ActionMetadata) (
 		return copiedLen, errors.New(fmt.Sprintf("not complete copiedLen %d  len %d", copiedLen, len))
 	}
 	return copiedLen, nil
+}
+
+func (f *FileClient) InitWaitChan() {
+	if f.waitChan != nil {
+		close(f.waitChan)
+	}
+	f.waitChan = make(chan error, 1)
+}
+
+func (f *FileClient) WaitForDownload() error {
+	if f.waitChan != nil {
+		select {
+		case <-time.After(20 * time.Second):
+			return errors.New("timeout")
+		case err := <-f.waitChan:
+			return err
+		}
+	}
+	return nil
+}
+
+// List aims to list files in Filepath of ActionMetadata, the only difference with Download is Action
+func (f *FileClient) List(writer io.Writer, actionMetadata ActionMetadata) (int64, error) {
+	return f.Download(writer, actionMetadata)
 }
 
 func (f *FileClient) writeMagicNumber(conn net.Conn) {

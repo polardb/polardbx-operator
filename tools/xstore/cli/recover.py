@@ -16,6 +16,7 @@ import json
 import os.path
 
 import click
+import wget
 
 from core.context import Context
 from core.log import LogFactory
@@ -45,10 +46,15 @@ def start(restore_context, target_pod, password):
         remote_cp_path = params["cpfilePath"]
         storage_name = params["storageName"]
         sink = params["sink"]
+        pitr_endpoint = params["pitrEndpoint"] if "pitrEndpoint" in params else ""
 
-    filestream_client = FileStreamClient(context, BackupStorage[str.upper(storage_name)], sink)
     local_cp_path = os.path.join(RESTORE_TEMP_DIR, "set.cp")
-    filestream_client.download_to_file(remote=remote_cp_path, local=local_cp_path, logger=logger)
+    if len(pitr_endpoint) == 0:
+        filestream_client = FileStreamClient(context, BackupStorage[str.upper(storage_name)], sink)
+        filestream_client.download_to_file(remote=remote_cp_path, local=local_cp_path, logger=logger)
+    else:
+        download_url = "/".join([pitr_endpoint, "download", "recovertxs"])
+        wget.download(download_url, local_cp_path)
 
     recover_cmd = [context.bb_home, 'recover',
                    '-f', local_cp_path,

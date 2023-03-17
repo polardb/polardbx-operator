@@ -107,6 +107,7 @@ BASIC_BUILD_ENV = BuildEnv(
     golang=BuildGolangEnv(goflags=''),
     targets=[
         BuildTarget(target='cmd/polardbx-hpfs', binary='polardbx-hpfs', image='polardbx-hpfs', image_build_path=None),
+        BuildTarget(target='cmd/polardbx-job', binary='polardbx-job', image='polardbx-job', image_build_path=None),
         BuildTarget(target='cmd/polardbx-init', binary='polardbx-init', image='polardbx-init', image_build_path=None),
         BuildTarget(target='cmd/polardbx-exporter', binary='polardbx-exporter', image='polardbx-exporter',image_build_path=None),
         BuildTarget(target='cmd/probe-proxy', binary='probe-proxy', image='probe-proxy', image_build_path=None),

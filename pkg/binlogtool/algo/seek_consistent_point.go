@@ -1,5 +1,3 @@
-//go:build polardbx
-
 /*
 Copyright 2022 Alibaba Group Holding Limited.
 
@@ -19,6 +17,8 @@ limitations under the License.
 package algo
 
 import (
+	"bytes"
+	"encoding/binary"
 	"fmt"
 	"github.com/alibaba/polardbx-operator/pkg/binlogtool/binlog"
 	"sync"
@@ -257,4 +257,37 @@ func NewSeekConsistentPoint(txEventParsers map[string]tx.TransactionEventParser,
 		txEventParsers: txEventParsers,
 		heartbeatTxid:  heartbeatTxid,
 	}
+}
+
+func SerializeCpResult(recoverableTxs []uint64, borders map[string]binlog.EventOffset) ([]byte, error) {
+	byteBuf := &bytes.Buffer{}
+	if err := binary.Write(byteBuf, binary.LittleEndian, uint32(len(recoverableTxs))); err != nil {
+		return nil, err
+	}
+	for _, txid := range recoverableTxs {
+		if err := binary.Write(byteBuf, binary.LittleEndian, txid); err != nil {
+			return nil, err
+		}
+	}
+	if err := binary.Write(byteBuf, binary.LittleEndian, uint16(len(borders))); err != nil {
+		return nil, err
+	}
+	for streamName, offset := range borders {
+		if err := binary.Write(byteBuf, binary.LittleEndian, uint8(len(streamName))); err != nil {
+			return nil, err
+		}
+		if _, err := byteBuf.Write([]byte(streamName)); err != nil {
+			return nil, err
+		}
+		if err := binary.Write(byteBuf, binary.LittleEndian, uint8(len(offset.File))); err != nil {
+			return nil, err
+		}
+		if _, err := byteBuf.Write([]byte(offset.File)); err != nil {
+			return nil, err
+		}
+		if err := binary.Write(byteBuf, binary.LittleEndian, offset.Offset); err != nil {
+			return nil, err
+		}
+	}
+	return byteBuf.Bytes(), nil
 }

@@ -43,6 +43,7 @@ type ControllerConfig struct {
 }
 
 type Config struct {
-	Dynamic ControllerConfig `json:"controller,omitempty"`
-	Engine  EngineConfig     `json:"engine,omitempty"`
+	Dynamic ControllerConfig              `json:"controller,omitempty"`
+	Engine  EngineConfig                  `json:"engine,omitempty"`
+	Envs    map[string]intstr.IntOrString `json:"envs,omitempty"`
 }

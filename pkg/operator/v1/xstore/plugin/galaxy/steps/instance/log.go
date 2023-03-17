@@ -17,6 +17,7 @@ limitations under the License.
 package instance
 
 import (
+	v1 "github.com/alibaba/polardbx-operator/api/v1"
 	xstoremeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/meta"
 	"time"
 
@@ -39,6 +40,16 @@ func PurgeLogsTemplate(d time.Duration) control.BindFunc {
 
 	return plugin.NewStepBinder(galaxy.Engine, "PurgeLogs",
 		func(rc *xstorev1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+
+			backupBinlogList := v1.PolarDBXBackupBinlogList{}
+			err := rc.Client().List(rc.Context(), &backupBinlogList)
+			if err != nil {
+				return flow.RetryErr(err, "failed to get backup binlog list")
+			}
+			if len(backupBinlogList.Items) > 0 {
+				return flow.Pass()
+			}
+
 			xstore := rc.MustGetXStore()
 
 			// if Purge binlog Locked

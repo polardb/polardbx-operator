@@ -88,7 +88,7 @@ func (exec *UpdateExec) Execute(rc *xstorev1reconcile.Context, flow control.Flow
 			return flow.Error(err, "Failed to construct new pod", "pod", target)
 		}
 		pod.Labels[xstoremeta.LabelGeneration] = strconv.FormatInt(step.TargetGeneration, 10)
-		pod.Spec.NodeName = step.OriginHost
+		pod.Spec.NodeName = exec.ec.Volumes[pod.Name].Host
 
 		if err := rc.SetControllerRefAndCreate(pod); err != nil {
 			return flow.Error(err, "Failed to create pod", "pod", target)

@@ -17,3 +17,6 @@ spec:
   - name: hpfs
     port: {{ .Values.hostPathFileService.port }}
     targetPort: hpfs
+  - name: filestream
+    port: {{ .Values.hostPathFileService.fsPort }}
+    targetPort: filestream

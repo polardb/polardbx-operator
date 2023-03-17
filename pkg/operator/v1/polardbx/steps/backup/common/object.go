@@ -18,20 +18,23 @@ package common
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	polardbxv1 "github.com/alibaba/polardbx-operator/api/v1"
 	xstorev1 "github.com/alibaba/polardbx-operator/api/v1"
-	"github.com/alibaba/polardbx-operator/pkg/debug"
+	polardbxv1polardbx "github.com/alibaba/polardbx-operator/api/v1/polardbx"
+	"github.com/alibaba/polardbx-operator/pkg/hpfs/filestream"
 	"github.com/alibaba/polardbx-operator/pkg/k8s/control"
 	k8shelper "github.com/alibaba/polardbx-operator/pkg/k8s/helper"
+	"github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/factory"
 	polardbxmeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/meta"
 	polardbxv1reconcile "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/reconcile"
-	backupbuilder "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/steps/backup/xstorejobbuilder"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/command"
 	xstoremeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/meta"
-	"github.com/alibaba/polardbx-operator/pkg/util"
 	xstorectrlerrors "github.com/alibaba/polardbx-operator/pkg/util/error"
+	"github.com/alibaba/polardbx-operator/pkg/util/path"
+	"github.com/google/uuid"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -64,14 +67,19 @@ var UpdateBackupStartInfo = polardbxv1reconcile.NewStepBinder("UpdateBackupStart
 			backup.Labels = make(map[string]string)
 		}
 		backup.Labels[polardbxmeta.LabelName] = backup.Spec.Cluster.Name
-		backup.Status.BackupRootPath = util.BackupRootPath(backup)
+		backup.Status.BackupRootPath = path.NewPathFromStringSequence(
+			polardbxmeta.BackupPath,
+			backup.Labels[polardbxmeta.LabelName],
+			fmt.Sprintf("%s-%s", backup.Name, backup.Status.StartTime.Format("20060102150405")),
+		)
 
-		// record topology of original pxc
-		pxc, err := rc.GetPolarDBX()
+		// record topology of original polardbx
+		polardbx, err := rc.GetPolarDBX()
 		if err != nil {
-			return flow.Error(err, "Unable to get original pxc")
+			return flow.Error(err, "Unable to get original polardbx")
 		}
-		backup.Status.ClusterSpecSnapshot = pxc.Spec.DeepCopy()
+		backup.Spec.Cluster.UID = polardbx.UID
+		backup.Status.ClusterSpecSnapshot = polardbx.Spec.DeepCopy()
 
 		if err := rc.UpdatePolarDBXBackup(); err != nil {
 			return flow.Error(err, "Unable to update PXC backup.")
@@ -115,12 +123,14 @@ var CreateBackupJobsForXStore = polardbxv1reconcile.NewStepBinder("CreateBackups
 				continue
 			}
 
-			xstoreBackup, err := backupbuilder.NewXStoreBackup(rc.Scheme(), backup, &xstore)
+			objectFactory := factory.NewObjectFactory(rc)
+			xstoreBackup, err := objectFactory.NewXStoreBackup(&xstore)
 			if err != nil {
 				return flow.Error(err, "Unable to build new physical backup for xstore", "xstore", xstore.Name)
 			}
 
-			if err = rc.Client().Create(rc.Context(), xstoreBackup); err != nil {
+			err = rc.SetControllerRefAndCreateToBackup(xstoreBackup)
+			if err != nil {
 				return flow.Error(err, "Unable to create physical backup for xstore", "xstore", xstore.Name)
 			}
 			backup.Status.XStores = append(backup.Status.XStores, xstoreBackup.Spec.XStore.Name)
@@ -195,19 +205,13 @@ var DeleteBackupJobsOnFailure = polardbxv1reconcile.NewStepBinder("DeleteBackupJ
 
 var PersistentStatusChanges = polardbxv1reconcile.NewStepBinder("PersistentStatusChanges",
 	func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
-		if debug.IsDebugEnabled() {
-			if err := rc.UpdatePolarDBXBackupStatus(); err != nil {
-				return flow.Error(err, "Unable to update status for xstore backup.")
-			}
-			return flow.Continue("PXC Backup status updated!")
-		}
 		if rc.IsPXCBackupStatusChanged() {
 			if err := rc.UpdatePolarDBXBackupStatus(); err != nil {
-				return flow.Error(err, "Unable to update status for xstore backup.")
+				return flow.Error(err, "Unable to update status for PolarDBX backup.")
 			}
-			return flow.Continue("PXC Backup status updated!")
+			return flow.Continue("PolarDBX backup status updated!")
 		}
-		return flow.Continue("PXC Backup status not changed!")
+		return flow.Continue("PolarDBX backup status not changed!")
 	})
 
 var LockXStoreBinlogPurge = polardbxv1reconcile.NewStepBinder("LockBinlogPurge",
@@ -258,24 +262,24 @@ var CollectBinlogStartIndex = polardbxv1reconcile.NewStepBinder("CollectBinlogSt
 			return flow.Error(err, "Unable to get XStore list")
 		}
 		for _, backupPod := range backupPodList {
-			groupManager, xstore, err := rc.GetPolarDBXGroupManagerByXStorePod(backupPod)
+			groupManager, err := rc.GetXstoreGroupManagerByPod(&backupPod)
 			if err != nil {
-				return flow.Error(err, "get DataSource Failed")
+				return flow.Error(err, "get datasource failed", "pod", backupPod.Name)
+			}
+			if groupManager == nil {
+				return flow.Error(errors.New("group manager is nil"),
+					"get group manager failed", "pod", backupPod.Name)
 			}
 
 			binlogOffset, err := groupManager.GetBinlogOffset()
 			if err != nil {
-				return flow.Error(err, "get binlogoffset Failed")
+				return flow.Error(err, "get binlogoffset failed", "pod", backupPod.Name)
 			}
 
-			err = rc.Close()
-			if err != nil {
-				return flow.Error(err, "Close Database Failed")
-			}
-
-			binlogOffset = fmt.Sprintf("%s\ntimestamp:%s", binlogOffset, time.Now().Format("2006-01-02 15:04:05"))
 			backupRootPath := pxcBackup.Status.BackupRootPath
-			remotePath := fmt.Sprintf("%s/%s/%s-start", backupRootPath, polardbxmeta.BinlogOffsetPath, xstore.Name)
+			xstoreName := backupPod.Labels[xstoremeta.LabelName]
+			binlogOffset = fmt.Sprintf("%s\ntimestamp:%s", binlogOffset, time.Now().Format("2006-01-02 15:04:05"))
+			remotePath := fmt.Sprintf("%s/%s/%s-start", backupRootPath, polardbxmeta.BinlogOffsetPath, xstoreName)
 			command := command.NewCanonicalCommandBuilder().Collect().
 				UploadOffset(binlogOffset, remotePath, string(pxcBackup.Spec.StorageProvider.StorageName), pxcBackup.Spec.StorageProvider.Sink).Build()
 			stdout := &bytes.Buffer{}
@@ -303,9 +307,7 @@ var CollectBinlogStartIndex = polardbxv1reconcile.NewStepBinder("CollectBinlogSt
 var DrainCommittingTrans = polardbxv1reconcile.NewStepBinder("DrainCommittingTrans",
 	func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
 		backup := rc.MustGetPolarDBXBackup()
-
-		cnManager, err := rc.GetPolarDBXCNGroupManager(backup)
-		defer rc.Close()
+		cnManager, err := rc.GetPolarDBXGroupManagerByBackup(backup)
 		if err != nil {
 			return flow.Error(err, "get CN DataSource Failed")
 		}
@@ -320,11 +322,9 @@ var DrainCommittingTrans = polardbxv1reconcile.NewStepBinder("DrainCommittingTra
 var SendHeartBeat = polardbxv1reconcile.NewStepBinder("SendHeartBeat",
 	func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
 		backup := rc.MustGetPolarDBXBackup()
-
-		cnManager, err := rc.GetPolarDBXCNGroupManager(backup)
-		defer rc.Close()
+		cnManager, err := rc.GetPolarDBXGroupManagerByBackup(backup)
 		if err != nil {
-			return flow.Error(err, "get CN DataSource Failed")
+			return flow.Error(err, "Get CN dataSource failed")
 		}
 
 		// In case that there is no cdc in the cluster
@@ -336,17 +336,17 @@ var SendHeartBeat = polardbxv1reconcile.NewStepBinder("SendHeartBeat",
 			"  PRIMARY KEY (`id`)\n) ENGINE = InnoDB AUTO_INCREMENT = 1666172319 DEFAULT CHARSET = utf8mb4 DEFAULT COLLATE = utf8mb4_0900_ai_ci  broadcast"
 		err = cnManager.CreateTable("__cdc__", heartbeatTableDDL)
 		if err != nil {
-			return flow.Error(err, "Create Heartbeat table failed: "+err.Error())
+			return flow.Error(err, "Create heartbeat table failed: "+err.Error())
 		}
 
 		sname := strconv.FormatInt(time.Now().Unix(), 10)
 		err = cnManager.SendHeartBeat(sname)
 		if err != nil {
-			return flow.Error(err, "Send HeartBeat Failed")
+			return flow.Error(err, "Send heartBeat failed")
 		}
 
 		backup.Status.HeartBeatName = sname
-		return flow.Continue("HeartBeat Send!")
+		return flow.Continue("HeartBeat send!")
 	})
 
 var WaitHeartbeatSentToFollower = polardbxv1reconcile.NewStepBinder("WaitHeartbeatSentToFollower",
@@ -396,16 +396,17 @@ var WaitHeartbeatSentToFollower = polardbxv1reconcile.NewStepBinder("WaitHeartbe
 				return flow.Error(errors.New("timeout"), "waiting heartbeat sync timeout")
 			case <-tick:
 				for waitingPod, leaderPod := range waitingPodMap {
-					manager, _, err := rc.GetPolarDBXGroupManagerByXStorePod(*leaderPod)
+					manager, err := rc.GetXstoreGroupManagerByPod(leaderPod)
 					if err != nil || manager == nil {
 						return flow.Error(err, "unable to connect to leader", "leader pod", leaderPod.Name)
 					}
+
 					clusterStatusList, err := manager.ShowClusterStatus()
 					if err != nil {
 						return flow.Error(err, "unable to get cluster status", "leader pod", leaderPod.Name)
 					}
 
-					// leader may hava changed, just abort the backup
+					// leader may have changed, just abort the backup
 					if len(clusterStatusList) != 3 {
 						return flow.Error(errors.New("global cluster status incorrect, leader may have changed"),
 							"leader pod", leaderPod.Name)
@@ -445,22 +446,24 @@ var CollectBinlogEndIndex = polardbxv1reconcile.NewStepBinder("CollectBinlogEndI
 			return flow.Error(err, "Unable to get XStore list")
 		}
 		for _, backupPod := range backupPodList {
-			groupManager, xstore, err := rc.GetPolarDBXGroupManagerByXStorePod(backupPod)
+			groupManager, err := rc.GetXstoreGroupManagerByPod(&backupPod)
 			if err != nil {
-				return flow.Error(err, "get DN DataSource Failed", "podName:", backupPod)
+				return flow.Error(err, "get dn datasource failed", "pod:", backupPod)
 			}
-			binlogOffset, err := groupManager.GetBinlogOffset()
-			if err != nil {
-				return flow.Error(err, "get binlogoffset Failed")
-			}
-			err = rc.Close()
-			if err != nil {
-				return flow.Error(err, "Close Database Failed")
+			if groupManager == nil {
+				return flow.Error(errors.New("group manager is nil"),
+					"get group manager failed", "pod", backupPod.Name)
 			}
 
-			binlogOffset = fmt.Sprintf("%s\ntimestamp:%s", binlogOffset, time.Now().Format("2006-01-02 15:04:05"))
+			binlogOffset, err := groupManager.GetBinlogOffset()
+			if err != nil {
+				return flow.Error(err, "get binlogoffset failed", "pod", backupPod.Name)
+			}
+
 			backupRootPath := pxcBackup.Status.BackupRootPath
-			remotePath := fmt.Sprintf("%s/%s/%s-end", backupRootPath, polardbxmeta.BinlogOffsetPath, xstore.Name)
+			xstoreName := backupPod.Labels[xstoremeta.LabelName]
+			binlogOffset = fmt.Sprintf("%s\ntimestamp:%s", binlogOffset, time.Now().Format("2006-01-02 15:04:05"))
+			remotePath := fmt.Sprintf("%s/%s/%s-end", backupRootPath, polardbxmeta.BinlogOffsetPath, xstoreName)
 			command := command.NewCanonicalCommandBuilder().Collect().
 				UploadOffset(binlogOffset, remotePath, string(pxcBackup.Spec.StorageProvider.StorageName), pxcBackup.Spec.StorageProvider.Sink).Build()
 			stdout := &bytes.Buffer{}
@@ -553,7 +556,6 @@ var CreateSeekCpJob = polardbxv1reconcile.NewStepBinder("CreateSeekCpJob",
 			return flow.Continue("SeekCp job already started!", "job-name", job.Name)
 		}
 
-		jobName := GenerateJobName(polardbxBackup, "seekcp")
 		xstoreBackupList, err := rc.GetXStoreBackups()
 		if err != nil {
 			return flow.Error(err, "Unable to get XStoreBackupList!")
@@ -575,7 +577,7 @@ var CreateSeekCpJob = polardbxv1reconcile.NewStepBinder("CreateSeekCpJob",
 		if len(targetPod.Name) == 0 {
 			return flow.Error(err, "Unable to get targetPod!")
 		}
-		job, err = newSeekCpJob(polardbxBackup, &targetPod, jobName)
+		job, err = newSeekCpJob(polardbxBackup, &targetPod)
 		if err != nil {
 			return flow.Error(err, "Unable to create SeekCpJob")
 		}
@@ -617,7 +619,8 @@ var WaitAllBinlogJobFinished = polardbxv1reconcile.NewStepBinder("WaitAllBinlogJ
 
 		for _, xstoreBackup := range xstoreBackupList.Items {
 			if xstoreBackup.Status.Phase != xstorev1.XStoreBinlogWaiting {
-				flow.Wait("xstorebackup is still backup binlog", "xstoreBackupName", xstoreBackup.Name)
+				return flow.RetryAfter(1*time.Minute, "XstoreBackup is still performing binlog backup",
+					"XstoreBackup name", xstoreBackup.Name)
 			}
 
 		}
@@ -709,5 +712,107 @@ var SavePXCSecrets = polardbxv1reconcile.NewStepBinder("SavePXCSecrets",
 		if err != nil {
 			return flow.Error(err, "Unable to create account secret while backuping")
 		}
-		return flow.Continue("PXC Secrets Saved!")
+		return flow.Continue("PolarDBX secret saved!")
+	})
+
+var UploadClusterMetadata = polardbxv1reconcile.NewStepBinder("UploadClusterMetadata",
+	func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+		// collect all the metadata and formatted them into a single json file
+		pxcBackup := rc.MustGetPolarDBXBackup()
+		polardbx, err := rc.GetPolarDBX()
+		if err != nil {
+			return flow.Error(err, "Unable to get original polardbx")
+		}
+		metadata := factory.MetadataBackup{
+			PolarDBXClusterMetadata: factory.PolarDBXClusterMetadata{
+				Name: polardbx.Name,
+				UID:  polardbx.UID,
+				Spec: pxcBackup.Status.ClusterSpecSnapshot.DeepCopy(),
+			},
+			XstoreMetadataList:         make([]factory.XstoreMetadata, 0, len(pxcBackup.Status.Backups)),
+			BackupSetName:              pxcBackup.Name,
+			BackupRootPath:             pxcBackup.Status.BackupRootPath,
+			StartTime:                  pxcBackup.Status.StartTime,
+			EndTime:                    pxcBackup.Status.EndTime,
+			LatestRecoverableTimestamp: pxcBackup.Status.LatestRecoverableTimestamp,
+		}
+
+		// xstore metadata and secrets
+		pxcSecret, err := rc.GetSecret(pxcBackup.Name)
+		if err != nil || pxcSecret == nil {
+			return flow.Error(err, "Unable to get secret for pxc", "pxc name", pxcBackup.Name)
+		}
+		metadata.PolarDBXClusterMetadata.Secrets = make([]polardbxv1polardbx.PrivilegeItem, 0, len(pxcSecret.Data))
+		for user, passwd := range pxcSecret.Data {
+			metadata.PolarDBXClusterMetadata.Secrets = append(
+				metadata.PolarDBXClusterMetadata.Secrets,
+				polardbxv1polardbx.PrivilegeItem{
+					Username: user,
+					Password: string(passwd),
+				})
+		}
+		for xstoreName, xstoreBackupName := range pxcBackup.Status.Backups {
+			var xstore xstorev1.XStore
+			err := rc.Client().Get(rc.Context(), types.NamespacedName{Namespace: rc.Namespace(), Name: xstoreName}, &xstore)
+			if err != nil {
+				return flow.Error(err, "Unable to get xstore by name", "xstore name", xstoreName)
+			}
+			xstoreSecret, err := rc.GetSecret(xstoreBackupName)
+			if client.IgnoreNotFound(err) != nil {
+				return flow.Error(err, "Unable to get secret for xstore", "xstore name", xstoreName)
+			} else if xstoreSecret == nil {
+				return flow.RetryAfter(5*time.Second, "Wait for the creation of xstore secret bacup",
+					"xstore name", xstoreName)
+			}
+			xstoreBackup, err := rc.GetXstoreBackupByName(xstoreBackupName)
+			if err != nil || xstoreBackup == nil {
+				return flow.Error(err, "Unable to get backup for xstore", "xstore name", xstoreName)
+			}
+
+			xstoreMetadata := factory.XstoreMetadata{
+				Name:            xstoreName,
+				UID:             xstore.UID,
+				BackupName:      xstoreBackupName,
+				LastCommitIndex: xstoreBackup.Status.CommitIndex,
+				Secrets:         make([]polardbxv1polardbx.PrivilegeItem, 0, len(xstoreSecret.Data)),
+			}
+			for user, passwd := range xstoreSecret.Data {
+				xstoreMetadata.Secrets = append(
+					xstoreMetadata.Secrets,
+					polardbxv1polardbx.PrivilegeItem{
+						Username: user,
+						Password: string(passwd),
+					})
+			}
+			metadata.XstoreMetadataList = append(metadata.XstoreMetadataList, xstoreMetadata)
+		}
+
+		// parse metadata to json string
+		jsonString, err := json.Marshal(metadata)
+		if err != nil {
+			return flow.RetryErr(err, "Failed to marshal metadata, retry to upload metadata")
+		}
+
+		// init filestream client and upload formatted metadata
+		filestreamClient, err := rc.GetFilestreamClient()
+		metadataBackupPath := fmt.Sprintf("%s/metadata", metadata.BackupRootPath)
+		if err != nil {
+			return flow.RetryAfter(10*time.Second, "Failed to get filestream client, error: "+err.Error())
+		}
+		filestreamAction, err := polardbxv1polardbx.NewBackupStorageFilestreamAction(pxcBackup.Spec.StorageProvider.StorageName)
+		if err != nil {
+			return flow.RetryAfter(10*time.Second, "Unsupported storage provided")
+		}
+		actionMetadata := filestream.ActionMetadata{
+			Action:    filestreamAction.Upload,
+			Sink:      pxcBackup.Spec.StorageProvider.Sink,
+			RequestId: uuid.New().String(),
+			Filename:  metadataBackupPath,
+		}
+		sendBytes, err := filestreamClient.Upload(bytes.NewReader(jsonString), actionMetadata)
+		if err != nil {
+			return flow.RetryAfter(10*time.Second, "Upload metadata failed, error: "+err.Error())
+		}
+		flow.Logger().Info("Uploading metadata finished", "sent bytes", sendBytes)
+		return flow.Continue("Metadata uploaded.")
 	})

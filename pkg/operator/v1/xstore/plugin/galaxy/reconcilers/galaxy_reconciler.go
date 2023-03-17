@@ -229,6 +229,10 @@ func (r *GalaxyReconciler) newReconcileTask(rc *xstorev1reconcile.Context, xstor
 			)(task)
 			instancesteps.WaitUntilLeaderElected(task)
 
+			if featuregate.EnableAutoRebuildFollower.Enabled() {
+				instancesteps.CheckFollowerStatus(task)
+			}
+
 			// Purge logs with interval specified (but not less than 2 minutes).
 			logPurgeInterval := 2 * time.Minute
 			if xstore.Spec.Config.Dynamic.LogPurgeInterval != nil {
@@ -253,9 +257,6 @@ func (r *GalaxyReconciler) newReconcileTask(rc *xstorev1reconcile.Context, xstor
 				instancesteps.SyncEngineConfigMap,
 			)(task)
 
-			// Sync my.cnf from my.cnf.override
-			instancesteps.UpdateMycnfParameters(task)
-
 			// Goto upgrading if topology changed. (not breaking the task flow)
 			instancesteps.WhenTopologyChanged(
 				instancesteps.UpdatePhaseTemplate(polardbxv1xstore.PhaseUpgrading),
@@ -265,6 +266,11 @@ func (r *GalaxyReconciler) newReconcileTask(rc *xstorev1reconcile.Context, xstor
 			instancesteps.WhenDynamicConfigChanged(
 				instancesteps.UpdatePhaseTemplate(polardbxv1xstore.PhaseUpgrading),
 				control.Retry("Start PhaseUpgrading..."),
+			)(task)
+
+			// get to adapt phase if the xstore needs adapt
+			instancesteps.WhenNeedAdapt(instancesteps.UpdatePhaseTemplate(polardbxv1xstore.PhaseAdapting),
+				control.Retry("Start PhaseAdapting..."),
 			)(task)
 
 			// Update the observed generation at the end of running phase.
@@ -296,18 +302,20 @@ func (r *GalaxyReconciler) newReconcileTask(rc *xstorev1reconcile.Context, xstor
 		control.RetryAfter(30*time.Second, "Check every 30 seconds...")(task)
 	case polardbxv1xstore.PhaseUpgrading, polardbxv1xstore.PhaseRepairing:
 		selfHeal := xstore.Status.Phase == polardbxv1xstore.PhaseRepairing
-
+		instancesteps.PrepareHostPathVolumes(task)
 		switch xstore.Status.Stage {
 		case polardbxv1xstore.StageEmpty:
 			ec, err := instancesteps.LoadExecutionContext(rc)
 			if err != nil {
 				return nil, err
 			}
+			newEc, err := instancesteps.NewExecutionContext(rc, xstore, selfHeal)
 			if ec == nil {
-				ec, err = instancesteps.NewExecutionContext(rc, xstore, selfHeal)
+				ec = newEc
 			}
-
-			defer instancesteps.TrackAndLazyUpdateExecuteContext(ec)(task, true)
+			TrackAndLazyUpdateExecuteContextFunc := instancesteps.TrackAndLazyUpdateExecuteContext(ec)
+			defer TrackAndLazyUpdateExecuteContextFunc(task, true)
+			ec.Volumes = newEc.Volumes
 			if featuregate.EnableGalaxyClusterMode.Enabled() {
 				instancesteps.ReconcileConsensusRoleLabels(task)
 			} else {
@@ -348,6 +356,8 @@ func (r *GalaxyReconciler) newReconcileTask(rc *xstorev1reconcile.Context, xstor
 			instancesteps.GetParametersRoleMap(task)
 			instancesteps.UpdateXStoreConfigMap(task)
 			instancesteps.SetGlobalVariables(task)
+			// Sync my.cnf from my.cnf.override
+			instancesteps.UpdateMycnfParameters(task)
 			instancesteps.CloseXStoreUpdatePhase(task)
 			instancesteps.UpdatePhaseTemplate(polardbxv1xstore.PhaseRunning, true)(task)
 		}
@@ -386,6 +396,29 @@ func (r *GalaxyReconciler) newReconcileTask(rc *xstorev1reconcile.Context, xstor
 		)(task)
 		instancesteps.CloseXStoreRestartPhase(task)
 		instancesteps.UpdatePhaseTemplate(polardbxv1xstore.PhaseRunning, true)(task)
+	case polardbxv1xstore.PhaseAdapting:
+		switch xstore.Status.Stage {
+		case polardbxv1xstore.StageEmpty:
+			instancesteps.PrepareHostPathVolumes(task)
+			galaxyinstancesteps.CreatePodsAndServices(task)
+			instancesteps.UpdateSharedConfigMap(task)
+			instancesteps.DisableElection(task)
+			//先把logger节点和follower节点刷成learner，再把leader节点单节点拉起
+			instancesteps.UpdateStageTemplate(polardbxv1xstore.StageFlushMetadata, true)(task)
+		case polardbxv1xstore.StageFlushMetadata:
+			instancesteps.FlushClusterMetadata(task)
+			instancesteps.UpdateStageTemplate(polardbxv1xstore.StageAdapting, true)(task)
+		case polardbxv1xstore.StageAdapting:
+			instancesteps.ReconcileConsensusRoleLabels(task)
+			instancesteps.WaitUntilLeaderElected(task)
+			instancesteps.ReAddFollower(task)
+			xstoreplugincommonsteps.SetVoterElectionWeightToOne(task)
+			instancesteps.WaitUntilCandidatesAndVotersReady(task)
+			instancesteps.UpdateStageTemplate(polardbxv1xstore.StageBeforeSuccess, true)(task)
+		case polardbxv1xstore.StageBeforeSuccess:
+			instancesteps.EnableElection(task)
+			instancesteps.UpdatePhaseTemplate(polardbxv1xstore.PhaseRunning, true)(task)
+		}
 	case polardbxv1xstore.PhaseFailed:
 		log.Info("Failed.")
 	case polardbxv1xstore.PhaseUnknown:

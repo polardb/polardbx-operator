@@ -19,9 +19,11 @@ data:
         {{- if .Values.useLatestImage }}
         prober: {{ .Values.images.probeProxy }}:latest
         exporter: {{ .Values.images.polardbxExporter }}:latest
+        job: {{ .Values.images.polardbxJob }}:latest
         {{- else }}
         prober: {{ .Values.images.probeProxy }}:{{ .Values.imageTag | default .Chart.AppVersion }}
         exporter: {{ .Values.images.polardbxExporter }}:{{ .Values.imageTag | default .Chart.AppVersion }}
+        job: {{ .Values.images.polardbxJob }}:{{ .Values.imageTag | default .Chart.AppVersion }}
         {{- end }}
       compute:
         {{- if .Values.useLatestImage }}
@@ -56,7 +58,8 @@ data:
         volume_data: {{ .Values.node.volumes.data }}/xstore
         volume_log: {{ .Values.node.volumes.log }}/xstore
         volume_filestream: {{ .Values.node.volumes.filestream }}
-      hpfs_endpoint: {{.Values.hostPathFileService.name}}:{{ .Values.hostPathFileService.port }}
+      hpfs_endpoint: {{.Values.hostPathFileService.name}}.{{ .Release.Namespace }}:{{ .Values.hostPathFileService.port }}
+      fs_endpoint: {{.Values.hostPathFileService.name}}.{{ .Release.Namespace }}:{{ .Values.hostPathFileService.fsPort }}
 {{- if .Values.extension.config.security }}
     security:
 {{ toYaml .Values.extension.config.security | indent 6 }}

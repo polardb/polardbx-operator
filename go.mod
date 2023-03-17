@@ -48,9 +48,13 @@ require (
 )
 
 require (
+	github.com/eapache/queue v1.1.0
 	github.com/itchyny/timefmt-go v0.1.4
 	github.com/onsi/ginkgo v1.16.5
+	github.com/pkg/errors v0.9.1
 	github.com/prometheus/common v0.26.0
+	github.com/robfig/cron v1.2.0
+	go.uber.org/atomic v1.7.0
 	golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4
 	golang.org/x/text v0.7.0
 	gomodules.xyz/jsonpatch/v2 v2.2.0
@@ -90,7 +94,6 @@ require (
 	github.com/ncw/directio v1.0.5 // indirect
 	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
-	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/power-devops/perfstat v0.0.0-20210106213030-5aafc221ea8c // indirect
 	github.com/prometheus/procfs v0.6.0 // indirect
@@ -99,7 +102,6 @@ require (
 	github.com/tklauser/go-sysconf v0.3.9 // indirect
 	github.com/tklauser/numcpus v0.3.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.2 // indirect
-	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
 	golang.org/x/mod v0.6.0-dev.0.20220419223038-86c51ed26bb4 // indirect
 	golang.org/x/net v0.7.0 // indirect

@@ -292,11 +292,32 @@ if [[ -d /home/admin/drds-worker ]]; then
 fi
 `
 
+	cnStartCmd = `
+if [ -f /home/admin/entrypoint.sh ]; then
+	sh /home/admin/entrypoint.sh
+fi
+if [ -f /home/admin/app.sh ]; then
+	sh /home/admin/app.sh
+fi
+while [ "debug" == $(cat /etc/podinfo/runmode) ]
+do
+	echo "debug mode"
+	sleep 3600
+done
+`
 	cdcServerPostStartScript = `
 if [[ -d /home/admin/drds-worker ]]; then
 	# Remove the global schedule script
 	echo '' > /home/admin/drds-worker/bin/globalSchedule.sh
 fi
+`
+	cdcStartCmd = `
+sh /home/admin/app.sh
+while [ "debug" == $(cat /etc/podinfo/runmode) ]
+do
+	echo "debug mode"
+	sleep 3600
+done
 `
 )
 
@@ -385,6 +406,8 @@ func (f *objectFactory) newDeployment4CN(group string, mr *matchingRule, mustSta
 			{Protocol: corev1.ProtocolTCP, Name: "htap", ContainerPort: int32(ports.HtapPort)},
 			{Protocol: corev1.ProtocolTCP, Name: "log", ContainerPort: int32(ports.LogPort)},
 		},
+		Command:      []string{"/bin/bash", "-c"},
+		Args:         []string{cnStartCmd},
 		VolumeMounts: volumeFactory.NewVolumeMountsForCNEngine(),
 		Lifecycle: &corev1.Lifecycle{
 			PostStart: &corev1.Handler{
@@ -627,6 +650,8 @@ func (f *objectFactory) newDeployment4CDC(group string, mr *matchingRule, mustSt
 			template.Image,
 			config.Images().DefaultImageForCluster(polardbxmeta.RoleCDC, convention.ContainerEngine, topology.Version),
 		),
+		Command:         []string{"/bin/bash", "-c"},
+		Args:            []string{cdcStartCmd},
 		ImagePullPolicy: template.ImagePullPolicy,
 		Env:             envVars,
 		Resources:       *template.Resources.DeepCopy(),
@@ -644,7 +669,43 @@ func (f *objectFactory) newDeployment4CDC(group string, mr *matchingRule, mustSt
 		SecurityContext: k8shelper.NewSecurityContext(config.Cluster().ContainerPrivileged()),
 	}
 	probeConfigure.ConfigureForCDCEngine(&engineContainer, ports)
-	containers := []corev1.Container{engineContainer}
+	proberContainer := corev1.Container{
+		Name:  convention.ContainerProber,
+		Image: config.Images().DefaultImageForCluster(polardbxmeta.RoleCDC, convention.ContainerProber, topology.Version),
+		Env: []corev1.EnvVar{
+			{Name: "GOMAXPROCS", Value: "1"},
+		},
+		Args: []string{
+			"--listen-port", fmt.Sprintf("%d", ports.GetProbePort()),
+		},
+		Ports: []corev1.ContainerPort{
+			{Protocol: corev1.ProtocolTCP, Name: "probe", ContainerPort: int32(ports.GetProbePort())},
+		},
+		LivenessProbe: &corev1.Probe{
+			Handler: corev1.Handler{
+				HTTPGet: &corev1.HTTPGetAction{
+					Path: "/liveness",
+					Port: intstr.FromString("probe"),
+					HTTPHeaders: []corev1.HTTPHeader{
+						{Name: "Probe-Target", Value: probe.TypeSelf},
+					},
+				},
+			},
+		},
+		VolumeMounts: volumeFactory.NewSystemVolumeMounts(),
+	}
+	if k8shelper.IsContainerQoSGuaranteed(&engineContainer) {
+		if featuregate.EnforceQoSGuaranteed.Enabled() {
+			proberContainer.Resources = corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("200m"),
+					corev1.ResourceMemory: resource.MustParse("100Mi"),
+				},
+			}
+		}
+	}
+
+	containers := []corev1.Container{engineContainer, proberContainer}
 
 	dnsPolicy := corev1.DNSClusterFirst
 	if template.HostNetwork {

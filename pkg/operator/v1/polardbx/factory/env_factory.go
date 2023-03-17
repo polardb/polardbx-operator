@@ -352,7 +352,7 @@ func (e *envFactory) newBasicEnvVarsForCDCEngine(gmsConn *StorageConnection) []c
 	clusterId := e.polardbx.Name + "-" + clusterType
 
 	// FIXME CDC currently doesn't support host network, so ports are hard coded.
-	return []corev1.EnvVar{
+	envs := []corev1.EnvVar{
 		{Name: "switchCloud", Value: "aliyun"},
 		{Name: "cluster_id", Value: clusterId},
 		{Name: "cluster_type", Value: clusterType},
@@ -372,6 +372,16 @@ func (e *envFactory) newBasicEnvVarsForCDCEngine(gmsConn *StorageConnection) []c
 		{Name: "polarx_password", ValueFrom: e.newValueFromSecretKey(e.polardbx.Name, "polardbx_root")},
 		{Name: "dnPasswordKey", Value: e.cipher.Key()},
 	}
+	configEnvs := e.polardbx.Spec.Config.CDC.Envs
+	if configEnvs != nil {
+		for k, v := range configEnvs {
+			envs = append(envs, corev1.EnvVar{
+				Name:  k,
+				Value: v.String(),
+			})
+		}
+	}
+	return envs
 }
 
 func (e *envFactory) NewEnvVarsForCDCEngine(gmsConn StorageConnection) []corev1.EnvVar {

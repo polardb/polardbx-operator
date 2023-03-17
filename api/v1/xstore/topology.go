@@ -35,7 +35,7 @@ type NodeSpec struct {
 	// ImagePullSecrets represents the secrets for pulling private images.
 	ImagePullSecrets []v1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
 
-	// +kubebuilder:default=true
+	// +kubebuilder:default=false
 
 	// HostNetwork defines whether the node uses the host network. Default is true.
 	HostNetwork *bool `json:"hostNetwork,omitempty"`

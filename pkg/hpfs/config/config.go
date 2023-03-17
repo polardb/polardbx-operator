@@ -14,13 +14,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package filestream
+package config
 
 import (
 	"errors"
 	"fmt"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"os"
+	"path/filepath"
 	"reflect"
 	"sync/atomic"
 	"time"
@@ -29,8 +30,11 @@ import (
 var ConfigFilepath = "/config/config.yaml"
 
 const (
-	SinkTypeOss  = "oss"
-	SinkTypeSftp = "sftp"
+	SinkTypeOss                        = "oss"
+	SinkTypeSftp                       = "sftp"
+	SinkTypeNone                       = "none"
+	DefaultLocalExpireLogHours float64 = 7
+	DefaultMaxLocalBinlogCount         = 50
 )
 
 type OssSink struct {
@@ -54,8 +58,30 @@ type Sink struct {
 	SftpSink
 }
 
+type BackupBinlogConfig struct {
+	RootDirectories     []string `json:"rootDirectories,omitempty"`
+	StoragePathPrefix   string   `json:"storagePathPrefix,omitempty"`
+	LocalExpireLogHours *float64 `json:"localExpireLogHours,omitempty"`
+	MaxLocalBinlogCount *int64   `json:"maxLocalBinlogCount,omitempty"`
+}
+
+func (bbc *BackupBinlogConfig) GetExpireLogHours() float64 {
+	if bbc.LocalExpireLogHours == nil {
+		return DefaultLocalExpireLogHours
+	}
+	return *bbc.LocalExpireLogHours
+}
+
+func (bbc *BackupBinlogConfig) GetMaxLocalBinlogCount() int64 {
+	if bbc.MaxLocalBinlogCount == nil {
+		return DefaultMaxLocalBinlogCount
+	}
+	return *bbc.MaxLocalBinlogCount
+}
+
 type Config struct {
-	Sinks []Sink `json:"sinks,omitempty"`
+	Sinks              []Sink              `json:"sinks,omitempty"`
+	BackupBinlogConfig *BackupBinlogConfig `json:"backupBinlogConfig,omitempty"`
 }
 
 var configValue atomic.Value
@@ -107,4 +133,25 @@ func ReloadConfig() {
 	}
 	configValue.Swap(config)
 	fmt.Println(time.Now().Format("2006-01-02 15:04:05") + "  filestream config changed")
+}
+
+func GetBinlogStoragePathPrefix() string {
+	prefix := "polardbx-binlogbackup"
+	if GetConfig().BackupBinlogConfig != nil && GetConfig().BackupBinlogConfig.StoragePathPrefix != "" {
+		prefix = GetConfig().BackupBinlogConfig.StoragePathPrefix
+	}
+	return prefix
+}
+
+func GetXStorePodBinlogStorageDirectory(namespace string, pxcName string, pxcUid string, xStoreName string, xStoreUid string, podName string) string {
+	prefix := GetBinlogStoragePathPrefix()
+	if xStoreName == "" {
+		return filepath.Join(prefix, namespace, pxcName, pxcUid)
+	}
+	return filepath.Join(prefix, namespace, pxcName, pxcUid, xStoreName, xStoreUid, podName)
+}
+
+func GetPxcBinlogStorageDirectory(namespace string, pxcName string, pxcUid string) string {
+	prefix := GetBinlogStoragePathPrefix()
+	return filepath.Join(prefix, namespace, pxcName, pxcUid)
 }

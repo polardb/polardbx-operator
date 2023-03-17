@@ -1,5 +1,3 @@
-//go:build polardbx
-
 /*
 Copyright 2022 Alibaba Group Holding Limited.
 
@@ -21,6 +19,7 @@ package tx
 import (
 	"bufio"
 	"fmt"
+	"github.com/alibaba/polardbx-operator/pkg/binlogtool/binlog"
 	"os"
 	"testing"
 )

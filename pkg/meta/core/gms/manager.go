@@ -139,7 +139,14 @@ var (
 	xcluster80VersionPattern = regexp.MustCompile("8\\.0\\.\\S+-X-Cluster-\\S+")
 )
 
-func GetStorageType(engine string, version string) (StorageType, error) {
+func GetStorageType(engine string, version string, annotationStorageType string) (StorageType, error) {
+	if annotationStorageType != "" {
+		storageType, err := strconv.ParseInt(annotationStorageType, 10, 63)
+		if err != nil {
+			return 0, err
+		}
+		return StorageType(int32(storageType)), nil
+	}
 	switch engine {
 	case "xcluster":
 		if xcluster80VersionPattern.MatchString(version) {

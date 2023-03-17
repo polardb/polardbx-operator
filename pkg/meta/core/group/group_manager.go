@@ -120,6 +120,7 @@ type GroupManager interface {
 	GetTrans(column string, table string) (map[string]bool, error)
 	IsTransCommited(column string, table string) error
 	SendHeartBeat(sname string) error
+	CheckFileStorageCompatibility() (bool, error)
 	ListFileStorage() ([]polardbx.FileStorageInfo, error)
 	CreateFileStorage(info polardbx.FileStorageInfo, config config.Config) error
 	DropFileStorage(fileStorageName string) error
@@ -158,16 +159,32 @@ func (m *groupManager) SendHeartBeat(sname string) error {
 	retryLimits := 10
 	retry := 0
 	for retry < retryLimits {
-		tx, err := conn.BeginTx(m.ctx, &sql.TxOptions{})
-		now := time.Now()
-		_, err = tx.ExecContext(m.ctx, fmt.Sprintf("replace into `__cdc__`.`__cdc_heartbeat__`(id, sname, gmt_modified) values(%d, %s, '%s')", now.Unix(), sname, now.Format("2006-01-02 15:04:05")))
-		if err != nil {
-			tx.Rollback()
-		} else {
-			tx.Commit()
-			break
-		}
 		retry++
+		tx, err := conn.BeginTx(m.ctx, &sql.TxOptions{})
+		if err != nil {
+			continue
+		}
+
+		now := time.Now()
+		queries := []string{
+			"set drds_transaction_policy='TSO'",
+			fmt.Sprintf("replace into `__cdc__`.`__cdc_heartbeat__`(id, sname, gmt_modified) values(%d, %s, '%s')",
+				now.Unix(), sname, now.Format("2006-01-02 15:04:05")),
+		}
+
+		for _, query := range queries {
+			_, err = tx.ExecContext(m.ctx, query)
+			if err != nil {
+				_ = tx.Rollback()
+				break
+			}
+		}
+		if err == nil {
+			err = tx.Commit()
+			if err == nil {
+				return nil
+			}
+		}
 	}
 	return err
 }
@@ -614,6 +631,23 @@ func (m *groupManager) Close() error {
 	return nil
 }
 
+func (m *groupManager) CheckFileStorageCompatibility() (bool, error) {
+	conn, err := m.getConn("")
+	if err != nil {
+		return false, err
+	}
+	defer dbutil.DeferClose(conn)
+
+	// Check compatibility
+	showTablesStmt := `SHOW TABLES FROM metadb LIKE 'file_storage_info'`
+	rs, err := conn.QueryContext(m.ctx, showTablesStmt)
+	if err != nil {
+		return false, err
+	}
+	defer dbutil.DeferClose(rs)
+	return rs.Next(), nil
+}
+
 func (m *groupManager) ListFileStorage() ([]polardbx.FileStorageInfo, error) {
 	var fileStorageInfoList []polardbx.FileStorageInfo
 	conn, err := m.getConn("")
@@ -775,13 +809,13 @@ func (m *groupManager) GetBinlogOffset() (string, error) {
 	if !rs.Next() {
 		return "", errors.New("no rows returned")
 	}
-	var file_name, file_size, binlog_do_db, binlog_ignore_db, executed_gtid_set string
+	var fileName, fileSize, binlogDoDb, binlogIgnoreDb, executedGtidSet string
 
-	err = rs.Scan(&file_name, &file_size, &binlog_do_db, &binlog_ignore_db, &executed_gtid_set)
+	err = rs.Scan(&fileName, &fileSize, &binlogDoDb, &binlogIgnoreDb, &executedGtidSet)
 	if err != nil {
 		return "", nil
 	}
-	ans := file_name + ":" + file_size
+	ans := fileName + ":" + fileSize
 	return ans, nil
 }
 

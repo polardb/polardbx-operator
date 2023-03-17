@@ -17,7 +17,6 @@ limitations under the License.
 package steps
 
 import (
-	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/plugin/galaxy/galaxy"
 	"strings"
 	"time"
 
@@ -59,9 +58,7 @@ func transformPodsIntoNodesWithServices(rc *xstorev1reconcile.Context, pods []co
 		if nodes[i].Role == strings.ToLower(xstoremeta.RoleLearner) {
 			nodes[i].Host = service.Spec.ClusterIP
 		}
-		if rc.MustGetXStore().Spec.Engine == galaxy.Engine {
-			nodes[i].Host = service.Spec.ClusterIP
-		}
+		nodes[i].Host = service.Spec.ClusterIP
 	}
 	return nodes
 }

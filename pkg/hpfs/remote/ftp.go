@@ -114,3 +114,15 @@ func (f *ftpFs) DownloadFile(ctx context.Context, writer io.Writer, path string,
 
 	return ft, nil
 }
+
+func (f *ftpFs) DeleteExpiredFile(ctx context.Context, path string, auth, params map[string]string) (FileTask, error) {
+	panic("Not implemented")
+}
+
+func (f *ftpFs) ListFiles(ctx context.Context, writer io.Writer, path string, auth, params map[string]string) (FileTask, error) {
+	panic("Not implemented")
+}
+
+func (o *ftpFs) ListAllFiles(ctx context.Context, path string, auth, params map[string]string) (FileTask, error) {
+	panic("Not implemented")
+}

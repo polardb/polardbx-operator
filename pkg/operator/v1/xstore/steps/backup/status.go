@@ -18,6 +18,7 @@ package backup
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	polardbxv1 "github.com/alibaba/polardbx-operator/api/v1"
 	xstorev1 "github.com/alibaba/polardbx-operator/api/v1"
@@ -25,17 +26,15 @@ import (
 	"github.com/alibaba/polardbx-operator/pkg/k8s/control"
 	k8shelper "github.com/alibaba/polardbx-operator/pkg/k8s/helper"
 	polardbxmeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/meta"
+	xstoreconvention "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/convention"
 	xstoremeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/meta"
 	xstorev1reconcile "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/reconcile"
 	xstorectrlerrors "github.com/alibaba/polardbx-operator/pkg/util/error"
-	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/rand"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -58,16 +57,6 @@ func UpdatePhaseTemplate(phase xstorev1.XStoreBackupPhase, requeue ...bool) cont
 			xstoreBackup.Status.Phase = phase
 			return flow.Continue(" Phase xstore backup updated!", "phase-new", phase)
 		})
-}
-
-func GenerateJobName(targetPod *corev1.Pod, JobLabel string) string {
-	// 理论情况下, jobName不应该超过63位, 并且在每次job完成后，我们会将job删除，所以这里应该不会出现同时job名称冲突的情况.
-	jobName := JobLabel + "-job-" + targetPod.Name + "-" + rand.String(4)
-	if len(jobName) >= 60 {
-		jobName = jobName[0:59]
-		jobName = strings.TrimRight(jobName, "-")
-	}
-	return jobName
 }
 
 var PersistentStatusChanges = NewStepBinder("PersistentStatusChanges",
@@ -165,14 +154,16 @@ var StartXStoreFullBackupJob = NewStepBinder("StartXStoreFullBackupJob",
 			return flow.Error(err, "Unable to get task context for backup")
 		}
 
+		// retry until target pod found, ops allowed here
 		xstoreBackup := rc.MustGetXStoreBackup()
 		targetPod, err := rc.GetXStoreTargetPod()
 		if err != nil {
-			return flow.Error(err, "Unable to find target pod!")
+			return flow.RetryAfter(5*time.Second, "Unable to find target pod, error: "+err.Error())
 		}
 		if targetPod == nil {
-			return flow.Wait("Unable to find target pod!")
+			return flow.RetryAfter(5*time.Second, "Unable to find target pod, error: target pod status abnormal")
 		}
+
 		if targetPod.Labels[xstoremeta.LabelRole] == xstoremeta.RoleLeader { // warning when backup on leader pod
 			flow.Logger().Info("Warning: performing backup on leader", "leader pod", targetPod.Name)
 		}
@@ -185,7 +176,7 @@ var StartXStoreFullBackupJob = NewStepBinder("StartXStoreFullBackupJob",
 			return flow.Continue("Full Backup job already started!", "job-name", job.Name)
 		}
 
-		jobName := GenerateJobName(targetPod, "backup")
+		jobName := xstoreconvention.NewBackupJobName(targetPod, xstoreconvention.BackupJobTypeFullBackup)
 		xstoreBackup.Status.TargetPod = targetPod.Name
 
 		job, e := newBackupJob(xstoreBackup, targetPod, jobName)
@@ -312,7 +303,7 @@ var StartCollectBinlogJob = NewStepBinder("StartCollectBinlogJob",
 		if err != nil {
 			return flow.Error(err, "Unable to get pxcBackup!")
 		}
-		jobName := GenerateJobName(targetPod, "collect")
+		jobName := xstoreconvention.NewBackupJobName(targetPod, xstoreconvention.BackupJobTypeCollect)
 
 		job, err = newCollectJob(xstoreBackup, targetPod, *polardbxBackup, jobName)
 		if err != nil {
@@ -323,10 +314,11 @@ var StartCollectBinlogJob = NewStepBinder("StartCollectBinlogJob",
 			return flow.Error(err, "Unable to create job to initialize data")
 		}
 
-		return flow.Continue("collect binlog job started!", "job-name", jobName)
+		// wait 10 seconds to ensure that job has been created
+		return flow.RetryAfter(10*time.Second, "collect binlog job started!", "job-name", jobName)
 	})
 
-var WaitCollectBinlogJobFinished = NewStepBinder("WaitBackupJobFinished",
+var WaitCollectBinlogJobFinished = NewStepBinder("WaitCollectBinlogJobFinished",
 	func(rc *xstorev1reconcile.BackupContext, flow control.Flow) (reconcile.Result, error) {
 		xstore, err := rc.GetXStore()
 		if err != nil {
@@ -336,12 +328,29 @@ var WaitCollectBinlogJobFinished = NewStepBinder("WaitBackupJobFinished",
 			return flow.Continue("GMS don't need to collect binlog job!", "xstore-name:", xstore.Name)
 		}
 
+		// in case that collect job not found, allow retry ${probeLimit} times, by default the limit is 5
+		probeLimit := 5
+		xstoreBackup := rc.MustGetXStoreBackup()
+		if limitAnnotation, ok := xstoreBackup.Annotations[xstoremeta.AnnotationCollectJobProbeLimit]; ok {
+			if tempLimit, err := strconv.Atoi(limitAnnotation); err != nil {
+				probeLimit = tempLimit // only update when valid annotation parsed
+			}
+		}
+		flow.Logger().Info("fetch collect job probe limit from annotation", "limit", probeLimit)
+
 		job, err := rc.GetCollectBinlogJob()
 		if client.IgnoreNotFound(err) != nil {
 			return flow.Error(err, "Unable to get collect binlog job!")
 		}
 		if job == nil {
-			return flow.Continue("Collect binlog job removed!")
+			if probeLimit--; probeLimit >= 0 { // update probe limit and record into xsb
+				xstoreBackup.Annotations[xstoremeta.AnnotationCollectJobProbeLimit] = strconv.Itoa(probeLimit)
+				if err := rc.UpdateXStoreBackup(); err != nil {
+					return flow.Error(err, "Unable to update collect job probe limit")
+				}
+				return flow.Retry("Retry to get collect binlog job")
+			}
+			return flow.Error(errors.New("collect binlog job abnormal"), "Collect binlog job not found, retry limits reached!")
 		}
 
 		if !k8shelper.IsJobCompleted(job) {
@@ -411,7 +420,7 @@ var StartBinlogBackupJob = NewStepBinder("StartBinlogBackupJob",
 			return flow.Continue("Collect job already started!", "job-name", job.Name)
 		}
 
-		jobName := GenerateJobName(targetPod, "binlog")
+		jobName := xstoreconvention.NewBackupJobName(targetPod, xstoreconvention.BackupJobTypeBinlogBackup)
 
 		if targetPod.Labels[polardbxmeta.LabelRole] == polardbxmeta.RoleGMS {
 			job, err = newBinlogBackupJob(xstoreBackup, targetPod, jobName, true)
@@ -532,16 +541,16 @@ var RemoveXSBackupOverRetention = NewStepBinder("RemoveXSBackupOverRetention",
 		return flow.Continue("PolarDBX backup deleted!", "XSBackup-name", backup.Name)
 	})
 
-var WaitPXCBackupFinished = NewStepBinder("WaitPXCBackupFinished",
+var WaitPXCBinlogBackupFinished = NewStepBinder("WaitPXCBinlogBackupFinished",
 	func(rc *xstorev1reconcile.BackupContext, flow control.Flow) (reconcile.Result, error) {
 		polardbxBackup, err := rc.GetPolarDBXBackup()
 		if err != nil {
-			flow.Error(err, "Unable to find polardbxBackup")
+			flow.Error(err, "Unable to find get PolarDBX backup")
 		}
-		if polardbxBackup.Status.Phase != polardbxv1.BackupFinished {
-			return flow.RetryAfter(5*time.Second, "Wait polardbx backup Finished", "pxcBackup", polardbxBackup.Name)
+		if polardbxBackup.Status.Phase != polardbxv1.MetadataBackuping {
+			return flow.RetryAfter(5*time.Second, "Wait until PolarDBX binlog backup finished", "pxc backup", polardbxBackup.Name)
 		}
-		return flow.Continue("Backup Finished!")
+		return flow.Continue("PolarDBX binlog backup finished.")
 	})
 
 var SaveXStoreSecrets = NewStepBinder("SaveXStoreSecrets",
@@ -564,5 +573,5 @@ var SaveXStoreSecrets = NewStepBinder("SaveXStoreSecrets",
 		if err != nil {
 			return flow.Error(err, "Unable to create account secret while backuping")
 		}
-		return flow.Continue("XStore Secrets Saved!")
+		return flow.Continue("XStore Secret Saved!")
 	})

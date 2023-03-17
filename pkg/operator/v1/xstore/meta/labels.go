@@ -25,21 +25,23 @@ import (
 )
 
 const (
-	LabelName        = "xstore/name"
-	LabelRand        = "xstore/rand"
-	LabelRole        = "xstore/role"
-	LabelPod         = "xstore/pod"
-	LabelNodeRole    = "xstore/node-role"
-	LabelServiceType = "xstore/service"
-	LabelNodeSet     = "xstore/node-set"
-	LabelGeneration  = "xstore/generation"
-	LabelPortLock    = "xstore/port-lock"
-	LabelHash        = "xstore/hash"
-	LabelConfigHash  = "xstore/config-hash"
-	LabelPrimaryName = "xstore/primary-name"
-	LabelRebuildTask = "xstore/rebuild-task"
-	LabelOriginName  = "xstore/origin-name"
-	LabelTmp         = "xstore/tmp"
+	LabelName         = "xstore/name"
+	LabelRand         = "xstore/rand"
+	LabelRole         = "xstore/role"
+	LabelPod          = "xstore/pod"
+	LabelNodeRole     = "xstore/node-role"
+	LabelServiceType  = "xstore/service"
+	LabelNodeSet      = "xstore/node-set"
+	LabelGeneration   = "xstore/generation"
+	LabelPortLock     = "xstore/port-lock"
+	LabelHash         = "xstore/hash"
+	LabelConfigHash   = "xstore/config-hash"
+	LabelPrimaryName  = "xstore/primary-name"
+	LabelRebuildTask  = "xstore/rebuild-task"
+	LabelOriginName   = "xstore/origin-name"
+	LabelTargetXStore = "xstore/target-name"
+	LabelTmp          = "xstore/tmp"
+	LabelAutoRebuild  = "xstore/auto-rebuild"
 )
 
 const (

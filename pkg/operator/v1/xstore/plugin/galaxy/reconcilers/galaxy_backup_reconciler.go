@@ -67,7 +67,7 @@ func (r *GalaxyBackupReconciler) newReconcileTask(rc *xstorev1reconcile.BackupCo
 		backupsteps.ExtractLastEventTimestamp(task)
 		backupsteps.UpdatePhaseTemplate(xstorev1.XStoreBinlogWaiting)(task)
 	case xstorev1.XStoreBinlogWaiting:
-		backupsteps.WaitPXCBackupFinished(task)
+		backupsteps.WaitPXCBinlogBackupFinished(task)
 		backupsteps.SaveXStoreSecrets(task)
 		backupsteps.UpdatePhaseTemplate(xstorev1.XStoreBackupFinished)(task)
 	case xstorev1.XStoreBackupFinished:

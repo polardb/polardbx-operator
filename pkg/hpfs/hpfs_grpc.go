@@ -17,15 +17,21 @@ limitations under the License.
 package hpfs
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"github.com/alibaba/polardbx-operator/pkg/hpfs/backupbinlog"
+	"github.com/alibaba/polardbx-operator/pkg/hpfs/common"
+	"github.com/alibaba/polardbx-operator/pkg/hpfs/config"
 	"os"
 	"os/exec"
 	"os/user"
 	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-logr/logr"
 	protobuf "github.com/golang/protobuf/proto"
@@ -738,4 +744,194 @@ func (r *rpcService) ControlCgroupsBlkio(ctx context.Context, request *proto.Con
 	}
 
 	return &proto.ControlCgroupsBlkioResponse{Status: r.ok("")}, nil
+}
+
+func (r *rpcService) OpenBackupBinlog(ctx context.Context, request *proto.OpenBackupBinlogRequest) (*proto.OpenBackupBinlogResponse, error) {
+	infoVersionFilepath := filepath.Join(request.GetLogDir(), backupbinlog.InfoVersionFilename)
+	versionFileExists, err := r.localFileService.IsExists(infoVersionFilepath)
+	if err != nil {
+		return &proto.OpenBackupBinlogResponse{Status: r.fail(err)}, nil
+	}
+	version := backupbinlog.InfoVersion + "=" + strconv.FormatInt(time.Now().Unix(), 10)
+	if !versionFileExists {
+		r.Info("the version file does not exists, create one", "filepath", infoVersionFilepath)
+		os.WriteFile(infoVersionFilepath, []byte(version), 0644)
+	} else {
+		data, err := os.ReadFile(infoVersionFilepath)
+		if err != nil {
+			return &proto.OpenBackupBinlogResponse{Status: r.fail(err)}, nil
+		}
+		version = string(data)
+	}
+	infoFilepath := filepath.Join(request.GetLogDir(), backupbinlog.InfoFilename)
+	exists, err := r.localFileService.IsExists(infoFilepath)
+	if err != nil {
+		return &proto.OpenBackupBinlogResponse{Status: r.fail(err)}, nil
+	}
+	if exists {
+		r.Info("the file exists, do update", "filepath", infoFilepath)
+	}
+	buf := bytes.Buffer{}
+	buf.Write([]byte(request.GetContent()))
+	buf.Write([]byte(version))
+	buf.Write([]byte("\n"))
+	err = os.WriteFile(infoFilepath, buf.Bytes(), 0644)
+	if err != nil {
+		r.Error(err, "failed to write file", "filepath", infoFilepath)
+		return &proto.OpenBackupBinlogResponse{Status: r.fail(err)}, nil
+	}
+	return &proto.OpenBackupBinlogResponse{Status: r.ok("")}, nil
+}
+
+func (r *rpcService) CloseBackupBinlog(ctx context.Context, request *proto.CloseBackupBinlogRequest) (*proto.CloseBackupBinlogResponse, error) {
+	infoFilepath := filepath.Join(request.GetLogDir(), backupbinlog.InfoFilename)
+	exists, err := r.localFileService.IsExists(infoFilepath)
+	if err != nil {
+		return &proto.CloseBackupBinlogResponse{Status: r.fail(err)}, nil
+	}
+	if exists {
+		err := os.Remove(infoFilepath)
+		if err != nil {
+			r.Error(err, "failed to remove bakcup binlog infoFile", "filepath", infoFilepath)
+			return &proto.CloseBackupBinlogResponse{Status: r.fail(err)}, nil
+		}
+	}
+	return &proto.CloseBackupBinlogResponse{Status: r.ok("")}, nil
+}
+
+func (r *rpcService) UploadLatestBinlogFile(ctx context.Context, request *proto.UploadLatestBinlogFileRequest) (*proto.UploadLatestBinlogFileResponse, error) {
+	done := backupbinlog.UploadLatestBinlogFile(request.GetLogDir())
+	r.Info(fmt.Sprintf("latest binlog file upload, done=%v", done))
+	return &proto.UploadLatestBinlogFileResponse{Status: r.ok(""), Done: done}, nil
+}
+
+func (r *rpcService) GetWatcherInfoHash(ctx context.Context, request *proto.GetWatcherInfoHashRequest) (*proto.GetWatcherInfoHashResponse, error) {
+	hash := backupbinlog.GetWatcherInfoHash(request.GetLogDir())
+	return &proto.GetWatcherInfoHashResponse{Status: r.ok(""), Hash: hash}, nil
+}
+
+func GetFileServiceParam(sinkName string, sinkType string) (err error, params map[string]string, auth map[string]string, fileServiceName string, returnSink config.Sink) {
+	var sinkPtr *config.Sink
+	for _, sink := range config.GetConfig().Sinks {
+		if sink.Name == sinkName && sink.Type == sinkType {
+			sinkPtr = &sink
+			returnSink = sink
+			break
+		}
+	}
+	if sinkPtr == nil {
+		err = fmt.Errorf("sink not found. type=%s name=%s", sinkType, sinkName)
+		return
+	}
+	auth = map[string]string{}
+	params = map[string]string{}
+	if sinkPtr.Type == config.SinkTypeOss {
+		auth["endpoint"] = sinkPtr.Endpoint
+		auth["access_key"] = sinkPtr.AccessKey
+		auth["access_secret"] = sinkPtr.AccessSecret
+		params["bucket"] = sinkPtr.Bucket
+		fileServiceName = "aliyun-oss"
+	} else if sinkPtr.Type == config.SinkTypeSftp {
+		auth["port"] = strconv.FormatInt(int64(sinkPtr.Port), 10)
+		auth["host"] = sinkPtr.Host
+		auth["username"] = sinkPtr.User
+		auth["password"] = sinkPtr.Password
+		fileServiceName = "sftp"
+	}
+	return
+}
+
+func (r *rpcService) DeleteBinlogFilesBefore(ctx context.Context, request *proto.DeleteBinlogFilesBeforeRequest) (*proto.DeleteBinlogFilesBeforeResponse, error) {
+	err, params, auth, fileServiceName, sink := GetFileServiceParam(request.GetSinkName(), request.GetSinkType())
+	if err != nil {
+		return &proto.DeleteBinlogFilesBeforeResponse{Status: r.fail(err)}, nil
+	}
+	params["deadline"] = strconv.FormatInt(request.GetUnixTime(), 10)
+	pxcBinlogDir := config.GetPxcBinlogStorageDirectory(request.GetNamespace(), request.GetPxcName(), request.GetPxcUid())
+	if sink.RootPath != "" && !strings.HasPrefix(pxcBinlogDir, "/") {
+		pxcBinlogDir = filepath.Join(sink.RootPath, pxcBinlogDir)
+	}
+	expiredFiles := make([]string, 0)
+	expiredFilesPtr := &expiredFiles
+	fileService, err := remote.GetFileService(fileServiceName)
+	if err != nil {
+		r.Error(err, "Failed to get file service")
+		return &proto.DeleteBinlogFilesBeforeResponse{Status: r.fail(err)}, nil
+	}
+	ctx = context.WithValue(ctx, common.AffectedFiles, expiredFilesPtr)
+	ft, err := fileService.DeleteExpiredFile(ctx, pxcBinlogDir, auth, params)
+	if err == nil {
+		err = ft.Wait()
+	}
+	if err != nil {
+		return &proto.DeleteBinlogFilesBeforeResponse{Status: r.fail(err)}, nil
+	}
+	return &proto.DeleteBinlogFilesBeforeResponse{Status: r.ok(""), DeletedFiles: *expiredFilesPtr}, nil
+}
+
+func (r *rpcService) ListLocalBinlogList(ctx context.Context, request *proto.ListLocalBinlogListRequest) (*proto.ListLocalBinlogListResponse, error) {
+	logDir := request.GetLogDir()
+	exists, err := r.localFileService.IsExists(logDir)
+	if err != nil {
+		return &proto.ListLocalBinlogListResponse{Status: r.fail(err)}, nil
+	}
+	if !exists {
+		return &proto.ListLocalBinlogListResponse{Status: r.fail(errors.New(fmt.Sprintf("not found filepath = %s", logDir)))}, nil
+	}
+	versionFilepath := filepath.Join(logDir, backupbinlog.InfoVersionFilename)
+	versionBytes, err := os.ReadFile(versionFilepath)
+	if err != nil {
+		return &proto.ListLocalBinlogListResponse{Status: r.fail(err)}, nil
+	}
+	index := bytes.IndexByte(versionBytes, '=')
+	var version string
+	if index >= 0 {
+		version = string(versionBytes[index+1:])
+	}
+	indexFilepath := filepath.Join(logDir, backupbinlog.IndexFilename)
+	indexBytes, err := os.ReadFile(indexFilepath)
+	if err != nil {
+		return &proto.ListLocalBinlogListResponse{Status: r.fail(err)}, nil
+	}
+	indexFileContent := string(indexBytes)
+	binlogFiles := make([]string, 0, 20)
+	for _, file := range strings.Split(indexFileContent, "\n") {
+		if len(file) > 0 {
+			binlogFiles = append(binlogFiles, file)
+		}
+	}
+	return &proto.ListLocalBinlogListResponse{
+		Version:     version,
+		BinlogFiles: binlogFiles,
+		Status:      r.ok(""),
+	}, nil
+}
+
+func (r *rpcService) ListRemoteBinlogList(ctx context.Context, request *proto.ListRemoteBinlogListRequest) (*proto.ListRemoteBinlogListResponse, error) {
+	err, params, auth, fileServiceName, sink := GetFileServiceParam(request.GetSinkName(), request.GetSinkType())
+	if err != nil {
+		return &proto.ListRemoteBinlogListResponse{Status: r.fail(err)}, nil
+	}
+	fileService, err := remote.GetFileService(fileServiceName)
+	if err != nil {
+		r.Error(err, "Failed to get file service")
+		return &proto.ListRemoteBinlogListResponse{Status: r.fail(err)}, nil
+	}
+	resultFiles := make([]string, 0)
+	resultFilesPtr := &resultFiles
+	ctx = context.WithValue(ctx, common.AffectedFiles, resultFilesPtr)
+	xstoreBinlogDir := config.GetXStorePodBinlogStorageDirectory(request.GetNamespace(), request.GetPxcName(), request.GetPxcUid(), request.GetXStoreName(), request.GetXStoreUid(), request.GetPodName())
+	if sink.RootPath != "" && !strings.HasPrefix(xstoreBinlogDir, "/") {
+		xstoreBinlogDir = filepath.Join(sink.RootPath, xstoreBinlogDir)
+	}
+	params["deadline"] = strconv.FormatInt(time.Now().Unix()+3600, 10)
+	ft, err := fileService.ListAllFiles(ctx, xstoreBinlogDir, auth, params)
+	if err == nil {
+		err = ft.Wait()
+	}
+	if err != nil {
+		return &proto.ListRemoteBinlogListResponse{Status: r.fail(err)}, nil
+	}
+	return &proto.ListRemoteBinlogListResponse{Status: r.ok(""), Files: *resultFilesPtr}, nil
+	return nil, nil
 }

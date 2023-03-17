@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	. "github.com/alibaba/polardbx-operator/pkg/hpfs/common"
 	"hash"
 	"hash/crc32"
 	"io"

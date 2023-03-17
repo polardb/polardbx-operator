@@ -17,28 +17,34 @@ limitations under the License.
 package meta
 
 const (
-	LabelName                = "polardbx/name"
-	LabelRand                = "polardbx/rand"
-	LabelRole                = "polardbx/role"
-	LabelCNType              = "polardbx/cn-type"
-	LabelDNIndex             = "polardbx/dn-index"
-	LabelTopologyRule        = "polardbx/topology-rule"
-	LabelGeneration          = "polardbx/generation"
-	LabelPortLock            = "polardbx/port-lock"
-	LabelGroup               = "polardbx/group"
-	LabelHash                = "polardbx/hash"
-	LabelTopBackup           = "polardbx/top-backup"
-	LabelBackupXStore        = "polardbx/xstore"
-	LabelBackupXStoreUID     = "polardbx/xstore-uid"
-	LabelPreferredBackupNode = "polardbx/preferred-backup-node"
-	LabelBinlogPurgeLock     = "polardbx/binlogpurge-lock"
-	LabelPrimaryName         = "polardbx/primary-name"
-	LabelType                = "polardbx/type"
-	LabelAuditLog            = "polardbx/enableAuditLog"
+	LabelName            = "polardbx/name"
+	LabelUid             = "polardbx/uid"
+	LabelRand            = "polardbx/rand"
+	LabelRole            = "polardbx/role"
+	LabelCNType          = "polardbx/cn-type"
+	LabelDNIndex         = "polardbx/dn-index"
+	LabelTopologyRule    = "polardbx/topology-rule"
+	LabelGeneration      = "polardbx/generation"
+	LabelPortLock        = "polardbx/port-lock"
+	LabelGroup           = "polardbx/group"
+	LabelHash            = "polardbx/hash"
+	LabelTopBackup       = "polardbx/top-backup"
+	LabelBackupXStore    = "polardbx/xstore"
+	LabelBackupXStoreUID = "polardbx/xstore-uid"
+	LabelBinlogPurgeLock = "polardbx/binlogpurge-lock"
+	LabelPrimaryName     = "polardbx/primary-name"
+	LabelType            = "polardbx/type"
+	LabelAuditLog        = "polardbx/enableAuditLog"
+	LabelBackupSchedule  = "polardbx/backup-schedule"
+	LabelBackupBinlog    = "polardbx/backupBinlog"
+	LabelJobType         = "polardbx/jobType"
 )
+
 const (
 	SeekCpJobLabelPXCName    = "seekcp-job/pxc"
 	SeekCpJobLabelBackupName = "seekcp-job/backup"
+	// SeekCpJobLabelPodName denotes the pod on which seekcp job performed
+	SeekCpJobLabelPodName = "seekcp-job/pod"
 )
 
 const (
@@ -75,4 +81,11 @@ const (
 const (
 	TypeMaster   = "master"
 	TypeReadonly = "readonly"
+)
+
+type PxcJobType string
+
+const (
+	HeartbeatJobType         PxcJobType = "PitrHeartbeat"
+	PitrPrepareBinlogJobType PxcJobType = "PitrPrepareBinlogs"
 )

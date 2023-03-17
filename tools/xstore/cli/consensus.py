@@ -11,14 +11,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import click
 import re
 import sys
-
-import click
-import pymysql
-
 from core import channel, convention
-from core.consensus import ConsensusRole, ConsensusExtRole, ConsensusNode, SlaveStatus
+from core.consensus import ConsensusRole, ConsensusExtRole, ConsensusNode
+
 from .common import global_mgr, print_rows
 
 
@@ -254,6 +252,55 @@ def drop_learner(node):
 consensus_group.add_command(drop_learner)
 
 
+@click.command(name='learner-to-follower')
+@click.argument('node')
+def chanage_to_follower_from_learner(node):
+    shared_channel = global_mgr.shared_channel()
+    addr = _get_addr_from_argument(node, shared_channel)
+    with global_mgr.consensus_manager() as mgr:
+        mgr.upgrade_learner_to_follower(addr)
+
+
+consensus_group.add_command(chanage_to_follower_from_learner)
+
+
+@click.command(name='enable-election')
+def enable_election():
+    with global_mgr.consensus_manager() as mgr:
+        mgr.enable_follower_election()
+
+
+consensus_group.add_command(enable_election)
+
+
+@click.command(name='disable-election')
+def enable_election():
+    with global_mgr.consensus_manager() as mgr:
+        mgr.disable_follower_election()
+
+
+consensus_group.add_command(enable_election)
+
+
+@click.command(name='update-cluster-info')
+@click.argument('cluster-info')
+def update_cluster_info(cluster_info):
+    with global_mgr.consensus_manager() as mgr:
+        mgr.update_cluster_info(cluster_info)
+
+
+consensus_group.add_command(update_cluster_info)
+
+
+@click.command(name='prepare-handle-indicate')
+@click.argument('action')
+def prepare_handle_indicate(action):
+    global_mgr.engine().prepare_handle_indicate(action)
+
+
+consensus_group.add_command(prepare_handle_indicate)
+
+
 @click.command(name='slave-status')
 def show_status():
     with global_mgr.consensus_manager() as mgr:
@@ -265,12 +312,29 @@ def show_status():
             'slave_sql_running',
             'slave_sql_running_state',
             'seconds_behind_master',
+            'last_errno',
+            'last_error',
+            'last_io_errno',
+            'last_io_error',
+            'last_sql_errno',
+            'last_sql_error'
         ), rows=[(slave_status.relay_log_file, slave_status.relay_log_pos, slave_status.slave_io_running,
                   slave_status.slave_sql_running, slave_status.slave_sql_running_state,
-                  slave_status.seconds_behind_master)])
+                  slave_status.seconds_behind_master, slave_status.last_errno, slave_status.last_error,
+                  slave_status.last_io_errno, slave_status.last_io_error, slave_status.last_sql_errno,
+                  slave_status.last_sql_error)])
 
 
 consensus_group.add_command(show_status)
+
+
+@click.command(name='set-readonly')
+def set_readonly():
+    with global_mgr.consensus_manager() as mgr:
+        mgr.set_readonly()
+
+
+consensus_group.add_command(set_readonly)
 
 
 @click.group(name='log')

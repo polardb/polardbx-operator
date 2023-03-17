@@ -11,9 +11,10 @@ images:
   probeProxy: probe-proxy
   polardbxExporter: polardbx-exporter
   polardbxInit: polardbx-init
+  polardbxJob: polardbx-job
 
 # Default image tag. Use app version if not specified or 'latest' if useLatestImage is true.
-imageTag:
+imageTag: v1.4.0-beta
 
 # Uses the latest images for operator components.
 useLatestImage: false
@@ -28,9 +29,9 @@ imagePullSecrets:
 clusterDefaults:
   version: latest
   images:
-    galaxysql: galaxysql
-    galaxyengine: galaxyengine
-    galaxycdc: galaxycdc
+    galaxysql: polardbx-sql
+    galaxyengine: polardbx-engine
+    galaxycdc: polardbx-cdc
 
 # Configuration of Kubernetes hosts.
 node:
@@ -99,7 +100,7 @@ hostPathFileService:
   sinks:
     - name: default
       type: oss
-      endpoint: xxx 
+      endpoint: xxx
       accessKey: xxx
       accessSecret: xxxxx
       bucket: xxx

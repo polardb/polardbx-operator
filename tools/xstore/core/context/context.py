@@ -77,6 +77,7 @@ class Context(object):
         self.mysql_conf = os.path.join(self._volumes['data'], 'conf')
         self.mycnf_path = os.path.join(self.mysql_conf, 'my.cnf')
         self.mycnf_override_path = os.path.join(self.mysql_conf, 'dynamic.cnf')
+        self.file_config_override = os.path.join(self._volumes[convention.VOLUME_CONFIG], 'my.cnf.override')
         if self.is_galaxy80():
             self.mycnf_template_path = os.path.join(self._tools_home, 'core/engine/galaxy/templates', 'my.cnf')
         elif self.is_xcluster57():

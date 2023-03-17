@@ -35,12 +35,17 @@ engine_group.add_command(version)
 
 
 @click.command(name='parameter')
-@click.option('-k', '--key', required=True, type=str)
-@click.option('-v', '--value', required=True, type=str)
+@click.option('-k', '--key', required=True, multiple=True)
+@click.option('-v', '--value', required=True, multiple=True)
 def set_global(key, value):
     with global_mgr.new_connection() as conn:
         with conn.cursor() as cur:
-            cmd = "SET GLOBAL " + key + " = " + value
+            cmd = "SET GLOBAL "
+            n = 0
+            for k in key:
+                cmd += k + " = " + value[n] + ", "
+                n += 1
+            cmd = cmd[0:-2]
             cur.execute(cmd)
         conn.commit()
 

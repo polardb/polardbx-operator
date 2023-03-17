@@ -53,6 +53,7 @@ type ShowSlaveStatusResult struct {
 	SlaveIORunning       string
 	SlaveSQLRunning      string
 	SalveSqlRunningState string
+	LastSqlError         string
 	SecondsBehindMaster  float64
 }
 
@@ -80,9 +81,10 @@ func ShowSlaveStatus(rc *xstorev1reconcile.Context, pod *corev1.Pod, logger logr
 	if err != nil {
 		return nil, err
 	}
-	secondsBehindMaster, err := strconv.ParseFloat(strings.TrimSpace(oneParsedResult["seconds_behind_master"].(string)), 64)
+	var secondsBehindMaster float64
+	secondsBehindMaster, err = strconv.ParseFloat(strings.TrimSpace(oneParsedResult["seconds_behind_master"].(string)), 64)
 	if err != nil {
-		return nil, err
+		secondsBehindMaster = -1
 	}
 	showSlaveStatusResult := ShowSlaveStatusResult{
 		RelayLogFile:         strings.TrimSpace(oneParsedResult["relay_log_file"].(string)),
@@ -90,6 +92,7 @@ func ShowSlaveStatus(rc *xstorev1reconcile.Context, pod *corev1.Pod, logger logr
 		SlaveIORunning:       strings.TrimSpace(oneParsedResult["slave_io_running"].(string)),
 		SlaveSQLRunning:      strings.TrimSpace(oneParsedResult["slave_sql_running"].(string)),
 		SalveSqlRunningState: strings.TrimSpace(oneParsedResult["slave_sql_running_state"].(string)),
+		LastSqlError:         strings.TrimSpace(oneParsedResult["last_sql_error"].(string)),
 		SecondsBehindMaster:  secondsBehindMaster,
 	}
 	return &showSlaveStatusResult, nil
@@ -544,5 +547,82 @@ var DropLearnerOnLeader = xstorev1reconcile.NewStepBinder("DropLearnerOnLeader",
 		}
 
 		return flow.Continue("Learner nodes deleted.")
+	},
+)
+
+func DisableElectionByPod(rc *xstorev1reconcile.Context, pod *corev1.Pod, logger logr.Logger) error {
+	cmd := xstoreexec.NewCanonicalCommandBuilder().Consensus().DisableElection().Build()
+	err := rc.ExecuteCommandOn(pod, "engine", cmd, control.ExecOptions{
+		Logger: logger,
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func EnableElectionByPod(rc *xstorev1reconcile.Context, pod *corev1.Pod, logger logr.Logger) error {
+	cmd := xstoreexec.NewCanonicalCommandBuilder().Consensus().EnableElection().Build()
+	err := rc.ExecuteCommandOn(pod, "engine", cmd, control.ExecOptions{
+		Logger: logger,
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+var DisableElection = xstorev1reconcile.NewStepBinder("DisableElection",
+	func(rc *xstorev1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+
+		pods, err := rc.GetXStorePods()
+		if err != nil {
+			return flow.RetryErr(err, "Failed to get pods")
+		}
+		leaderPod, err := GetLeaderPod(rc, flow.Logger(), true)
+		if err != nil || leaderPod == nil {
+			return flow.RetryErr(err, "Failed to get leader pod")
+		}
+		var execErr error
+		var errPodName string
+		for _, pod := range pods {
+			if pod.Name == leaderPod.Name {
+				continue
+			}
+			currentExecErr := DisableElectionByPod(rc, &pod, flow.Logger())
+			if currentExecErr != nil {
+				execErr = currentExecErr
+				errPodName = pod.Name
+			}
+		}
+		if execErr != nil {
+			return flow.RetryErr(execErr, "Failed to disable election", "pod", errPodName)
+		}
+
+		return flow.Continue("Disable Election Success.")
+	},
+)
+
+var EnableElection = xstorev1reconcile.NewStepBinder("EnableElection",
+	func(rc *xstorev1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+
+		pods, err := rc.GetXStorePods()
+		if err != nil {
+			return flow.RetryErr(err, "Failed to get pods")
+		}
+		var execErr error
+		var errPodName string
+		for _, pod := range pods {
+			currentExecErr := EnableElectionByPod(rc, &pod, flow.Logger())
+			if currentExecErr != nil {
+				execErr = currentExecErr
+				errPodName = pod.Name
+			}
+		}
+		if execErr != nil {
+			return flow.RetryErr(execErr, "Failed to enable election", "pod", errPodName)
+		}
+
+		return flow.Continue("Enable Election Success.")
 	},
 )

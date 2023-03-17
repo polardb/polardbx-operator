@@ -20,20 +20,16 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/alibaba/polardbx-operator/test/framework/polardbxparameter"
 
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
-
-	"k8s.io/client-go/util/homedir"
-
 	polardbxmeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/meta"
 	v1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	"k8s.io/client-go/rest"
 
 	"github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
@@ -936,18 +932,12 @@ func (e *Expectation) ExpectDNParameterPersistenceOk(expectedParams map[string]s
 	localPort := local.AcquireLocalPort()
 	defer local.ReleaseLocalPort(localPort)
 
-	home := homedir.HomeDir()
-	kubeconfig := filepath.Join(home, ".kube", "config")
-
-	cfg, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
-	if err != nil {
-		common.ExpectNoError(err, "could not get config")
+	cfg := framework.TestContext.KubeConfig
+	if cfg == nil {
+		common.ExpectNoError(errors.New("could not get config"))
 	}
 
 	setKubeConfig(cfg)
-
-	//cfg, err := rest.InClusterConfig()
-	//common.ExpectNoError(err, "not connectable")
 
 	clientset, err := kubernetes.NewForConfig(cfg)
 	common.ExpectNoError(err, "not connectable")

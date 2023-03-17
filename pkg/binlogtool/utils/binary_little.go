@@ -37,6 +37,6 @@ func ReadNumberLittleEndianHack[T constraints.Integer | constraints.Float](data 
 	*data = (*(*[]T)(unsafe.Pointer(&bs)))[0]
 }
 
-func ReadNumberBigEndianHack[T constraints.Integer | constraints.Float](data *T, bs []byte) {
+func ReadNumberBigEndianHack[T constraints.Integer](data *T, bs []byte) {
 	ReadNumber(binary.BigEndian, data, bs)
 }

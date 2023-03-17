@@ -98,7 +98,7 @@ type XStoreTemplate struct {
 	// +optional
 	ServiceType corev1.ServiceType `json:"serviceType,omitempty"`
 
-	// +kubebuilder:default=true
+	// +kubebuilder:default=false
 
 	// HostNetwork mode.
 	// +optional

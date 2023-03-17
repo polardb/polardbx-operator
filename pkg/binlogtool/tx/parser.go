@@ -1,5 +1,3 @@
-//go:build polardbx
-
 /*
 Copyright 2022 Alibaba Group Holding Limited.
 
@@ -221,6 +219,9 @@ func (s *transactionEventParser) processOne(h EventHandler) error {
 			}
 
 		case spec.XID_EVENT:
+			if txLogTableWriteRowsEvent == nil {
+				return nil
+			}
 			beginEv, prepareEv, commitEv := &Event{
 				Raw:    beginQueryEvent,
 				File:   beginQueryEventOffset.File,
@@ -264,6 +265,7 @@ func (s *transactionEventParser) processOne(h EventHandler) error {
 			if bytes.Equal(queryEvent.Query, []byte("BEGIN")) {
 				beginQueryEvent = logEvent
 				beginQueryEventOffset = offset
+				txLogTableWriteRowsEvent = nil
 			} else {
 				xid, t, err := ParseXIDAndType(queryEvent.Query)
 				if err != nil {

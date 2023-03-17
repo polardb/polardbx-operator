@@ -14,17 +14,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package backup
+package common
 
 import (
-	xstorev1 "github.com/alibaba/polardbx-operator/api/v1"
+	polardbxv1 "github.com/alibaba/polardbx-operator/api/v1"
 	k8shelper "github.com/alibaba/polardbx-operator/pkg/k8s/helper"
+	"github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/meta"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/command"
-	xstoremeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/meta"
-	"github.com/alibaba/polardbx-operator/pkg/util"
+	"github.com/alibaba/polardbx-operator/pkg/util/name"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/utils/pointer"
 )
 
@@ -52,14 +53,14 @@ func replaceSystemEnvs(podSpec *corev1.PodSpec, targetPod *corev1.Pod) {
 	}
 }
 
-func patchTaskConfigMapVolumeAndVolumeMounts(xstoreBackup *xstorev1.XStoreBackup, podSpec *corev1.PodSpec) {
+func patchTaskConfigMapVolumeAndVolumeMounts(polardbxBackup *polardbxv1.PolarDBXBackup, podSpec *corev1.PodSpec) {
 	podSpec.Volumes = k8shelper.PatchVolumes(podSpec.Volumes, []corev1.Volume{
 		{
-			Name: "backup",
+			Name: "seekcp",
 			VolumeSource: corev1.VolumeSource{
 				ConfigMap: &corev1.ConfigMapVolumeSource{
 					LocalObjectReference: corev1.LocalObjectReference{
-						Name: util.XStoreBackupStableName(xstoreBackup, "backup"),
+						Name: name.PolarDBXBackupStableName(polardbxBackup, "seekcp"),
 					},
 				},
 			},
@@ -70,15 +71,15 @@ func patchTaskConfigMapVolumeAndVolumeMounts(xstoreBackup *xstorev1.XStoreBackup
 		c := &podSpec.Containers[i]
 		c.VolumeMounts = k8shelper.PatchVolumeMounts(c.VolumeMounts, []corev1.VolumeMount{
 			{
-				Name:      "backup",
+				Name:      "seekcp",
 				ReadOnly:  true,
-				MountPath: "/backup",
+				MountPath: "/seekcp",
 			},
 		})
 	}
 }
 
-func newBackupJob(xstoreBackup *xstorev1.XStoreBackup, targetPod *corev1.Pod, jobName string) (*batchv1.Job, error) {
+func newSeekCpJob(pxcBackup *polardbxv1.PolarDBXBackup, targetPod *corev1.Pod) (*batchv1.Job, error) {
 	podSpec := targetPod.Spec.DeepCopy()
 	podSpec.InitContainers = nil
 	podSpec.RestartPolicy = corev1.RestartPolicyNever
@@ -87,30 +88,30 @@ func newBackupJob(xstoreBackup *xstorev1.XStoreBackup, targetPod *corev1.Pod, jo
 	podSpec.Containers = []corev1.Container{
 		*k8shelper.GetContainerFromPodSpec(podSpec, "engine"),
 	}
-	podSpec.Containers[0].Name = "backupjob"
+	podSpec.Containers[0].Name = "seekcpjob"
 
-	podSpec.Containers[0].Command = command.NewCanonicalCommandBuilder().Backup().
-		StartBackup("/backup/backup", jobName).Build()
+	podSpec.Containers[0].Command = command.NewCanonicalCommandBuilder().Seekcp().
+		StartSeekcp("/seekcp/seekcp").Build()
 	podSpec.Containers[0].Resources.Limits = nil
 	podSpec.Containers[0].Resources.Requests = nil
 	podSpec.Containers[0].Ports = nil
 
-	podSpec.Containers[0].StartupProbe = nil
-	podSpec.Containers[0].LivenessProbe = nil
-	podSpec.Containers[0].ReadinessProbe = nil
-
 	// Replace system envs
 	replaceSystemEnvs(podSpec, targetPod)
-	patchTaskConfigMapVolumeAndVolumeMounts(xstoreBackup, podSpec)
+	patchTaskConfigMapVolumeAndVolumeMounts(pxcBackup, podSpec)
 
+	jobName := name.NewSplicedName(
+		name.WithTokens("seekcp", "job", pxcBackup.Name, rand.String(4)),
+		name.WithPrefix("seekcp-job"),
+	)
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
-			Namespace: xstoreBackup.Namespace,
+			Namespace: pxcBackup.Namespace,
 			Labels: map[string]string{
-				xstoremeta.JobLabelTargetPod:      targetPod.Name,
-				xstoremeta.JobLabelTargetNodeName: targetPod.Spec.NodeName,
-				xstoremeta.LabelXStoreBackupName:  xstoreBackup.Name,
+				meta.SeekCpJobLabelBackupName: pxcBackup.Name,
+				meta.SeekCpJobLabelPXCName:    pxcBackup.Spec.Cluster.Name,
+				meta.SeekCpJobLabelPodName:    targetPod.Name,
 			},
 		},
 		Spec: batchv1.JobSpec{
@@ -118,9 +119,9 @@ func newBackupJob(xstoreBackup *xstorev1.XStoreBackup, targetPod *corev1.Pod, jo
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
-						xstoremeta.JobLabelTargetPod:      targetPod.Name,
-						xstoremeta.JobLabelTargetNodeName: targetPod.Spec.NodeName,
-						xstoremeta.LabelXStoreBackupName:  xstoreBackup.Name,
+						meta.SeekCpJobLabelBackupName: pxcBackup.Name,
+						meta.SeekCpJobLabelPXCName:    pxcBackup.Spec.Cluster.Name,
+						meta.SeekCpJobLabelPodName:    targetPod.Name,
 					},
 				},
 				Spec: *podSpec,

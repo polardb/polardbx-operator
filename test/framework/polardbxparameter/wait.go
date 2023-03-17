@@ -59,6 +59,20 @@ func WaitForMyConfOverrideUpdates(clientset kubernetes.Interface, config *restcl
 		s := strings.ReplaceAll(stdout.String(), " ", "")
 		configs := strings.Split(s, "\n")
 
+		stdout, stderr = new(bytes.Buffer), new(bytes.Buffer)
+		err = ExecCmd(clientset, config, &pod, ns, "cat /data/config/my.cnf.override.version", nil, stdout, stderr)
+		if err != nil {
+			return false, nil
+		}
+		newVersion := stdout.String()
+
+		stdout, stderr = new(bytes.Buffer), new(bytes.Buffer)
+		err = ExecCmd(clientset, config, &pod, ns, "cat /data/mysql/conf/my.cnf.override.version", nil, stdout, stderr)
+		if err != nil {
+			return false, nil
+		}
+		oldVersion := stdout.String()
+
 		nowConfigs := make(map[string]string)
 		for _, config := range configs {
 			if config == "" || config[0] == '[' {
@@ -71,7 +85,7 @@ func WaitForMyConfOverrideUpdates(clientset kubernetes.Interface, config *restcl
 		}
 
 		for k, v := range expectedParams {
-			if nowConfigs[k] == v {
+			if nowConfigs[k] == v && newVersion == oldVersion {
 				return true, nil
 			}
 		}

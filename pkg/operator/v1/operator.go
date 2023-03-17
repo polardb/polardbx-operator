@@ -18,6 +18,7 @@ package v1
 
 import (
 	"context"
+	systemtaskv1controllers "github.com/alibaba/polardbx-operator/pkg/operator/v1/systemtask/controllers"
 	"os"
 
 	promv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
@@ -162,6 +163,36 @@ func setupPolarDBXControllers(opts controllerOptions) error {
 		return err
 	}
 
+	systemTaskReconciler := systemtaskv1controllers.SystemTaskReconciler{
+		BaseRc:         opts.BaseReconcileContext,
+		LoaderFactory:  opts.LoaderFactory,
+		Logger:         ctrl.Log.WithName("controller").WithName("polardbxsystemtask"),
+		MaxConcurrency: opts.opts.MaxConcurrentReconciles,
+	}
+	if err := systemTaskReconciler.SetupWithManager(opts.Manager); err != nil {
+		return err
+	}
+
+	polardbxBackupBinlogReconciler := polardbxv1controllers.PolarDBXBackupBinlogReconciler{
+		BaseRc:         opts.BaseReconcileContext,
+		LoaderFactory:  opts.LoaderFactory,
+		Logger:         ctrl.Log.WithName("controller").WithName("polardbxbackupbinlog"),
+		MaxConcurrency: opts.opts.MaxConcurrentReconciles,
+	}
+	if err := polardbxBackupBinlogReconciler.SetupWithManager(opts.Manager); err != nil {
+		return err
+	}
+
+	backupScheduleReconciler := polardbxv1controllers.PolarDBXBackupScheduleReconciler{
+		BaseRc:         opts.BaseReconcileContext,
+		LoaderFactory:  opts.LoaderFactory,
+		Logger:         ctrl.Log.WithName("controller").WithName("polardbxbackupschedule"),
+		MaxConcurrency: opts.opts.MaxConcurrentReconciles,
+	}
+	if err := backupScheduleReconciler.SetupWithManager(opts.Manager); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -211,12 +242,12 @@ func setupXStoreBackupControllers(opts controllerOptions) error {
 // to handle signals correctly. The second parameter opts defines the configurable options of controllers.
 //
 // Currently, these controllers are included:
-//   1. Controller for PolarDBXCluster (v1)
-//   2. Controller for XStore (v1)
-//   3. Controllers for PolarDBXBackup, PolarDBXBinlogBackup (v1)
-//   4. Controllers for XStoreBackup, XStoreBinlogBackup (v1)
-//   5. Controllers for PolarDBXBackupSchedule, PolarDBXBinlogBackupSchedule (v1)
-//   6. Controllers for PolarDBXParameter (v1)
+//  1. Controller for PolarDBXCluster (v1)
+//  2. Controller for XStore (v1)
+//  3. Controllers for PolarDBXBackup, PolarDBXBinlogBackup (v1)
+//  4. Controllers for XStoreBackup, XStoreBinlogBackup (v1)
+//  5. Controllers for PolarDBXBackupSchedule, PolarDBXBinlogBackupSchedule (v1)
+//  6. Controllers for PolarDBXParameter (v1)
 func Start(ctx context.Context, opts Options) {
 	// Start instruction loader.
 	hint.StartLoader(ctx)
@@ -317,7 +348,7 @@ func Start(ctx context.Context, opts Options) {
 		}
 	} else {
 		// Defaults ot setup on manager.
-		err = webhook.SetupWebhooks(ctx, mgr, opts.ConfigPath)
+		err = webhook.SetupWebhooks(ctx, mgr, opts.ConfigPath, configLoaderFactory())
 		if err != nil {
 			setupLog.Error(err, "Unable to setup webhooks...")
 			os.Exit(1)

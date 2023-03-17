@@ -11,10 +11,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import time
 
 import click
 
 from .common import global_mgr
+from .utils import timer
+from core.config.mysql import MySQLConfigManager
 
 
 @click.group(name='myconfig')
@@ -23,8 +26,17 @@ def my_config_group():
 
 
 @click.command(name='update')
+@timer.timeout(300)
 def update():
-    global_mgr.engine().update_config()
+    while True:
+        bigger_version = MySQLConfigManager.check_config_version(
+            global_mgr.engine().file_config_version,
+            global_mgr.engine().file_config_override_version,
+        )
+        if bigger_version:
+            global_mgr.engine().update_config()
+            break
+        time.sleep(1)
 
 
 my_config_group.add_command(update)

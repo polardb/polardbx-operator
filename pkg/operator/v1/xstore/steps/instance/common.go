@@ -563,6 +563,18 @@ var UpdateXStoreConfigMap = xstorev1reconcile.NewStepBinder("UpdateXStoreConfigM
 
 		templateCm.Data[convention.ConfigMyCnfOverride] = iniutil.ToString(mycnfOverrride)
 
+		mycnfVersion := templateCm.Data["my.cnf.override.version"]
+		if mycnfVersion == "" {
+			templateCm.Data["my.cnf.override.version"] = "1"
+		} else {
+			version, err := strconv.Atoi(mycnfVersion)
+			if err != nil {
+				return flow.Error(err, "Unable to get version of my.cnf.override.")
+			}
+			version = version + 1
+			templateCm.Data["my.cnf.override.version"] = strconv.Itoa(version)
+		}
+
 		// Update config map.
 		err = rc.Client().Update(rc.Context(), templateCm)
 		if err != nil {

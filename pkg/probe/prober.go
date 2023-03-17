@@ -21,8 +21,10 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -36,6 +38,7 @@ const (
 	TypePolarDBX = "polardbx"
 	TypeXStore   = "xstore"
 	TypeSelf     = "server"
+	TypeCdc      = "cdc"
 )
 
 type Prober struct {
@@ -54,7 +57,7 @@ type Prober struct {
 
 func (p *Prober) valid() bool {
 	for _, t := range []string{
-		TypePolarDBX, TypeXStore, TypeSelf,
+		TypePolarDBX, TypeXStore, TypeSelf, TypeCdc,
 	} {
 		if p.target == t {
 			return true
@@ -134,6 +137,25 @@ func (p *Prober) ping() error {
 	return p.db.PingContext(p.ctx)
 }
 
+func (p *Prober) cdcConnect() error {
+	httpClient := http.Client{Timeout: p.timeout}
+	url := fmt.Sprintf("http://%s:%d/status", p.host, p.port)
+	resp, err := httpClient.Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	bodyStr := strings.ToUpper(strings.TrimSpace(string(body)))
+	if bodyStr != "OK" {
+		return fmt.Errorf("unhealthy status body=%s , url=%s", bodyStr, url)
+	}
+	return nil
+}
+
 func (p *Prober) Liveness() error {
 	switch p.target {
 	case TypeXStore, TypePolarDBX:
@@ -149,6 +171,8 @@ func (p *Prober) Liveness() error {
 		}
 
 		return p.ping()
+	case TypeCdc:
+		return p.cdcConnect()
 	case TypeSelf:
 		return nil
 	default:

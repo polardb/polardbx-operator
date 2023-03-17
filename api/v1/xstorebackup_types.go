@@ -17,14 +17,17 @@ limitations under the License.
 package v1
 
 import (
+	"github.com/alibaba/polardbx-operator/api/v1/polardbx"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
 type XStoreReference struct {
-	Name string `json:"name,omitempty"`
+	Name string    `json:"name,omitempty"`
+	UID  types.UID `json:"uid,omitempty"`
 }
 
 // XStoreBackupSpec defines the desired state of XStoreBackup
@@ -33,13 +36,24 @@ type XStoreBackupSpec struct {
 
 	// Engine is the engine used by xstore. Default is "galaxy".
 	// +optional
-	Engine   string          `json:"engine,omitempty"`
-	XStore   XStoreReference `json:"xstore,omitempty"`
-	Timezone string          `json:"timezone,omitempty"`
+	Engine string `json:"engine,omitempty"`
+
+	XStore XStoreReference `json:"xstore,omitempty"`
+
+	Timezone string `json:"timezone,omitempty"`
+
 	// RetentionTime defines how long will this backup set be kept
 	RetentionTime metav1.Duration `json:"retentionTime,omitempty"`
+
 	// StorageProvider defines backup storage configuration
-	StorageProvider BackupStorageProvider `json:"storageProvider,omitempty"`
+	StorageProvider polardbx.BackupStorageProvider `json:"storageProvider,omitempty"`
+
+	// +kubebuilder:default=follower
+	// +kubebuilder:validation:Enum=leader;follower
+
+	// PreferredBackupRole defines the role of node on which backup will happen
+	// +optional
+	PreferredBackupRole string `json:"preferredBackupRole,omitempty"`
 }
 
 // XStoreBackupStatus defines the observed state of XStoreBackup
@@ -50,7 +64,7 @@ type XStoreBackupStatus struct {
 	TargetPod   string            `json:"targetPod,omitempty"`
 	CommitIndex int64             `json:"commitIndex,omitempty"`
 	// StorageName represents the kind of Storage
-	StorageName BackupStorage `json:"storageName,omitempty"`
+	StorageName polardbx.BackupStorage `json:"storageName,omitempty"`
 	// BackupRootPath stores the root path of backup set
 	BackupRootPath string `json:"backupRootPath,omitempty"`
 	// BackupSetTimestamp records timestamp of last event included in tailored binlog
@@ -66,6 +80,7 @@ const (
 	XStoreBinlogBackuping  XStoreBackupPhase = "Binloging"
 	XStoreBinlogWaiting    XStoreBackupPhase = "Waiting"
 	XStoreBackupFinished   XStoreBackupPhase = "Finished"
+	XStoreBackupDummy      XStoreBackupPhase = "Dummy"
 )
 
 // +kubebuilder:object:root=true

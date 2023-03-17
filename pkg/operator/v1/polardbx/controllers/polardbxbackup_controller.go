@@ -22,6 +22,7 @@ import (
 	"github.com/alibaba/polardbx-operator/pkg/k8s/control"
 	"github.com/alibaba/polardbx-operator/pkg/operator/hint"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/config"
+	"github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/meta"
 	polardbxreconcile "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/reconcile"
 	commonsteps "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/steps/backup/common"
 	"github.com/go-logr/logr"
@@ -45,7 +46,7 @@ type PolarDBXBackupReconciler struct {
 }
 
 func (r *PolarDBXBackupReconciler) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
-	log := r.Logger.WithValues("namespace", request.Namespace, "polardbxcluster", request.Name)
+	log := r.Logger.WithValues("namespace", request.Namespace, "polardbxbackup", request.Name)
 
 	if hint.IsNamespacePaused(request.Namespace) {
 		log.Info("Reconciling is paused, skip")
@@ -73,6 +74,12 @@ func (r *PolarDBXBackupReconciler) Reconcile(ctx context.Context, request reconc
 		Namespace: request.Namespace,
 		Name:      polardbxBackup.Spec.Cluster.Name,
 	})
+
+	// check whether backup is dummy
+	if polardbxBackup.Annotations[meta.AnnotationDummyBackup] == "true" {
+		log.Info("Dummy polardbx backup, skip")
+		return reconcile.Result{}, nil
+	}
 
 	return r.reconcile(rc, polardbxBackup, log)
 }
@@ -114,6 +121,12 @@ func (r *PolarDBXBackupReconciler) newReconcileTask(rc *polardbxreconcile.Contex
 	case polardbxv1.BinlogBackuping:
 		commonsteps.WaitAllBinlogJobFinished(task)
 		commonsteps.SavePXCSecrets(task)
+		commonsteps.TransferPhaseTo(polardbxv1.MetadataBackuping, false)(task)
+	case polardbxv1.MetadataBackuping:
+		// In order to mitigate effect of cache, avoiding duplicate uploads
+		defer control.ScheduleAfter(10*time.Second)(task, true)
+
+		commonsteps.UploadClusterMetadata(task)
 		commonsteps.TransferPhaseTo(polardbxv1.BackupFinished, false)(task)
 	case polardbxv1.BackupFinished:
 		commonsteps.UnLockXStoreBinlogPurge(task)
@@ -121,6 +134,7 @@ func (r *PolarDBXBackupReconciler) newReconcileTask(rc *polardbxreconcile.Contex
 		commonsteps.RemoveBackupOverRetention(task)
 		log.Info("Finished phase.")
 	case polardbxv1.BackupFailed:
+		commonsteps.UnLockXStoreBinlogPurge(task)
 		commonsteps.DeleteBackupJobsOnFailure(task)
 		log.Info("Failed phase.")
 	default:
@@ -142,8 +156,8 @@ func (r *PolarDBXBackupReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			MaxConcurrentReconciles: r.MaxConcurrency,
 			RateLimiter: workqueue.NewMaxOfRateLimiter(
 				workqueue.NewItemExponentialFailureRateLimiter(5*time.Millisecond, 300*time.Second),
-				// 10 qps, 100 bucket size.  This is only for retry speed. It's only the overall factor (not per item).
-				&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
+				// 60 qps, 10 bucket size.  This is only for retry speed. It's only the overall factor (not per item).
+				&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(60), 10)},
 			),
 		}).
 		For(&polardbxv1.PolarDBXBackup{}).

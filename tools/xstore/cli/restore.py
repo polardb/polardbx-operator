@@ -16,6 +16,7 @@ import collections
 import configparser
 import fcntl
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -29,7 +30,8 @@ from core.convention import *
 from core.context.mycnf_renderer import MycnfRenderer
 from core.backup_restore.storage.filestream_client import FileStreamClient, BackupStorage
 from core.backup_restore.utils import check_run_process
-
+import wget
+import requests
 
 RESTORE_TEMP_DIR = "/data/mysql/restore"
 CONN_TIMEOUT = 30
@@ -53,6 +55,9 @@ def start(restore_context):
         binlog_dir_path = params["binlogDirPath"]
         storage_name = params["storageName"]
         sink = params["sink"]
+        pitr_endpoint = params["pitrEndpoint"] if "pitrEndpoint" in params else ""
+        pitr_xstore = params["pitrXStore"] if "pitrXStore" in params else ""
+
     logger.info('start restore: backup_file_path=%s' % backup_file_path)
 
     context = Context()
@@ -75,7 +80,8 @@ def start(restore_context):
 
     apply_backup_file(context, logger)
 
-    mysql_bin_list = download_binlogbackup_file(binlog_dir_path, filestream_client, logger)
+    mysql_bin_list = download_binlogbackup_file(binlog_dir_path, filestream_client, logger) if len(
+        pitr_endpoint) == 0 else download_pitr_binloglist(pitr_endpoint, pitr_xstore, logger)
 
     copy_binlog_to_new_path(mysql_bin_list, context, logger)
 
@@ -144,6 +150,24 @@ def download_binlogbackup_file(binlog_dir_path, filestream_client, logger):
     return mysql_binlog_list
 
 
+def download_pitr_binloglist(pitrEndpoint, xstore, logger):
+    binlogListUrl = "/".join([pitrEndpoint, "binlogs"]) + ("?xstore=%s" % xstore)
+    response = requests.get(binlogListUrl)
+    mysql_binlog_list = []
+    if response.status_code == 200:
+        logger.info("binlogs http response %s" % response.content)
+        binlogs = json.loads(response.content)
+        for binlog in binlogs:
+            mysql_binlog_list.append(binlog['filename'])
+    else:
+        raise Exception("failed to get binlogs url = %s" % binlogListUrl)
+    for binlog in mysql_binlog_list:
+        downloadUrl = "/".join([pitrEndpoint, "download", "binlog"]) + ("?xstore=%s" % xstore) + "&" + (
+                "filename=%s" % binlog)
+        wget.download(downloadUrl, os.path.join(RESTORE_TEMP_DIR, binlog))
+    return mysql_binlog_list
+
+
 def copy_binlog_to_new_path(mysql_bin_list, context, logger):
     # copy backup binlog to new binlog path
     log_dir = context.volume_path(VOLUME_DATA, "log")
@@ -199,8 +223,15 @@ def initialize_local_mycnf(context: Context, logger):
         override_config = configparser.ConfigParser(allow_no_value=True)
         override_config.read(context.mycnf_override_path)
 
+        overrides = [context.mycnf_system_config(), override_config]
+        if os.path.exists(context.file_config_override):
+            # override file has the highest priority
+            override_file_config = configparser.ConfigParser(allow_no_value=True)
+            override_file_config.read(context.file_config_override)
+            overrides += [override_file_config]
+
         r = MycnfRenderer(context.mycnf_template_path)
-        r.render(extras=[context.mycnf_system_config(), override_config], fp=mycnf_file)
+        r.render(extras=overrides, fp=mycnf_file)
 
         # Release the lock
         fcntl.flock(mycnf_file.fileno(), fcntl.LOCK_UN)
@@ -212,8 +243,8 @@ def apply_backup_file(context, logger):
     apply_backup_cmd = ""
     if context.is_galaxy80():
         apply_backup_cmd = "%s --defaults-file=%s --prepare --target-dir=%s 2> %s/applybackup.log" \
-                       % (context.xtrabackup, context.mycnf_path, context.volume_path(VOLUME_DATA, 'data'),
-                          context.volume_path(VOLUME_DATA, "log"))
+                           % (context.xtrabackup, context.mycnf_path, context.volume_path(VOLUME_DATA, 'data'),
+                              context.volume_path(VOLUME_DATA, "log"))
     elif context.is_xcluster57():
         apply_backup_cmd = "%s --defaults-file=%s --apply-log  %s 2> %s/applybackup.log" \
                            % (context.xtrabackup, context.mycnf_path, context.volume_path(VOLUME_DATA, 'data'),

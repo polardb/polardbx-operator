@@ -40,6 +40,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type JobContext struct {
@@ -74,23 +75,18 @@ var (
 		JobTaskInitLogger:          JobArgInitLoggerFunc,
 	}
 	BackupToolBinFilePaths = map[string]string{
-		"xcluster":    XClusterBackupBinFilepath,
 		galaxy.Engine: GalaxyEngineBackupBinFilepath,
 	}
 	BackupSetPrepareArgs = map[string]string{
-		"xcluster":    XClusterBackupSetPrepareArg,
 		galaxy.Engine: GalaxyEngineBackupSetPrepareArg,
 	}
-	BackupSlaveInfoArgs = map[string]string{
-		"xcluster":    XClusterBackupSlaveInfoArgs,
-		galaxy.Engine: GalaxyEngineBackupSlaveInfoArgs,
+	BackupExtraArgs = map[string]string{
+		galaxy.Engine: GalaxyEngineBackupExtraArgs,
 	}
 	BackupStreamTypeArgs = map[string]string{
-		"xcluster":    XClusterBackupStreamArgs,
 		galaxy.Engine: GalaxyEngineBackupStreamArgs,
 	}
 	TargetDirArgs = map[string]string{
-		"xcluster":    XClusterTargetDirArgs,
 		galaxy.Engine: GalaxyEngineTargetDirArgs,
 	}
 )
@@ -130,7 +126,7 @@ func JobCommandInitLoggerFunc(ctx JobContext) []string {
 func JobArgBackupFunc(ctx JobContext) []string {
 	return []string{
 		"-c",
-		"touch /tmp/rebuild.log && tail -f /tmp/rebuild.log & " + BackupToolBinFilePaths[ctx.engine] + " --defaults-file=/data/mysql/conf/my.cnf --backup " + BackupSlaveInfoArgs[ctx.engine] + " --user=root --socket='/data/mysql/run/mysql.sock' " + BackupStreamTypeArgs[ctx.engine] + " " + TargetDirArgs[ctx.engine] + "/tmp/backup 2>/tmp/rebuild.log " +
+		"touch /tmp/rebuild.log && tail -f /tmp/rebuild.log & " + BackupToolBinFilePaths[ctx.engine] + " --defaults-file=/data/mysql/conf/my.cnf --backup " + BackupExtraArgs[ctx.engine] + " --user=root --socket='/data/mysql/run/mysql.sock' " + BackupStreamTypeArgs[ctx.engine] + " " + TargetDirArgs[ctx.engine] + "/tmp/backup 2>/tmp/rebuild.log " +
 			"| /tools/xstore/current/bin/polardbx-filestream-client " + BackupStreamTypeArgs[ctx.engine] + " --meta.action=uploadRemote " + fmt.Sprintf(" --meta.instanceId='%s' ", GetFileStreamInstanceId(ctx.otherPod)) +
 			fmt.Sprintf(" --meta.filename='%s' ", FileStreamBackupFilename) + fmt.Sprintf(" --destNodeName='%s' ", ctx.otherPod.Spec.NodeName) + " --hostInfoFilePath=/tools/xstore/hdfs-nodes.json && /tools/xstore/current/venv/bin/python3 /tools/xstore/current/cli.py process check_std_err_complete --filepath=/tmp/rebuild.log ",
 	}
@@ -205,7 +201,7 @@ func newJobName(task JobTask, targetPod *corev1.Pod) string {
 	if val, ok := targetPod.Labels[polarxmeta.LabelDNIndex]; ok {
 		suffix += suffix + "-" + val
 	}
-	return fmt.Sprintf("job-%s-%s-%s%s", string(task), hashStr, targetPod.Labels[xstoremeta.LabelNodeSet], suffix)
+	return fmt.Sprintf("job-%s-%s-%d-%s%s", string(task), hashStr, time.Now().Unix(), targetPod.Labels[xstoremeta.LabelNodeSet], suffix)
 }
 
 func newJob(ctx JobContext) *batchv1.Job {

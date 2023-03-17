@@ -17,8 +17,10 @@ limitations under the License.
 package instance
 
 import (
+	"errors"
 	"fmt"
 	polardbxv1 "github.com/alibaba/polardbx-operator/api/v1"
+	"github.com/alibaba/polardbx-operator/api/v1/polardbx"
 	xstorev1 "github.com/alibaba/polardbx-operator/api/v1/xstore"
 	"github.com/alibaba/polardbx-operator/pkg/k8s/control"
 	k8shelper "github.com/alibaba/polardbx-operator/pkg/k8s/helper"
@@ -27,8 +29,9 @@ import (
 	xstoremeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/meta"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/plugin/common/channel"
 	xstorev1reconcile "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/reconcile"
-	"github.com/alibaba/polardbx-operator/pkg/util"
+	"github.com/alibaba/polardbx-operator/pkg/util/name"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -37,14 +40,16 @@ import (
 )
 
 type RestoreJobContext struct {
-	BackupFilePath      string                   `json:"backupFilePath,omitempty"`
-	BackupCommitIndex   *int64                   `json:"backupCommitIndex,omitempty"`
-	BinlogDirPath       string                   `json:"binlogDirPath,omitempty"`
-	BinlogEndOffsetPath string                   `json:"binlogEndOffsetPath,omitempty"`
-	IndexesPath         string                   `json:"indexesPath,omitempty"`
-	CpFilePath          string                   `json:"cpfilePath,omitempty"`
-	StorageName         polardbxv1.BackupStorage `json:"storageName,omitempty"`
-	Sink                string                   `json:"sink,omitempty"`
+	BackupFilePath      string                 `json:"backupFilePath,omitempty"`
+	BackupCommitIndex   *int64                 `json:"backupCommitIndex,omitempty"`
+	BinlogDirPath       string                 `json:"binlogDirPath,omitempty"`
+	BinlogEndOffsetPath string                 `json:"binlogEndOffsetPath,omitempty"`
+	IndexesPath         string                 `json:"indexesPath,omitempty"`
+	CpFilePath          string                 `json:"cpfilePath,omitempty"`
+	StorageName         polardbx.BackupStorage `json:"storageName,omitempty"`
+	Sink                string                 `json:"sink,omitempty"`
+	PitrEndpoint        string                 `json:"pitrEndpoint,omitempty"`
+	PitrXStore          string                 `json:"pitrXStore,omitempty"`
 }
 
 var CheckXStoreRestoreSpec = xstorev1reconcile.NewStepBinder("CheckXStoreRestoreSpec",
@@ -91,7 +96,7 @@ var StartRestoreJob = xstorev1reconcile.NewStepBinder("StartRestoreJob",
 
 		jobCreated := false
 		for _, pod := range pods {
-			job, err := rc.GetXStoreJob(util.GetStableNameSuffix(xstore, pod.Name) + "-restore")
+			job, err := rc.GetXStoreJob(name.GetStableNameSuffix(xstore, pod.Name) + "-restore")
 			if client.IgnoreNotFound(err) != nil {
 				return flow.Error(err, "Unable to get restore data job.", "pod", pod.Name)
 			}
@@ -122,7 +127,7 @@ var WaitUntilRestoreJobFinished = xstorev1reconcile.NewStepBinder("WaitUntilRest
 			return flow.Error(err, "Unable to get pods for xcluster.")
 		}
 		for _, pod := range pods {
-			job, err := rc.GetXStoreJob(util.GetStableNameSuffix(xstore, pod.Name) + "-restore")
+			job, err := rc.GetXStoreJob(name.GetStableNameSuffix(xstore, pod.Name) + "-restore")
 			if err != nil {
 				return flow.Error(err, "Unable to get xstore restore data job", "pod", pod.Name)
 			}
@@ -140,7 +145,6 @@ var PrepareRestoreJobContext = xstorev1reconcile.NewStepBinder("PrepareRestoreJo
 		const restoreJobKey = "restore"
 
 		// Check if exists, exit if true.
-
 		exists, err := rc.IsTaskContextExists(restoreJobKey)
 		if err != nil {
 			return flow.Error(err, "Unable to determine job context for restore!")
@@ -151,10 +155,10 @@ var PrepareRestoreJobContext = xstorev1reconcile.NewStepBinder("PrepareRestoreJo
 
 		// Prepare context.
 		xstore := rc.MustGetXStore()
-
 		fromXStoreName := xstore.Spec.Restore.From.XStoreName
 		backup := &polardbxv1.XStoreBackup{}
 		if xstore.Spec.Restore.BackupSet == "" || len(xstore.Spec.Restore.BackupSet) == 0 {
+			// TODO(dengli): with metadata backup
 			// Parse restore time.
 			restoreTime := rc.MustParseRestoreTime()
 			// Get last backup
@@ -181,9 +185,15 @@ var PrepareRestoreJobContext = xstorev1reconcile.NewStepBinder("PrepareRestoreJo
 			xstoreBackupKey := types.NamespacedName{Namespace: rc.Namespace(), Name: xstore.Spec.Restore.BackupSet}
 			err := rc.Client().Get(rc.Context(), xstoreBackupKey, backup)
 			if err != nil {
-				return flow.Error(err, "Unable to get xstoreBackup by BackupSet")
+				return flow.Error(err, "Can not get xstore backup set", "backup set key", xstoreBackupKey)
 			}
 		}
+		if backup == nil {
+			return flow.Error(errors.New("xstore backup obejct is null"), "Can not get xstore backup set")
+		}
+		backupRootPath := backup.Status.BackupRootPath
+		lastCommitIndex := backup.Status.CommitIndex
+
 		//Update sharedchannel
 		sharedCm, err := rc.GetXStoreConfigMap(convention.ConfigMapTypeShared)
 		if err != nil {
@@ -195,14 +205,13 @@ var PrepareRestoreJobContext = xstorev1reconcile.NewStepBinder("PrepareRestoreJo
 			return flow.Error(err, "Unable to parse shared channel from config map.")
 		}
 
-		sharedChannel.UpdateLastBackupBinlogIndex(&backup.Status.CommitIndex)
+		sharedChannel.UpdateLastBackupBinlogIndex(&lastCommitIndex)
 		sharedCm.Data[channel.SharedChannelKey] = sharedChannel.String()
 		err = rc.Client().Update(rc.Context(), sharedCm)
 		if err != nil {
 			return flow.Error(err, "Unable to update shared config map.")
 		}
 
-		backupRootPath := backup.Status.BackupRootPath
 		fullBackupPath := fmt.Sprintf("%s/%s/%s.xbstream",
 			backupRootPath, polardbxmeta.FullBackupPath, fromXStoreName)
 		binlogEndOffsetPath := fmt.Sprintf("%s/%s/%s-end",
@@ -216,13 +225,15 @@ var PrepareRestoreJobContext = xstorev1reconcile.NewStepBinder("PrepareRestoreJo
 		// Save.
 		if err := rc.SaveTaskContext(restoreJobKey, &RestoreJobContext{
 			BackupFilePath:      fullBackupPath,
-			BackupCommitIndex:   &backup.Status.CommitIndex,
+			BackupCommitIndex:   &lastCommitIndex,
 			BinlogDirPath:       binlogBackupDir,
 			BinlogEndOffsetPath: binlogEndOffsetPath,
 			IndexesPath:         indexesPath,
 			CpFilePath:          cpFilePath,
 			StorageName:         backup.Spec.StorageProvider.StorageName,
 			Sink:                backup.Spec.StorageProvider.Sink,
+			PitrEndpoint:        xstore.Spec.Restore.PitrEndpoint,
+			PitrXStore:          xstore.Spec.Restore.From.XStoreName,
 		}); err != nil {
 			return flow.Error(err, "Unable to save job context for restore!")
 		}
@@ -238,17 +249,15 @@ var RemoveRestoreJob = xstorev1reconcile.NewStepBinder("RemoveRestoreJob",
 			return flow.Error(err, "Unable to get pods for xcluster.")
 		}
 		for _, pod := range pods {
-			job, err := rc.GetXStoreJob(util.GetStableNameSuffix(xstore, pod.Name) + "-restore")
-			if err != nil {
+			job, err := rc.GetXStoreJob(name.GetStableNameSuffix(xstore, pod.Name) + "-restore")
+			if err != nil && !apierrors.IsNotFound(err) {
 				return flow.Error(err, "Unable to get xstore restore data job", "pod", pod.Name)
 			}
-			if job == nil {
-				return flow.Continue("Restore job removed!")
-			}
-
-			err = rc.Client().Delete(rc.Context(), job, client.PropagationPolicy(metav1.DeletePropagationBackground))
-			if client.IgnoreNotFound(err) != nil {
-				return flow.Error(err, "Unable to remove restore job", "job-name", job.Name)
+			if job != nil {
+				err = rc.Client().Delete(rc.Context(), job, client.PropagationPolicy(metav1.DeletePropagationBackground))
+				if client.IgnoreNotFound(err) != nil {
+					return flow.Error(err, "Unable to remove restore job", "job-name", job.Name)
+				}
 			}
 		}
 		return flow.Continue("Restore job removed!")
@@ -287,7 +296,7 @@ var StartRecoverJob = xstorev1reconcile.NewStepBinder("StartRecoverJob",
 		}
 		jobCreated := false
 
-		job, err := rc.GetXStoreJob(util.GetStableNameSuffix(xstore, leaderPod.Name) + "-recover")
+		job, err := rc.GetXStoreJob(name.GetStableNameSuffix(xstore, leaderPod.Name) + "-recover")
 		if client.IgnoreNotFound(err) != nil {
 			return flow.Error(err, "Unable to get recover data job.", "pod", leaderPod.Name)
 		}
@@ -325,7 +334,7 @@ var WaitUntilRecoverJobFinished = xstorev1reconcile.NewStepBinder("WaitUntilReco
 		if leaderPod == nil {
 			return flow.RetryAfter(5*time.Second, "Leader pod not found")
 		}
-		job, err := rc.GetXStoreJob(util.GetStableNameSuffix(xstore, leaderPod.Name) + "-recover")
+		job, err := rc.GetXStoreJob(name.GetStableNameSuffix(xstore, leaderPod.Name) + "-recover")
 
 		if err != nil {
 			return flow.Error(err, "Unable to get xstore recover data job", "pod", leaderPod.Name)
@@ -348,16 +357,15 @@ var RemoveRecoverJob = xstorev1reconcile.NewStepBinder("RemoveRecoverJob",
 		if err != nil {
 			return flow.Error(err, "Unable to get leaderPod for xcluster.")
 		}
-		job, err := rc.GetXStoreJob(util.GetStableNameSuffix(xstore, leaderPod.Name) + "-recover")
-		if err != nil {
+		job, err := rc.GetXStoreJob(name.GetStableNameSuffix(xstore, leaderPod.Name) + "-recover")
+		if err != nil && !apierrors.IsNotFound(err) {
 			return flow.Error(err, "Unable to get xstore recover data job", "pod", leaderPod.Name)
 		}
-		if job == nil {
-			return flow.Continue("Recover job already removed!")
-		}
-		err = rc.Client().Delete(rc.Context(), job, client.PropagationPolicy(metav1.DeletePropagationBackground))
-		if client.IgnoreNotFound(err) != nil {
-			return flow.Error(err, "Unable to remove recover job", "job-name", job.Name)
+		if job != nil {
+			err = rc.Client().Delete(rc.Context(), job, client.PropagationPolicy(metav1.DeletePropagationBackground))
+			if client.IgnoreNotFound(err) != nil {
+				return flow.Error(err, "Unable to remove recover job", "job-name", job.Name)
+			}
 		}
 		return flow.Continue("Recover job removed!")
 	})

@@ -47,10 +47,15 @@ type CNConfig struct {
 }
 
 type DNConfig struct {
-	MycnfOverwrite    string          `json:"mycnfOverwrite,omitempty"`
-	LogPurgeInterval  metav1.Duration `json:"logPurgeInterval,omitempty"`
-	EnableAuditLog    bool            `json:"enableAuditLog,omitempty"`
-	LogDataSeparation bool            `json:"logDataSeparation,omitempty"`
+	MycnfOverwrite    string                        `json:"mycnfOverwrite,omitempty"`
+	LogPurgeInterval  metav1.Duration               `json:"logPurgeInterval,omitempty"`
+	EnableAuditLog    bool                          `json:"enableAuditLog,omitempty"`
+	LogDataSeparation bool                          `json:"logDataSeparation,omitempty"`
+	Envs              map[string]intstr.IntOrString `json:"envs,omitempty"`
+}
+
+type CDCConfig struct {
+	Envs map[string]intstr.IntOrString `json:"envs,omitempty"`
 }
 
 type Config struct {
@@ -59,4 +64,7 @@ type Config struct {
 
 	// DN config.
 	DN DNConfig `json:"dn,omitempty"`
+
+	// CDC config
+	CDC CDCConfig `json:"cdc,omitempty"`
 }

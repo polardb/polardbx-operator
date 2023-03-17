@@ -21,6 +21,10 @@ const (
 	FollowerPhaseDeleting      FollowerPhase = "FollowerPhaseDeleting"
 )
 
+func IsEndPhase(phase FollowerPhase) bool {
+	return phase == FollowerPhaseSuccess || phase == FollowerPhaseFailed || phase == FollowerPhaseDeleting
+}
+
 type FollowerRole string
 
 const (

@@ -159,6 +159,10 @@ var TryLoadTargetPod = NewStepBinder("TryLoadTargetPod", func(rc *xstorev1reconc
 	xstoreFollower.Status.TargetPodName = targetPodName
 	xstoreFollower.Status.RebuildPodName = targetPodName
 	xstoreFollower.Status.RebuildNodeName = pod.Spec.NodeName
+	xstoreFollower.SetLabels(k8shelper.PatchLabels(xstoreFollower.GetLabels(), map[string]string{
+		xstoremeta.LabelTargetXStore: pod.Labels[xstoremeta.LabelName],
+		xstoremeta.LabelPod:          pod.Name,
+	}))
 	rc.MarkChanged()
 	return flow.Continue("TryLoadTargetPod Success.")
 })
@@ -303,7 +307,8 @@ var ClearAndMarkElectionWeight = NewStepBinder("ClearAndMarkElectionWeight", fun
 	}
 	oldWeights, err := xstoreinstance.SetPodElectionWeight(xstoreContext, leaderPod, flow.Logger(), 0, []string{targetPodName})
 	if err != nil {
-		return flow.RetryErr(err, "")
+		flow.Logger().Error(err, "ClearAndMarkElectionWeight skip")
+		return flow.Continue("ClearAndMarkElectionWeight Skip.")
 	}
 	xStoreFollower.Status.ElectionWeight = oldWeights[0]
 	rc.MarkChanged()

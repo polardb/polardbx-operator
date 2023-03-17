@@ -14,22 +14,21 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1
+package path
 
-// BackupStorageProvider defines the configuration of storage for storing backup files.
-type BackupStorageProvider struct {
-	// StorageName defines the storage medium used to perform backup
-	StorageName BackupStorage `json:"storageName,omitempty"`
+import "strings"
 
-	// Sink defines the storage configuration choose to perform backup
-	Sink string `json:"sink,omitempty"`
-	// TODO: Add Nas Provider
+func NewPathFromStringSequence(sequence ...string) string {
+	return strings.Join(sequence, "/")
 }
 
-// BackupStorage defines the storage of backup
-type BackupStorage string
-
-const (
-	OSS  BackupStorage = "oss"
-	SFTP BackupStorage = "sftp"
-)
+// GetBaseNameFromPath gets last non-empty token in the path
+func GetBaseNameFromPath(path string) string {
+	sequence := strings.Split(path, "/")
+	for i := len(sequence) - 1; i >= 0; i-- {
+		if len(sequence[i]) != 0 {
+			return sequence[i]
+		}
+	}
+	return ""
+}

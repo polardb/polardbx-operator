@@ -24,23 +24,32 @@ option go_package = "github.com/alibaba/polardbx-operator/pkg/hpfs/proto";
 
 //@formatter:off
 service HpfsService {
-    rpc CreateDirectory(CreateDirectoryRequest) returns (CreateDirectoryResponse) {}
-    rpc CreateFile(CreateFileRequest) returns (CreateFileResponse) {}
-    rpc CreateSymbolicLink(CreateSymbolicLinkRequest) returns (CreateSymbolicLinkResponse) {}
-    rpc ListDirectory(ListDirectoryRequest) returns (ListDirectoryResponse) {}
-    rpc RemoveDirectory(RemoveDirectoryRequest) returns (RemoveDirectoryResponse) {}
-    rpc RemoveFile(RemoveFileRequest) returns (RemoveFileResponse) {}
-    rpc TruncateFile(TruncateFileRequest) returns (TruncateFileResponse) {}
-    rpc DownloadFiles(DownloadRequest) returns (DownloadResponse) {}
-    rpc UploadFiles(UploadRequest) returns (UploadResponse) {}
-    rpc DeleteRemoteFile(DeleteRemoteFileRequest) returns (DeleteRemoteFileResponse) {}
-    rpc ShowAsyncTaskStatus(ShowAsyncTaskStatusRequest) returns (ShowAsyncTaskStatusResponse) {}
-    rpc CancelAsyncTask(CancelAsyncTaskRequest) returns (CancelAsyncTaskResponse) {}
-    rpc TransferFiles(TransferRequest) returns (TransferResponse) {}
-    rpc ShowDiskUsage(ShowDiskUsageRequest) returns (ShowDiskUsageResponse) {}
-    rpc ShowDiskInfo(ShowDiskInfoRequest) returns (ShowDiskInfoResponse) {}
-    // Control blkio cgroups for kubernetes pods.
-    rpc ControlCgroupsBlkio(ControlCgroupsBlkioRequest) returns (ControlCgroupsBlkioResponse) {}
+  rpc CreateDirectory(CreateDirectoryRequest) returns (CreateDirectoryResponse) {}
+  rpc CreateFile(CreateFileRequest) returns (CreateFileResponse) {}
+  rpc CreateSymbolicLink(CreateSymbolicLinkRequest) returns (CreateSymbolicLinkResponse) {}
+  rpc ListDirectory(ListDirectoryRequest) returns (ListDirectoryResponse) {}
+  rpc RemoveDirectory(RemoveDirectoryRequest) returns (RemoveDirectoryResponse) {}
+  rpc RemoveFile(RemoveFileRequest) returns (RemoveFileResponse) {}
+  rpc TruncateFile(TruncateFileRequest) returns (TruncateFileResponse) {}
+  rpc DownloadFiles(DownloadRequest) returns (DownloadResponse) {}
+  rpc UploadFiles(UploadRequest) returns (UploadResponse) {}
+  rpc DeleteRemoteFile(DeleteRemoteFileRequest) returns (DeleteRemoteFileResponse) {}
+  rpc ShowAsyncTaskStatus(ShowAsyncTaskStatusRequest) returns (ShowAsyncTaskStatusResponse) {}
+  rpc CancelAsyncTask(CancelAsyncTaskRequest) returns (CancelAsyncTaskResponse) {}
+  rpc TransferFiles(TransferRequest) returns (TransferResponse) {}
+  rpc ShowDiskUsage(ShowDiskUsageRequest) returns (ShowDiskUsageResponse) {}
+  rpc ShowDiskInfo(ShowDiskInfoRequest) returns (ShowDiskInfoResponse) {}
+  // Control blkio cgroups for kubernetes pods.
+  rpc ControlCgroupsBlkio(ControlCgroupsBlkioRequest) returns (ControlCgroupsBlkioResponse) {}
+
+  //backup binlog
+  rpc OpenBackupBinlog(OpenBackupBinlogRequest) returns (OpenBackupBinlogResponse){}
+  rpc CloseBackupBinlog(CloseBackupBinlogRequest) returns (CloseBackupBinlogResponse){}
+  rpc UploadLatestBinlogFile(UploadLatestBinlogFileRequest) returns (UploadLatestBinlogFileResponse){}
+  rpc GetWatcherInfoHash(GetWatcherInfoHashRequest) returns (GetWatcherInfoHashResponse){}
+  rpc DeleteBinlogFilesBefore(DeleteBinlogFilesBeforeRequest) returns (DeleteBinlogFilesBeforeResponse){}
+  rpc ListLocalBinlogList(ListLocalBinlogListRequest) returns (ListLocalBinlogListResponse){}
+  rpc ListRemoteBinlogList(ListRemoteBinlogListRequest) returns (ListRemoteBinlogListResponse){}
 }
 //@formatter:on
 
@@ -579,4 +588,150 @@ message ControlCgroupsBlkioRequest {
 message ControlCgroupsBlkioResponse {
   // Operation status.
   Status status = 1;
+}
+
+message OpenBackupBinlogRequest{
+  // Target host
+  Host host = 1;
+
+  //the log directory of the pod on the host
+  string log_dir = 2;
+
+  //the info file content
+  string content = 3;
+}
+
+message OpenBackupBinlogResponse{
+  // Operation status.
+  Status status = 1;
+}
+
+message CloseBackupBinlogRequest{
+  // Target host
+  Host host = 1;
+
+  //the log directory of the pod on the host
+  string log_dir = 2;
+}
+
+message CloseBackupBinlogResponse{
+  // Operation status.
+  Status status = 1;
+}
+
+message UploadLatestBinlogFileRequest{
+  // Target host
+  Host host = 1;
+
+  //the log directory of the pod on the host
+  string log_dir = 2;
+}
+
+message UploadLatestBinlogFileResponse{
+  // Operation status.
+  Status status = 1;
+
+  // check if the latest binlog file is uploaded
+  bool done = 2;
+}
+
+
+message GetWatcherInfoHashRequest{
+  // Target host
+  Host host = 1;
+
+  //log dir. also worker dir of the watcher
+  string logDir = 2;
+}
+
+message GetWatcherInfoHashResponse{
+  // Operation status.
+  Status status = 1;
+
+  // Hash value of info file
+  string hash = 2;
+}
+
+message DeleteBinlogFilesBeforeRequest{
+  //the k8s namespace
+  string namespace = 1;
+
+  // the instance name of PolarDB-X
+  string pxcName = 2;
+
+  //the object uid of PolarDB-X
+  string pxcUid = 3;
+
+  //the timestamp unit: seconds
+  int64 unixTime = 4;
+
+  //the sink type
+  string sinkType = 5;
+
+  //the sink name
+  string sinkName = 6;
+}
+
+message DeleteBinlogFilesBeforeResponse{
+  // Operation status.
+  Status status = 1;
+
+  // delete file list
+  repeated string deletedFiles = 2;
+
+  // check if the latest binlog file is uploaded
+  bool done = 3;
+}
+
+message ListLocalBinlogListRequest{
+  // Target host
+  Host host = 1;
+
+  //log dir. also worker dir of the watcher
+  string logDir = 2;
+}
+
+message ListLocalBinlogListResponse{
+  // Operation status.
+  Status status = 1;
+
+  //backup binlog version
+  string version = 2;
+
+  // binlog file list
+  repeated string binlogFiles = 3;
+}
+
+message ListRemoteBinlogListRequest{
+  //the k8s namespace
+  string namespace = 1;
+
+  // the instance name of PolarDB-X
+  string pxcName = 2;
+
+  //the object uid of PolarDB-X
+  string pxcUid = 3;
+
+  // the instance name of xstore
+  string xStoreName = 4;
+
+  //the object uid of xstore
+  string xStoreUid = 5;
+
+  //the pod name
+  string podName = 6;
+
+  //the sink name
+  string sinkName = 7;
+
+  //the sink type
+  string sinkType = 8;
+}
+
+message ListRemoteBinlogListResponse{
+  // Operation status.
+  Status status = 1;
+
+  //the files
+  repeated string files = 2;
 }

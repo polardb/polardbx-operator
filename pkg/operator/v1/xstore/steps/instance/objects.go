@@ -17,6 +17,7 @@ limitations under the License.
 package instance
 
 import (
+	"context"
 	"strings"
 
 	"github.com/go-logr/logr"
@@ -44,7 +45,7 @@ var CreateSecret = xstorev1reconcile.NewStepBinder("CreateSecret",
 		}
 		if secret == nil {
 			if xstore.Spec.Restore != nil {
-				secret, err := rc.CreateSecretByXStore(xstore)
+				secret, err := factory.NewSecretForRestore(rc, xstore)
 				if err != nil {
 					return flow.Error(err, "unable to get secret while restoring")
 				}
@@ -127,6 +128,9 @@ func CreatePodsAndPodServicesWithExtraFactory(extraPodFactory factory.ExtraPodFa
 
 						newCnt++
 					} else {
+						if xstore.Status.Phase == polardbxv1xstore.PhaseAdapting {
+							continue
+						}
 						// update if generation is too old.
 						observedGeneration, _ := convention.GetGenerationLabelValue(pod)
 
@@ -157,7 +161,7 @@ func CreatePodsAndPodServicesWithExtraFactory(extraPodFactory factory.ExtraPodFa
 				// Get current pod services.
 				podServices, err := rc.GetXStorePodServices()
 				if err != nil {
-					return flow.Error(err, "Unable to get pod services.")
+					return flow.RetryErr(err, "Unable to get pod services.")
 				}
 
 				// For each pod, create a pod service.
@@ -169,7 +173,7 @@ func CreatePodsAndPodServicesWithExtraFactory(extraPodFactory factory.ExtraPodFa
 							svc := factory.NewClusterIpService(xstore, podMap[podName])
 							err := rc.SetControllerRefAndCreate(svc)
 							if err != nil {
-								return flow.Error(err, "Unable to create service for pod.", "pod", podName)
+								return flow.RetryErr(err, "Unable to create service for pod.", "pod", podName)
 							}
 						}
 					}
@@ -325,7 +329,7 @@ var UpdateMycnfParameters = xstorev1reconcile.NewStepBinder("UpdateMycnfParamete
 
 			// update my.cnf locally.
 			err := xstoreexec.UpdateMycnfParameters(rc, &pod, "engine", flow.Logger())
-			if err != nil {
+			if err != nil && err != context.DeadlineExceeded {
 				return flow.Error(err, "Failed to update my.cnf locally.", "pod", pod.Name)
 			}
 		}

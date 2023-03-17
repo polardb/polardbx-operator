@@ -174,8 +174,8 @@ func (r *XStoreFollowerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			MaxConcurrentReconciles: r.MaxConcurrency,
 			RateLimiter: workqueue.NewMaxOfRateLimiter(
 				workqueue.NewItemExponentialFailureRateLimiter(5*time.Millisecond, 30*time.Second),
-				// 10 qps, 100 bucket size.  This is only for retry speed. It's only the overall factor (not per item).
-				&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(60), 100)},
+				// 60 qps, 10 bucket size.  This is only for retry speed. It's only the overall factor (not per item).
+				&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(60), 10)},
 			),
 		}).
 		For(&polardbxv1.XStoreFollower{}).

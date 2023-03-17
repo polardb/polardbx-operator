@@ -1,5 +1,3 @@
-//go:build polardbx
-
 /*
 Copyright 2022 Alibaba Group Holding Limited.
 

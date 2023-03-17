@@ -14,14 +14,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package util
+package name
 
 import (
 	"fmt"
 	polardbxv1 "github.com/alibaba/polardbx-operator/api/v1"
-	polardbxmeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/meta"
+	"github.com/alibaba/polardbx-operator/pkg/meta/core/gms/security"
 	"strings"
 )
+
+// Naming functions related to restore phase
 
 func StableNamePrefix(xstore *polardbxv1.XStore) string {
 	if len(xstore.Status.Rand) > 0 {
@@ -60,11 +62,65 @@ func XStoreBackupStableName(xstoreBackup *polardbxv1.XStoreBackup, suffix string
 	return XStoreBackupStableNamePrefix(xstoreBackup) + suffix
 }
 
-// BackupRootPath is used to identify backup set by backup time
-func BackupRootPath(polardbxBackup *polardbxv1.PolarDBXBackup) string {
-	startTime := polardbxBackup.Status.StartTime
-	timestamp := startTime.Format("20060102150405") // golang standard format
-	rootPath := fmt.Sprintf("%s/%s/%s-%s",
-		polardbxmeta.BackupPath, polardbxBackup.Labels[polardbxmeta.LabelName], polardbxBackup.Name, timestamp)
-	return rootPath
+// Splicer is a helper to splice object name, which also provides alternative name to ensure length of name is under limit
+type Splicer struct {
+	Tokens    *[]string
+	Delimiter string
+	Limit     int
+	Prefix    string
+}
+
+func NewSplicer(options ...func(*Splicer)) *Splicer {
+	splicer := &Splicer{
+		Delimiter: "-",
+		Limit:     63,
+	}
+	for _, option := range options {
+		option(splicer)
+	}
+	return splicer
+}
+
+func (s *Splicer) getAbbreviateName(sourceName string) string {
+	hashVal := security.MustSha1Hash(sourceName)
+	if s.Prefix == "" {
+		return hashVal
+	}
+	return fmt.Sprintf("%s%s%s", s.Prefix, s.Delimiter, hashVal)
+}
+
+func (s *Splicer) GetName() string {
+	name := strings.Join(*s.Tokens, s.Delimiter)
+	if s.Limit == 0 || len(name) < s.Limit {
+		return name
+	}
+	return s.getAbbreviateName(name)
+}
+
+func WithTokens(tokens ...string) func(*Splicer) {
+	return func(splicer *Splicer) {
+		splicer.Tokens = &tokens
+	}
+}
+
+func WithDelimiter(delimiter string) func(*Splicer) {
+	return func(splicer *Splicer) {
+		splicer.Delimiter = delimiter
+	}
+}
+
+func WithLimit(limit int) func(*Splicer) {
+	return func(splicer *Splicer) {
+		splicer.Limit = limit
+	}
+}
+
+func WithPrefix(prefix string) func(*Splicer) {
+	return func(splicer *Splicer) {
+		splicer.Prefix = prefix
+	}
+}
+
+func NewSplicedName(options ...func(*Splicer)) string {
+	return NewSplicer(options...).GetName()
 }

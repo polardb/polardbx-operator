@@ -18,6 +18,7 @@ package helper
 
 import (
 	corev1 "k8s.io/api/core/v1"
+	"time"
 )
 
 func IsPodRunning(pod *corev1.Pod) bool {
@@ -84,11 +85,13 @@ func MustGetContainerFromPod(pod *corev1.Pod, name string) *corev1.Container {
 }
 
 func IsPodDeletedOrFailed(po *corev1.Pod) bool {
-	return IsPodDeleted(po) || IsPodFailed(po)
+	return IsPodDeleted(po, 32*time.Second) || IsPodFailed(po)
 }
 
-func IsPodDeleted(po *corev1.Pod) bool {
-	return po != nil && !po.DeletionTimestamp.IsZero()
+func IsPodDeleted(po *corev1.Pod, delaySeconds time.Duration) bool {
+	now := time.Now()
+	now = now.Add(-delaySeconds)
+	return po != nil && !po.DeletionTimestamp.IsZero() && po.DeletionTimestamp.UTC().Before(now)
 }
 
 func IsPodFailed(po *corev1.Pod) bool {

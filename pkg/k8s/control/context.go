@@ -152,7 +152,7 @@ func (rc *BaseReconcileContext) ExecuteCommandOn(pod *corev1.Pod, container stri
 	opts.setDefaults()
 
 	logger := opts.Logger
-	logger.Info("Executing command", "pod", pod.Namespace, "container", container, "command", command, "timeout", opts.Timeout)
+	logger.Info("Executing command", "pod", pod.Name, "container", container, "command", command, "timeout", opts.Timeout)
 
 	// Start execute
 	req := rc.clientSet.

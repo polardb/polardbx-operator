@@ -7,4 +7,8 @@ data:
   config.yaml: |-
     sinks:
 {{ toYaml .Values.hostPathFileService.sinks | indent 7 }}
+    backupBinlogConfig:
+      rootDirectories:
+        - {{ .Values.node.volumes.data }}/xstore
+        - {{ .Values.node.volumes.log }}/xstore
 

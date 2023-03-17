@@ -96,6 +96,17 @@ spec:
                 description: Config defines the configuration of the current cluster.
                   Both dynamic and static configs of CN and DN are included.
                 properties:
+                  cdc:
+                    description: CDC config
+                    properties:
+                      envs:
+                        additionalProperties:
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          x-kubernetes-int-or-string: true
+                        type: object
+                    type: object
                   cn:
                     description: CN config.
                     properties:
@@ -158,6 +169,13 @@ spec:
                     properties:
                       enableAuditLog:
                         type: boolean
+                      envs:
+                        additionalProperties:
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          x-kubernetes-int-or-string: true
+                        type: object
                       logDataSeparation:
                         type: boolean
                       logPurgeInterval:
@@ -250,11 +268,37 @@ spec:
                   fail due to lack of backups silently.
                 properties:
                   backupset:
-                    description: BackupSet defines the source of backup set
+                    description: BackupSet defines the source of backup set. It works
+                      only when PolarDBXBackup object of this BackupSet still exists.
                     type: string
+                  binlogSource:
+                    description: BinlogSource defines the binlog datasource
+                    properties:
+                      checksum:
+                        description: Checksum defines the binlog file checksum.
+                        type: string
+                      namespace:
+                        description: Namespace defines the source binlog namespace
+                        type: string
+                      storageProvider:
+                        description: StorageProvider defines the source binlog sink
+                        properties:
+                          sink:
+                            description: Sink defines the storage configuration choose
+                              to perform backup
+                            type: string
+                          storageName:
+                            description: StorageName defines the storage medium used
+                              to perform backup
+                            type: string
+                        type: object
+                    type: object
                   from:
-                    description: From defines the source information, either backup
-                      sets, snapshot or an running cluster.
+                    description: "From defines the source information, either a running
+                      cluster, backup set path or backup selector. \n If PolarDBXRestoreFrom.BackupSetPath
+                      provided, restore will be performed using metadata backup in
+                      remote storage. It works only when BackupSet is empty and StorageProvider
+                      is provided."
                     properties:
                       backupSelector:
                         additionalProperties:
@@ -262,9 +306,25 @@ spec:
                         description: BackupSelector defines the selector for the backups
                           to be selected. Optional.
                         type: object
+                      backupSetPath:
+                        description: BackupSetPath defines the location of backup
+                          set in remote storage
+                        type: string
                       clusterName:
-                        description: PolarBDXName defines the the polardbx name that
-                          this polardbx is restored from. Optional.
+                        description: PolarBDXName defines the polardbx name that this
+                          polardbx is restored from. Optional.
+                        type: string
+                    type: object
+                  storageProvider:
+                    description: StorageProvider defines storage used to perform backup
+                    properties:
+                      sink:
+                        description: Sink defines the storage configuration choose
+                          to perform backup
+                        type: string
+                      storageName:
+                        description: StorageName defines the storage medium used to
+                          perform backup
                         type: string
                     type: object
                   syncSpecWithOriginalCluster:
@@ -278,7 +338,7 @@ spec:
                     type: boolean
                   time:
                     description: Time defines the specified time of the restored data,
-                      in the format of 'yyyy-MM-dd HH:mm:ss'. Required.
+                      in the format of 'yyyy-MM-ddTHH:mm:ssZ'. Required.
                     type: string
                   timezone:
                     description: TimeZone defines the specified time zone of the restore
@@ -559,7 +619,7 @@ spec:
                                   dependent.
                                 type: string
                               hostNetwork:
-                                default: true
+                                default: false
                                 description: HostNetwork mode.
                                 type: boolean
                               image:
@@ -656,7 +716,7 @@ spec:
                                   dependent.
                                 type: string
                               hostNetwork:
-                                default: true
+                                default: false
                                 description: HostNetwork mode.
                                 type: boolean
                               image:
@@ -1665,6 +1725,14 @@ spec:
               phase:
                 description: Phase is the current phase of the cluster.
                 type: string
+              pitrStatus:
+                description: PitrStatus represents the status of the pitr restore
+                properties:
+                  job:
+                    type: string
+                  preapreJobEndpoint:
+                    type: string
+                type: object
               randHash:
                 description: Rand represents a random string value to avoid collision.
                 type: string
@@ -1747,6 +1815,17 @@ spec:
                 properties:
                   config:
                     properties:
+                      cdc:
+                        description: CDC config
+                        properties:
+                          envs:
+                            additionalProperties:
+                              anyOf:
+                              - type: integer
+                              - type: string
+                              x-kubernetes-int-or-string: true
+                            type: object
+                        type: object
                       cn:
                         description: CN config.
                         properties:
@@ -1809,6 +1888,13 @@ spec:
                         properties:
                           enableAuditLog:
                             type: boolean
+                          envs:
+                            additionalProperties:
+                              anyOf:
+                              - type: integer
+                              - type: string
+                              x-kubernetes-int-or-string: true
+                            type: object
                           logDataSeparation:
                             type: boolean
                           logPurgeInterval:
@@ -2041,7 +2127,7 @@ spec:
                                       dependent.
                                     type: string
                                   hostNetwork:
-                                    default: true
+                                    default: false
                                     description: HostNetwork mode.
                                     type: boolean
                                   image:
@@ -2140,7 +2226,7 @@ spec:
                                       dependent.
                                     type: string
                                   hostNetwork:
-                                    default: true
+                                    default: false
                                     description: HostNetwork mode.
                                     type: boolean
                                   image:

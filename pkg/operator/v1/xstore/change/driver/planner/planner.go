@@ -80,8 +80,10 @@ func (p *Planner) runningGenerations() (map[int64]int, error) {
 
 func (p *Planner) buildExpectedNodes() map[string]model.PaxosNode {
 	topology := &p.xstore.Spec.Topology
+	generation := p.xstore.Generation
 	if p.selfHeal {
 		topology = p.xstore.Status.ObservedTopology
+		generation = p.xstore.Status.ObservedGeneration
 	}
 
 	nodes := make(map[string]model.PaxosNode)
@@ -93,7 +95,7 @@ func (p *Planner) buildExpectedNodes() map[string]model.PaxosNode {
 				PaxosInnerNode: model.PaxosInnerNode{
 					Pod:        name,
 					Role:       strings.ToLower(string(ns.Role)),
-					Generation: p.xstore.Generation,
+					Generation: generation,
 					Set:        ns.Name,
 					Index:      i,
 				},

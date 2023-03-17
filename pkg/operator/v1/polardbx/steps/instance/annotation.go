@@ -17,6 +17,9 @@ limitations under the License.
 package instance
 
 import (
+	polardbxmeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/meta"
+	v1 "k8s.io/api/core/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/alibaba/polardbx-operator/pkg/k8s/control"
@@ -33,3 +36,43 @@ func RemoveAnnotation(key string) control.BindFunc {
 		return flow.Pass()
 	})
 }
+
+var TrySetRunMode = polardbxreconcile.NewStepBinder("TrySetRunMode",
+	func(rc *polardbxreconcile.Context, flow control.Flow) (reconcile.Result, error) {
+		polardbx := rc.MustGetPolarDBX()
+		if !rc.Config().Cluster().EnableRunModeCheck() {
+			return flow.Pass()
+		}
+		if polardbx.Annotations == nil {
+			polardbx.SetAnnotations(map[string]string{})
+		}
+		runmode, ok := polardbx.Annotations["runmode"]
+		if !ok {
+			runmode = "none"
+		}
+		var podList v1.PodList
+		err := rc.Client().List(rc.Context(), &podList, client.InNamespace(polardbx.Namespace), client.MatchingLabels{
+			polardbxmeta.LabelName: polardbx.Name,
+		})
+		if err != nil {
+			return flow.RetryErr(err, "failed to get podlist")
+		}
+
+		for _, pod := range podList.Items {
+			annotations := pod.GetAnnotations()
+			if annotations == nil {
+				annotations = map[string]string{}
+			}
+			mode, ok := annotations["runmode"]
+			if !ok || mode != runmode {
+				annotations["runmode"] = runmode
+				pod.SetAnnotations(annotations)
+				err := rc.Client().Update(rc.Context(), &pod)
+				if err != nil {
+					return flow.RetryErr(err, "failed to update pod runmode annotation", "PodName", pod.GetName())
+				}
+			}
+		}
+		return flow.Pass()
+	},
+)

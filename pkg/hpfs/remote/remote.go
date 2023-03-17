@@ -31,6 +31,9 @@ type FileService interface {
 	DeleteFile(ctx context.Context, path string, auth, params map[string]string) error
 	UploadFile(ctx context.Context, reader io.Reader, path string, auth, params map[string]string) (FileTask, error)
 	DownloadFile(ctx context.Context, writer io.Writer, path string, auth, params map[string]string) (FileTask, error)
+	DeleteExpiredFile(ctx context.Context, path string, auth, params map[string]string) (FileTask, error)
+	ListFiles(ctx context.Context, writer io.Writer, path string, auth, params map[string]string) (FileTask, error)
+	ListAllFiles(ctx context.Context, path string, auth, params map[string]string) (FileTask, error)
 }
 
 type fileTask struct {
