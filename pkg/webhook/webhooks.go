@@ -18,6 +18,8 @@ package webhook
 
 import (
 	"context"
+	"github.com/alibaba/polardbx-operator/pkg/operator/v1/config"
+	"github.com/alibaba/polardbx-operator/pkg/webhook/polardbxbackup"
 	"net/http"
 
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -29,7 +31,7 @@ import (
 
 const ApiPath = "/apis/admission.polardbx.aliyun.com/v1"
 
-func SetupWebhooks(ctx context.Context, mgr ctrl.Manager, configPath string) error {
+func SetupWebhooks(ctx context.Context, mgr ctrl.Manager, configPath string, configLoader func() config.Config) error {
 	// Hack: for discovery. Awful hacking.
 	mgr.GetWebhookServer().Register(ApiPath, http.HandlerFunc(
 		func(w http.ResponseWriter, request *http.Request) {
@@ -48,6 +50,10 @@ func SetupWebhooks(ctx context.Context, mgr ctrl.Manager, configPath string) err
 	}
 
 	if err := parameter.SetupWebhooks(ctx, mgr, ApiPath); err != nil {
+		return err
+	}
+
+	if err := polardbxbackup.SetupWebhooks(ctx, mgr, ApiPath, configLoader); err != nil {
 		return err
 	}
 

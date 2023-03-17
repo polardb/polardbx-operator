@@ -24,10 +24,10 @@ import (
 	"golang.org/x/exp/constraints"
 )
 
-func ReadNumberLittleEndianHack[T constraints.Integer | constraints.Float](data *T, bs []byte) {
+func ReadNumberLittleEndianHack[T constraints.Integer](data *T, bs []byte) {
 	ReadNumber(binary.BigEndian, data, bs)
 }
 
-func ReadNumberBigEndianHack[T constraints.Integer | constraints.Float](data *T, bs []byte) {
+func ReadNumberBigEndianHack[T constraints.Integer](data *T, bs []byte) {
 	ReadNumber(binary.BigEndian, data, bs)
 }

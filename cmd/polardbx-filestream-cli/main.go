@@ -137,6 +137,11 @@ func main() {
 		if err != nil {
 			printErrAndExit(err, metadata)
 		}
+	} else if strings.HasPrefix(strings.ToLower(action), "list") {
+		_, err := client.List(os.Stdout, metadata)
+		if err != nil {
+			printErrAndExit(err, metadata)
+		}
 	} else {
 		printErrAndExit(errors.New("invalid action"), metadata)
 	}

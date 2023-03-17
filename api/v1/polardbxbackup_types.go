@@ -17,6 +17,7 @@ limitations under the License.
 package v1
 
 import (
+	"github.com/alibaba/polardbx-operator/api/v1/polardbx"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -56,7 +57,14 @@ type PolarDBXBackupSpec struct {
 	CleanPolicy CleanPolicyType `json:"cleanPolicy,omitempty"`
 
 	// StorageProvider defines the backend storage to store the backup files.
-	StorageProvider BackupStorageProvider `json:"storageProvider,omitempty"`
+	StorageProvider polardbx.BackupStorageProvider `json:"storageProvider,omitempty"`
+
+	// +kubebuilder:default=follower
+	// +kubebuilder:validation:Enum=leader;follower
+
+	// PreferredBackupRole defines the role of node on which backup will happen
+	// +optional
+	PreferredBackupRole string `json:"preferredBackupRole,omitempty"`
 }
 
 // PolarDBXBackupPhase defines the phase of backup
@@ -68,8 +76,10 @@ const (
 	BackupCollecting  PolarDBXBackupPhase = "Collecting"
 	BackupCalculating PolarDBXBackupPhase = "Calculating"
 	BinlogBackuping   PolarDBXBackupPhase = "BinlogBackuping"
+	MetadataBackuping PolarDBXBackupPhase = "MetadataBackuping"
 	BackupFinished    PolarDBXBackupPhase = "Finished"
 	BackupFailed      PolarDBXBackupPhase = "Failed"
+	BackupDummy       PolarDBXBackupPhase = "Dummy"
 )
 
 // PolarDBXBackupStatus defines the observed state of PolarDBXBackup
@@ -107,7 +117,7 @@ type PolarDBXBackupStatus struct {
 	HeartBeatName string `json:"heartbeat,omitempty"`
 
 	// StorageName represents the kind of Storage
-	StorageName BackupStorage `json:"storageName,omitempty"`
+	StorageName polardbx.BackupStorage `json:"storageName,omitempty"`
 
 	// BackupRootPath stores the root path of backup set
 	BackupRootPath string `json:"backupRootPath,omitempty"`

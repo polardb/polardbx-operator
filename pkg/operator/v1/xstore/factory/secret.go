@@ -17,13 +17,14 @@ limitations under the License.
 package factory
 
 import (
+	polardbxv1 "github.com/alibaba/polardbx-operator/api/v1"
+	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/convention"
+	xstoremeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/meta"
+	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/reconcile"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/utils/pointer"
-
-	polardbxv1 "github.com/alibaba/polardbx-operator/api/v1"
-	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/convention"
 )
 
 func NewSecret(xstore *polardbxv1.XStore) *corev1.Secret {
@@ -57,4 +58,35 @@ func NewSecret(xstore *polardbxv1.XStore) *corev1.Secret {
 		Type:       corev1.SecretTypeOpaque,
 		StringData: data,
 	}
+}
+
+func NewSecretForRestore(rc *reconcile.Context, xstore *polardbxv1.XStore) (*corev1.Secret, error) {
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      convention.NewSecretName(xstore),
+			Namespace: xstore.Namespace,
+			Labels:    convention.ConstLabels(xstore),
+		},
+		Immutable: pointer.Bool(true),
+		Type:      corev1.SecretTypeOpaque,
+	}
+	// try to get secret from pxb first
+	var secretName string
+	if xstore.Spec.Restore.BackupSet == "" || len(xstore.Spec.Restore.BackupSet) == 0 {
+		backup, err := rc.GetLastCompletedXStoreBackup(map[string]string{
+			xstoremeta.LabelName: xstore.Spec.Restore.From.XStoreName,
+		}, rc.MustParseRestoreTime())
+		if err != nil {
+			return nil, err
+		}
+		secretName = backup.Name
+	} else {
+		secretName = xstore.Spec.Restore.BackupSet
+	}
+	xsbSecret, err := rc.GetSecretByName(secretName)
+	if err != nil || xsbSecret == nil {
+		return nil, err
+	}
+	secret.Data = xsbSecret.Data
+	return secret, nil
 }

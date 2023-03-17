@@ -16,9 +16,12 @@ limitations under the License.
 
 package config
 
+import "time"
+
 type Config interface {
 	Images() ImagesConfig
 	Cluster() ClusterConfig
+	Backup() BackupConfig
 	Store() StoreConfig
 	Scheduler() SchedulerConfig
 	Security() SecurityConfig
@@ -36,6 +39,7 @@ type SchedulerConfig interface {
 
 type ImagesConfig interface {
 	DefaultImageRepo() string
+	DefaultJobImage() string
 	DefaultImageForCluster(role string, container string, version string) string
 	DefaultImageForStore(engine string, container string, version string) string
 }
@@ -44,6 +48,7 @@ type ClusterConfig interface {
 	EnableExporters() bool
 	EnableAliyunAckResourceController() bool
 	EnableDebugModeForComputeNodes() bool
+	EnableRunModeCheck() bool
 	ContainerPrivileged() bool
 	ForceCGroup() bool
 }
@@ -57,6 +62,8 @@ type StoreConfig interface {
 	HostPathFilestreamVolumeRoot() string
 
 	HostPathFileServiceEndpoint() string
+	FilestreamServiceEndpoint() string
+	GetMaxAutoRebuildingCount() int
 }
 
 type OssConfig interface {
@@ -69,4 +76,10 @@ type OssConfig interface {
 type NfsConfig interface {
 	Path() string
 	Server() string
+}
+
+type BackupConfig interface {
+	CheckBinlogExpiredFileInterval() (time.Duration, error)
+	GetHeartbeatJobNamePrefix() string
+	GetHeartbeatInterval() (time.Duration, error)
 }

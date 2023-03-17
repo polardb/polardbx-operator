@@ -21,7 +21,7 @@ import (
 	k8shelper "github.com/alibaba/polardbx-operator/pkg/k8s/helper"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/command"
 	xstoremeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/meta"
-	"github.com/alibaba/polardbx-operator/pkg/util"
+	"github.com/alibaba/polardbx-operator/pkg/util/name"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -55,7 +55,7 @@ func newRecoverDataJob(xstore *xstorev1.XStore, targetPod *corev1.Pod, secret st
 
 	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      util.StableName(xstore, util.GetStableNameSuffix(xstore, targetPod.Name)+"-recover"),
+			Name:      name.StableName(xstore, name.GetStableNameSuffix(xstore, targetPod.Name)+"-recover"),
 			Namespace: xstore.Namespace,
 			Labels: map[string]string{
 				xstoremeta.LabelName:              xstore.Name,

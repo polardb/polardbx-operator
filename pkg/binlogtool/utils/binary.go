@@ -24,15 +24,15 @@ import (
 	"golang.org/x/exp/constraints"
 )
 
-func forceConvert[T constraints.Integer | constraints.Float, R constraints.Integer | constraints.Float](x T) R {
-	return *(*R)(unsafe.Pointer(&x))
+func forceConvert[T constraints.Integer, R constraints.Integer](x T) R {
+	return R(x)
 }
 
 func init() {
 	_ = endian.Native
 }
 
-func ReadNumber[T constraints.Integer | constraints.Float](order binary.ByteOrder, data *T, bs []byte) {
+func ReadNumber[T constraints.Integer](order binary.ByteOrder, data *T, bs []byte) {
 	size := int(unsafe.Sizeof(T(0)))
 
 	switch size {

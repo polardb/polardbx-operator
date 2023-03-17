@@ -3,3 +3,4 @@ jsons==1.4.0
 PyMySQL==1.0.2
 typish==1.9.1
 oss2==2.15.0
+wget==3.2

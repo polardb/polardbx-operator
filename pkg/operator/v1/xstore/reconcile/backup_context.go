@@ -27,8 +27,8 @@ import (
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/convention"
 	xstoreconvention "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/convention"
 	xstoremeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/meta"
-	"github.com/alibaba/polardbx-operator/pkg/util"
 	dbutil "github.com/alibaba/polardbx-operator/pkg/util/database"
+	"github.com/alibaba/polardbx-operator/pkg/util/name"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -38,7 +38,6 @@ import (
 	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"strconv"
 )
 
 type BackupContext struct {
@@ -262,40 +261,42 @@ func (rc *BackupContext) GetXStoreTargetPod() (*corev1.Pod, error) {
 
 		rolePodMap := make(map[string]*corev1.Pod)
 		for i := range pods {
-			p := &pods[i]
-			rolePodMap[p.Labels[xstoremeta.LabelRole]] = p
+			pod := &pods[i]
+			rolePodMap[pod.Labels[xstoremeta.LabelRole]] = pod
 		}
 
-		preferred, _ := xstoreBackup.Labels[meta.LabelPreferredBackupNode]
-		if preferred == xstoremeta.RoleLeader { // preferred backup node is leader, just set it
-			p, ok := rolePodMap[xstoremeta.RoleLeader]
+		if xstoreBackup.Spec.PreferredBackupRole == xstoremeta.RoleLeader { // preferred backup node is leader, just set it
+			pod, ok := rolePodMap[xstoremeta.RoleLeader]
 			if !ok {
 				return nil, errors.New("target pod is leader, but leader not found")
 			}
-			rc.xstoreTargetPod = p
-			return p, nil
+			rc.xstoreTargetPod = pod
+			return pod, nil
 		}
 
-		// if `PreferredBackupNode` has not been set or set to something other than leader, then we pick follower as backup pod
-		p, ok := rolePodMap[xstoremeta.RoleFollower]
+		// if `PreferredBackupRole` has not been set or set to something other than leader, then we pick follower as backup pod
+		pod, ok := rolePodMap[xstoremeta.RoleFollower]
 		if !ok {
 			return nil, errors.New("target pod is follower, but follower not found")
 		}
-		manager, err := rc.GetXstoreGroupManagerByPod(p)
+		manager, err := rc.GetXstoreGroupManagerByPod(pod)
 		if err != nil {
 			return nil, err
 		}
 		if manager == nil {
 			return nil, errors.New("fail to connect to follower")
 		}
+		defer manager.Close()
+
 		status, err := manager.ShowSlaveStatus()
 		if err != nil {
 			return nil, err
 		}
 		if status.SlaveSQLRunning == "No" || status.LastError != "" {
-			return nil, errors.New("follower status abnormal")
+			return nil, errors.New("follower status abnormal, SlaveSQLRunning: " + status.SlaveSQLRunning +
+				", LastError: " + status.LastError)
 		}
-		rc.xstoreTargetPod = p
+		rc.xstoreTargetPod = pod
 	}
 	return rc.xstoreTargetPod, nil
 }
@@ -401,7 +402,7 @@ func (rc *BackupContext) GetOrCreateXStoreBackupTaskConfigMap() (*corev1.ConfigM
 		xstorebackup := rc.MustGetXStoreBackup()
 
 		var cm corev1.ConfigMap
-		err := rc.Client().Get(rc.Context(), types.NamespacedName{Namespace: rc.Namespace(), Name: util.XStoreBackupStableName(xstorebackup, "backup")}, &cm)
+		err := rc.Client().Get(rc.Context(), types.NamespacedName{Namespace: rc.Namespace(), Name: name.XStoreBackupStableName(xstorebackup, "backup")}, &cm)
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				rc.taskConfigMap = NewBackupTaskConfigMap(xstorebackup)
@@ -501,34 +502,30 @@ func (rc *BackupContext) NewSecretFromXStore(secret *corev1.Secret) (*corev1.Sec
 }
 
 func (rc *BackupContext) GetXstoreGroupManagerByPod(pod *corev1.Pod) (group.GroupManager, error) {
-	var serviceList corev1.ServiceList
-	err := rc.Client().List(rc.Context(), &serviceList, client.InNamespace(rc.Namespace()), client.MatchingLabels{
-		xstoremeta.LabelPod: pod.Name,
-	})
+	podService, err := rc.xStoreContext.GetXStoreServiceForPod(pod.Name)
 	if err != nil {
 		return nil, err
 	}
-	if len(serviceList.Items) == 0 {
-		return nil, errors.New("no service found related to xstore " + rc.xstore.Name)
+	host, port, err := k8shelper.GetClusterIpPortFromService(podService, convention.PortAccess)
+	if err != nil {
+		return nil, err
 	}
-	host := serviceList.Items[0].Name + "." + pod.Namespace
-	port, err := strconv.Atoi(pod.Labels[xstoremeta.LabelPortLock])
 	secret, err := rc.GetSecret(pod.Labels[xstoremeta.LabelName])
 	if err != nil {
 		return nil, err
 	}
 	user := xstoreconvention.SuperAccount
-	passwd, ok := secret.Data[user]
-	if !ok {
-		return nil, errors.New("can not get passwd for xsotre " + rc.xstore.Name)
+	passwd, err := rc.xStoreContext.GetXstoreAccountPasswordFromSecret(user, secret)
+	if err != nil {
+		return nil, err
 	}
 	return group.NewGroupManager(
 		rc.Context(),
 		dbutil.MySQLDataSource{
 			Host:     host,
-			Port:     port,
-			Username: user,
-			Password: string(passwd),
+			Port:     int(port),
+			Username: xstoreconvention.SuperAccount,
+			Password: passwd,
 		},
 		true,
 	), nil

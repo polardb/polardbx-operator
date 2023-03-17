@@ -1,0 +1,36 @@
+name: CI for build images
+
+on:
+  pull_request:
+    branches:
+      - main
+
+# Environment variables available to all jobs and steps in this workflow.
+env:
+  REGISTRY: registry.cn-zhangjiakou.aliyuncs.com
+  NAMESPACE: polardbx-ci
+  TAG: ${{ github.sha }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      # 1 Setup go environment
+      - name: Setup go environment
+        uses: actions/setup-go@v3
+        with:
+          go-version: '1.18'
+
+      # 2 Build images
+      - name: Build images
+        run: |-
+          make build REPO=$REGISTRY/$NAMESPACE TAG=$TAG
+
+      # 3 Generate helm chart
+      - name: Generate helm chart
+        run: |-
+          make helm-package
+

@@ -12,12 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import pymysql
 from abc import abstractmethod
 from contextlib import AbstractContextManager
 from enum import Enum
 from typing import NamedTuple, Union, Collection
-
-import pymysql
 
 CONSENSUS_ROLE_LEADER = 'leader'
 CONSENSUS_ROLE_FOLLOWER = 'follower'
@@ -133,6 +132,13 @@ class RoleMismatchError(Exception):
     pass
 
 
+    # last_errno=r['last_errno'],
+    # last_error=r['last_error'],
+    # last_io_errno=r['last_io_errno'],
+    # last_io_error=r['last_io_error'],
+    # last_sql_errno=r['last_sql_errno'],
+    # last_sql_error=r['last_sql_error']
+
 class SlaveStatus(NamedTuple):
     """
     the result of show slave status
@@ -143,7 +149,12 @@ class SlaveStatus(NamedTuple):
     slave_sql_running: str
     slave_sql_running_state: str
     seconds_behind_master: float
-
+    last_errno: str
+    last_error: str
+    last_io_errno: str
+    last_io_error: str
+    last_sql_errno: str
+    last_sql_error: str
 
 class AbstractConsensusManager(AbstractContextManager):
     def __init__(self, conn: pymysql.Connection, current_addr: str):
@@ -303,7 +314,7 @@ class AbstractConsensusManager(AbstractContextManager):
 
     # FIXME: ConsensusNode -> ip:port
     @abstractmethod
-    def upgrade_learner_to_follower(self, target: Union[str, ConsensusNode]) -> ConsensusNode:
+    def upgrade_learner_to_follower(self, addr) -> ConsensusNode:
         """
         Upgrade the learner to follower.
 
@@ -313,7 +324,7 @@ class AbstractConsensusManager(AbstractContextManager):
 
     # FIXME: ConsensusNode -> ip:port
     @abstractmethod
-    def downgrade_follower_to_learner(self, target: Union[str, ConsensusNode]) -> ConsensusNode:
+    def downgrade_follower_to_learner(self, addr) -> ConsensusNode:
         """
         Downgrade the follower to learner.
 
@@ -388,4 +399,16 @@ class AbstractConsensusManager(AbstractContextManager):
     def show_slave_status(self) -> SlaveStatus:
         """
         return query result of "show slave status"
+        """
+
+    @abstractmethod
+    def update_cluster_info(self, cluster_info):
+        """
+          update cluster info by SQL
+        """
+
+    @abstractmethod
+    def set_readonly(self):
+        """
+         set readonly
         """

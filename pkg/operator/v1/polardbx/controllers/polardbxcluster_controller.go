@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/steps/instance/pitr"
 	"time"
 
 	"github.com/alibaba/polardbx-operator/pkg/operator/hint"
@@ -118,6 +119,9 @@ func (r *PolarDBXReconciler) newReconcileTask(rc *polardbxreconcile.Context, pol
 		commonsteps.CheckDNs(task)
 	}
 
+	//try set runmode
+	instancesteps.TrySetRunMode(task)
+
 	// Let's construct the complex state machine.
 	switch polardbx.Status.Phase {
 	case polardbxv1polardbx.PhaseNew:
@@ -126,11 +130,13 @@ func (r *PolarDBXReconciler) newReconcileTask(rc *polardbxreconcile.Context, pol
 		commonsteps.InitializePolardbxLabel(task)
 		commonsteps.GenerateRandInStatus(task)
 		commonsteps.InitializeServiceName(task)
-		control.When(polardbx.Spec.Restore != nil,
-			commonsteps.SyncSpecFromBackupSet)(task)
 		commonsteps.TransferPhaseTo(polardbxv1polardbx.PhasePending, true)(task)
 
 	case polardbxv1polardbx.PhasePending:
+		control.When(polardbx.Spec.Restore != nil,
+			commonsteps.CreateDummyBackupObject,
+			pitr.LoadLatestBackupSetByTime,
+			commonsteps.SyncSpecFromBackupSet)(task)
 		checksteps.CheckStorageEngines(task)
 		commonsteps.UpdateSnapshotAndObservedGeneration(task)
 		instancesteps.CreateSecretsIfNotFound(task)
@@ -150,6 +156,10 @@ func (r *PolarDBXReconciler) newReconcileTask(rc *polardbxreconcile.Context, pol
 
 		// Create readonly polardbx in InitReadonly list
 		instancesteps.CreateOrReconcileReadonlyPolardbx(task)
+
+		control.When(pitr.IsPitrRestore(polardbx),
+			pitr.PreparePitrBinlogs,
+			pitr.WaitPreparePitrBinlogs)(task)
 
 		// Create GMS and DNs.
 		instancesteps.CreateOrReconcileGMS(task)
@@ -189,12 +199,15 @@ func (r *PolarDBXReconciler) newReconcileTask(rc *polardbxreconcile.Context, pol
 			instancesteps.CreateOrReconcileCDCs,
 			instancesteps.WaitUntilCNDeploymentsRolledOut,
 			instancesteps.WaitUntilCDCDeploymentsRolledOut,
+			instancesteps.CreateFileStorage,
 		)(task)
 
 		// Go to clean works.
 		control.Block(
 			control.When(!debug.IsDebugEnabled(), commonsteps.UpdateDisplayDetailedVersion),
+			control.When(polardbx.Status.Phase == polardbxv1polardbx.PhaseRestoring, commonsteps.CleanDummyBackupObject),
 			commonsteps.UpdateDisplayStorageSize,
+			control.When(pitr.IsPitrRestore(polardbx), pitr.CleanPreparePitrBinlogJob),
 		)(task)
 
 		commonsteps.TransferPhaseTo(polardbxv1polardbx.PhaseRunning, true)(task)
@@ -235,7 +248,6 @@ func (r *PolarDBXReconciler) newReconcileTask(rc *polardbxreconcile.Context, pol
 		// Always reconcile the stateless components (mainly for rebuilt).
 		instancesteps.CreateOrReconcileCNs(task)
 		instancesteps.CreateOrReconcileCDCs(task)
-		instancesteps.CreateFileStorage(task)
 
 		//sync cn label to pod without rebuild pod
 		instancesteps.TrySyncCnLabelToPodsDirectly(task)
@@ -277,6 +289,7 @@ func (r *PolarDBXReconciler) newReconcileTask(rc *polardbxreconcile.Context, pol
 				instancesteps.WaitUntilDNsReady,
 				instancesteps.WaitUntilCNDeploymentsRolledOut,
 				instancesteps.WaitUntilCDCDeploymentsRolledOut,
+				instancesteps.CreateFileStorage,
 			)(task)
 
 			// Prepare to rebalance data after DN stores are reconciled if necessary.
@@ -390,8 +403,8 @@ func (r *PolarDBXReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			MaxConcurrentReconciles: r.MaxConcurrency,
 			RateLimiter: workqueue.NewMaxOfRateLimiter(
 				workqueue.NewItemExponentialFailureRateLimiter(5*time.Millisecond, 300*time.Second),
-				// 10 qps, 100 bucket size.  This is only for retry speed. It's only the overall factor (not per item).
-				&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
+				// 60 qps, 10 bucket size.  This is only for retry speed. It's only the overall factor (not per item).
+				&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(60), 10)},
 			),
 		}).
 		For(&polardbxv1.PolarDBXCluster{}).

@@ -324,6 +324,17 @@ func (f *DefaultExtraPodFactory) NewEnvs(ctx *PodFactoryContext) (map[string][]c
 	template := ctx.template
 	resources := template.Spec.Resources
 
+	engineEnvs := make([]corev1.EnvVar, 0)
+	configEnvs := ctx.xstore.Spec.Config.Envs
+	if configEnvs != nil {
+		for k, v := range configEnvs {
+			engineEnvs = append(engineEnvs, corev1.EnvVar{
+				Name:  k,
+				Value: v.String(),
+			})
+		}
+	}
+
 	return map[string][]corev1.EnvVar{
 		convention.ContainerEngine: k8shelper.PatchEnvs(
 			[]corev1.EnvVar{
@@ -334,6 +345,7 @@ func (f *DefaultExtraPodFactory) NewEnvs(ctx *PodFactoryContext) (map[string][]c
 				{Name: "LOG_DATA_SEPARATION", Value: strconv.FormatBool(ctx.xstore.Spec.Config.Dynamic.LogDataSeparation)},
 			},
 			f.newEnvsForEnginePorts(ctx),
+			engineEnvs,
 		),
 	}, nil
 }

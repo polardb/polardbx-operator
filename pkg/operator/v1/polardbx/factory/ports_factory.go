@@ -22,6 +22,10 @@ import (
 	"k8s.io/apimachinery/pkg/util/rand"
 )
 
+type ProberPort interface {
+	GetAccessPort() int
+	GetProbePort() int
+}
 type CNPorts struct {
 	AccessPort  int
 	MgrPort     int
@@ -33,9 +37,26 @@ type CNPorts struct {
 	ProbePort   int
 }
 
+func (p *CNPorts) GetAccessPort() int {
+	return p.AccessPort
+}
+
+func (p *CNPorts) GetProbePort() int {
+	return p.ProbePort
+}
+
 type CDCPorts struct {
 	DaemonPort  int
 	MetricsPort int
+	ProbePort   int
+}
+
+func (p *CDCPorts) GetAccessPort() int {
+	return p.DaemonPort
+}
+
+func (p *CDCPorts) GetProbePort() int {
+	return p.ProbePort
 }
 
 type PortsFactory interface {
@@ -83,6 +104,7 @@ func (f *portsFactory) NewPortsForCDCEngine() CDCPorts {
 	return CDCPorts{
 		DaemonPort:  3007,
 		MetricsPort: 8081,
+		ProbePort:   9999,
 	}
 }
 

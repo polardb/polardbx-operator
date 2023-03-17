@@ -17,7 +17,9 @@ limitations under the License.
 package config
 
 import (
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/distribution/distribution/reference"
 
@@ -28,6 +30,7 @@ type config struct {
 	ImagesConfig    imagesConfig    `json:"images,omitempty"`
 	SchedulerConfig schedulerConfig `json:"scheduler,omitempty"`
 	ClusterConfig   clusterConfig   `json:"cluster,omitempty"`
+	BackupConfig    backupConfig    `json:"backup,omitempty"`
 	StoreConfig     storeConfig     `json:"store,omitempty"`
 	SecurityConfig  securityConfig  `json:"security,omitempty"`
 	OssConfig       ossConfig       `json:"oss,omitempty"`
@@ -44,6 +47,10 @@ func (c *config) Images() ImagesConfig {
 
 func (c *config) Cluster() ClusterConfig {
 	return &c.ClusterConfig
+}
+
+func (c *config) Backup() BackupConfig {
+	return &c.BackupConfig
 }
 
 func (c *config) Store() StoreConfig {
@@ -146,6 +153,11 @@ func (c *imagesConfig) DefaultImageForStore(engine, container string, version st
 	return newImage(image, c.Repo, version)
 }
 
+func (c *imagesConfig) DefaultJobImage() string {
+	image := c.Common["job"]
+	return newImage(image, c.Repo, "")
+}
+
 type schedulerConfig struct {
 	EnableMaster bool `json:"enable_master,omitempty"`
 }
@@ -158,6 +170,7 @@ type clusterConfig struct {
 	OptionEnableExporters                   bool `json:"enable_exporters,omitempty"`
 	OptionEnableAliyunAckResourceController bool `json:"enable_aliyun_ack_resource_controller,omitempty"`
 	OptionEnableDebugModeForComputeNodes    bool `json:"enable_debug_mode_for_compute_nodes,omitempty"`
+	OptionEnableRunModeCheck                bool `json:"enable_run_mode_check,omitempty"`
 	OptionEnablePrivilegedContainer         bool `json:"enable_privileged_container,omitempty"`
 	OptionForceCGroup                       bool `json:"force_cgroup,omitempty"`
 }
@@ -174,6 +187,10 @@ func (c *clusterConfig) EnableDebugModeForComputeNodes() bool {
 	return c.OptionEnableDebugModeForComputeNodes
 }
 
+func (c *clusterConfig) EnableRunModeCheck() bool {
+	return c.OptionEnableRunModeCheck
+}
+
 func (c *clusterConfig) ContainerPrivileged() bool {
 	return c.OptionEnablePrivilegedContainer
 }
@@ -186,6 +203,16 @@ type storeConfig struct {
 	EnablePrivilegedContainer bool              `json:"enable_privileged_container,omitempty"`
 	HostPaths                 map[string]string `json:"host_paths,omitempty"`
 	HpfsEndpoint              string            `json:"hpfs_endpoint,omitempty"`
+	FsEndpoint                string            `json:"fs_endpoint,omitempty"`
+	MaxAutoRebuildingCount    string            `json:"max_auto_rebuilding_count,omitempty"`
+}
+
+func (c *storeConfig) GetMaxAutoRebuildingCount() int {
+	val, err := strconv.Atoi(defaults.NonEmptyStrOrDefault(c.MaxAutoRebuildingCount, "1"))
+	if err != nil {
+		panic(err)
+	}
+	return val
 }
 
 func (c *storeConfig) ContainerPrivileged() bool {
@@ -210,6 +237,10 @@ func (c *storeConfig) HostPathFilestreamVolumeRoot() string {
 
 func (c *storeConfig) HostPathFileServiceEndpoint() string {
 	return c.HpfsEndpoint
+}
+
+func (c *storeConfig) FilestreamServiceEndpoint() string {
+	return c.FsEndpoint
 }
 
 type securityConfig struct {
@@ -254,4 +285,24 @@ func (c *nfsConfig) Path() string {
 
 func (c *nfsConfig) Server() string {
 	return c.NfsServer
+}
+
+type backupConfig struct {
+	CheckBinlogExpiredInterval string `json:"check_binlog_expired_interval,omitempty"`
+	HeartbeatJobNamePrefix     string `json:"heartbeat_job_name_prefix,omitempty"`
+	HeartbeatInterval          string `json:"heartbeat_interval,omitempty"`
+}
+
+func (b *backupConfig) CheckBinlogExpiredFileInterval() (time.Duration, error) {
+	interval := defaults.NonEmptyStrOrDefault(b.CheckBinlogExpiredInterval, "3600s")
+	return time.ParseDuration(interval)
+}
+
+func (b *backupConfig) GetHeartbeatJobNamePrefix() string {
+	return defaults.NonEmptyStrOrDefault(b.HeartbeatJobNamePrefix, "heartbeat-")
+}
+
+func (b *backupConfig) GetHeartbeatInterval() (time.Duration, error) {
+	interval := defaults.NonEmptyStrOrDefault(b.HeartbeatInterval, "1s")
+	return time.ParseDuration(interval)
 }

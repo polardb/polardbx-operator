@@ -23,6 +23,7 @@ from core import Context, convention
 from core.consensus import AbstractConsensusManager, ConsensusManager
 from ..engine import EngineCommon
 from ...config.mysql import MySQLConfigManager
+from ..util import config_util
 
 ENGINE_NAME = 'galaxy'
 
@@ -46,10 +47,13 @@ class GalaxyEngine(EngineCommon):
 
         self.file_config_template = self.context.volume_path(convention.VOLUME_CONFIG, 'my.cnf.template')
         self.file_config_override = self.context.volume_path(convention.VOLUME_CONFIG, 'my.cnf.override')
+        self.file_config_override_version = self.context.volume_path(convention.VOLUME_CONFIG,
+                                                                     'my.cnf.override.version')
 
         self.path_conf = os.path.join(self.vol_data_path, 'conf')
         self.file_config = os.path.join(self.path_conf, 'my.cnf')
         self.file_config_dynamic = os.path.join(self.path_conf, 'dynamic.cnf')
+        self.file_config_version = os.path.join(self.path_conf, 'my.cnf.override.version')
 
         self.path_data = os.path.join(self.vol_data_path, 'data')
         self.path_log = os.path.join(self.vol_data_path, 'log')
@@ -111,17 +115,17 @@ class GalaxyEngine(EngineCommon):
 
     def _get_cluster_info(self, learner: bool = False, local: bool = False):
         shared_channel = self.context.shared_channel()
+        pod_info = self.context.pod_info()
+        node_info = shared_channel.get_node_by_pod_name(pod_info.name())
 
         if local:
-            return '%s:%d@1' % (self.context.pod_info().ip(), self.context.port_paxos())
+            return '%s@1' % node_info.addr()
 
-        pod_info = self.context.pod_info()
         if learner:
-            node_info = shared_channel.get_node_by_pod_name(pod_info.name())
             return node_info.addr()
         else:
-            idx = shared_channel.get_sort_node_index(pod_info.name())
-            return ';'.join([n.addr() for n in shared_channel.list_sort_nodes()]) + '@' + str(idx + 1)
+            idx = shared_channel.get_node_index(self.context.pod_info().name())
+            return ';'.join([n.addr() for n in shared_channel.list_nodes()]) + '@' + str(idx + 1)
 
     def _new_initialize_command(self):
         return self._command_mysqld(extra_args={
@@ -165,7 +169,7 @@ class GalaxyEngine(EngineCommon):
         system_config['mysqld'] = {
             'user': 'mysql',
             'port': self.context.port_access(),
-            'galaxyx_port': int(self.context.port('polarx')),
+            'loose_galaxyx_port': int(self.context.port('polarx')),
             'loose_rpc_port': int(self.context.port('polarx')),
             'basedir': self.path_home,
             'datadir': self.path_data,
@@ -208,18 +212,15 @@ class GalaxyEngine(EngineCommon):
 
     def _default_dynamic_config(self) -> configparser.ConfigParser:
         config = configparser.ConfigParser(allow_no_value=True)
-        buffer_pool_size = int(self.context.pod_info().memory_limit() * 5 / 8)
+        dynamic_config = config_util.get_dynamic_mysql_cnf_by_spec(self.context.pod_info().cpu_limit(),
+                                                                   self.context.pod_info().memory_limit())
         config['mysqld'] = {
-            # Default using 5/8 of the memory limit.
-            'innodb_buffer_pool_size': str(buffer_pool_size),
-            'loose_rds_audit_log_buffer_size': str(int(buffer_pool_size / 100)),
-            'loose_innodb_replica_log_parse_buf_size': str(int(buffer_pool_size / 10)),
-            'loose_innodb_primary_flush_max_lsn_lag': str(int(buffer_pool_size / 11)),
-            'loose_extra_max_connections': str(65535),
-            'max_connections': str(65535),
-            'max_user_connections': str(65535),
-            'mysqlx_max_connections': str(4096),
-            'loose_galaxy_max_connections': str(4096),
+            'innodb_buffer_pool_size': dynamic_config["innodb_buffer_pool_size"],
+            'loose_rds_audit_log_buffer_size': dynamic_config["loose_rds_audit_log_buffer_size"],
+            'max_connections': dynamic_config["max_connections"],
+            'max_user_connections': dynamic_config["max_user_connections"],
+            'mysqlx_max_connections': dynamic_config["mysqlx_max_connections"],
+            'loose_galaxy_max_connections': dynamic_config["loose_galaxy_max_connections"],
             'default_time_zone': '+08:00',
             'loose_new_rpc': self.new_rpc_enabled,
         }
@@ -242,16 +243,18 @@ class GalaxyEngine(EngineCommon):
 
         mgr.update(template_config_file, overrides=override_configs)
 
+        MySQLConfigManager.write_config_version(self.file_config_version, self.file_config_override_version)
+
     def check_health(self, check_leader_readiness) -> bool:
         with self.context.new_connection() as conn:
             conn.ping()
 
         return True
 
-    def _reset_cluster_info(self, learner):
+    def _reset_cluster_info(self, learner, local=False):
         args = {
             'cluster-force-change-meta': 'ON',
-            'loose-cluster-info': self._get_cluster_info(learner=learner),
+            'loose-cluster-info': self._get_cluster_info(learner=learner, local=local),
             'user': 'mysql',
         }
         if learner:
@@ -269,3 +272,5 @@ class GalaxyEngine(EngineCommon):
             self._reset_cluster_info(learner=False)
         elif 'reset-cluster-info-to-learner' == indicate:
             self._reset_cluster_info(learner=True)
+        elif 'reset-cluster-info-to-local' == indicate:
+            self._reset_cluster_info(learner=False, local=True)

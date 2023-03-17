@@ -19,7 +19,6 @@ package factory
 import (
 	"github.com/alibaba/polardbx-operator/api/v1/polardbx"
 	promv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
-
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 
@@ -41,13 +40,19 @@ type ObjectFactory interface {
 	NewXStoreGMS() (*polardbxv1.XStore, error)
 	NewXStoreDN(idx int) (*polardbxv1.XStore, error)
 	NewSecret() (*corev1.Secret, error)
-	NewSecretFromPolarDBX(*corev1.Secret) (*corev1.Secret, error)
+	NewSecretForRestore() (*corev1.Secret, error)
 	NewSecuritySecret() (*corev1.Secret, error)
 	NewConfigMap(cmType convention.ConfigMapType) (*corev1.ConfigMap, error)
 
 	NewServiceMonitors() (map[string]promv1.ServiceMonitor, error)
 
 	NewReadonlyPolardbx(*polardbx.ReadonlyParam) (*polardbxv1.PolarDBXCluster, error)
+
+	NewPolarDBXBackupBySchedule() (*polardbxv1.PolarDBXBackup, error)
+	NewXStoreBackup(xstore *polardbxv1.XStore) (*polardbxv1.XStoreBackup, error)
+	NewDummyPolarDBXBackup(metadata *MetadataBackup) (*polardbxv1.PolarDBXBackup, error)
+	NewDummyXstoreBackup(xstoreName string, polardbxBackup *polardbxv1.PolarDBXBackup, metadata *MetadataBackup) (*polardbxv1.XStoreBackup, error)
+	NewDummySecretBackup(sourceSecretName string, metadata *MetadataBackup) (*corev1.Secret, error)
 }
 
 type Context struct {

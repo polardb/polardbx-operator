@@ -21,6 +21,8 @@ import (
 	"flag"
 	"fmt"
 	"github.com/alibaba/polardbx-operator/pkg/hpfs"
+	"github.com/alibaba/polardbx-operator/pkg/hpfs/backupbinlog"
+	"github.com/alibaba/polardbx-operator/pkg/hpfs/config"
 	"github.com/alibaba/polardbx-operator/pkg/hpfs/discovery"
 	"github.com/alibaba/polardbx-operator/pkg/hpfs/filestream"
 	"github.com/alibaba/polardbx-operator/pkg/hpfs/local"
@@ -30,6 +32,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
@@ -192,13 +195,28 @@ func startHpfs() {
 func startFileStreamServer() {
 	go func() {
 		log.Info("Start filestream server")
-		fileServer := filestream.NewFileServer("0.0.0.0", filestreamServerPort, filestreamRootPath, filestream.GlobalFlowControl)
+		fileServer := filestream.NewFileServer("", filestreamServerPort, filestreamRootPath, filestream.GlobalFlowControl)
 		err := fileServer.Start()
 		if err != nil {
 			log.Error(err, "Failed to start file server")
 			os.Exit(1)
 		}
 	}()
+}
+
+func startLoadConfig() {
+	config.InitConfig()
+	go func() {
+		for {
+			time.Sleep(70 * time.Second)
+			config.ReloadConfig()
+		}
+	}()
+}
+
+func startAllWatchers() {
+	backupbinlog.SetLocalFilestreamSeverPort(filestreamServerPort)
+	backupbinlog.StartAllWatchers()
 }
 
 func main() {
@@ -223,6 +241,10 @@ func main() {
 	})
 	flowControl.Start()
 	filestream.GlobalFlowControl = flowControl
+	//init config from configmap
+	startLoadConfig()
+	//for backup binlog periodic watch binlog
+	startAllWatchers()
 	// start file stream server
 	startFileStreamServer()
 	// Start hpfs.

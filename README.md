@@ -11,7 +11,7 @@ Follow the [快速开始](https://doc.polardbx.com/quickstart/topics/quickstart-
 
 ## Documentation
 
-Please refer to the [CHANGELOG](./CHANGELOG.md) for the notable changes for each version.**
+Please refer to the [CHANGELOG](./CHANGELOG/README.md) for the notable changes for each version.**
 
 Refer to the documentations for more details, such as CRD definitions and operation guides.
 

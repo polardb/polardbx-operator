@@ -128,6 +128,9 @@ type PolarDBXClusterStatus struct {
 
 	// RestartingPods represents pods need to restart
 	RestartingPods polardbx.RestartingPods `json:"restartingPods,omitempty"`
+
+	//PitrStatus represents the status of the pitr restore
+	PitrStatus *polardbx.PitrStatus `json:"pitrStatus,omitempty"`
 }
 
 // +kubebuilder:object:root=true

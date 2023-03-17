@@ -17,14 +17,21 @@ limitations under the License.
 package common
 
 import (
-	k8shelper "github.com/alibaba/polardbx-operator/pkg/k8s/helper"
-	polardbxmeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/meta"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-
+	"bytes"
+	"encoding/json"
+	"errors"
 	polardbxv1polardbx "github.com/alibaba/polardbx-operator/api/v1/polardbx"
+	"github.com/alibaba/polardbx-operator/pkg/hpfs/filestream"
 	"github.com/alibaba/polardbx-operator/pkg/k8s/control"
+	k8shelper "github.com/alibaba/polardbx-operator/pkg/k8s/helper"
+	"github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/factory"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/helper"
+	polardbxmeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/meta"
 	polardbxv1reconcile "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/reconcile"
+	polarxPath "github.com/alibaba/polardbx-operator/pkg/util/path"
+	"github.com/google/uuid"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 var PersistentStatus = polardbxv1reconcile.NewStepBinder("PersistentStatus",
@@ -123,26 +130,168 @@ var CheckDNs = polardbxv1reconcile.NewStepBinder("CheckDNs",
 	},
 )
 
+// helper function to download metadata backup from remote storage
+func downloadMetadataBackup(rc *polardbxv1reconcile.Context) (*factory.MetadataBackup, error) {
+	polardbx := rc.MustGetPolarDBX()
+	filestreamClient, err := rc.GetFilestreamClient()
+	if err != nil {
+		return nil, errors.New("failed to get filestream client, error: " + err.Error())
+	}
+	filestreamAction, err := polardbxv1polardbx.NewBackupStorageFilestreamAction(polardbx.Spec.Restore.StorageProvider.StorageName)
+
+	downloadActionMetadata := filestream.ActionMetadata{
+		Action:    filestreamAction.Download,
+		Sink:      polardbx.Spec.Restore.StorageProvider.Sink,
+		RequestId: uuid.New().String(),
+		Filename:  polarxPath.NewPathFromStringSequence(polardbx.Spec.Restore.From.BackupSetPath, "metadata"),
+	}
+	var downloadBuffer bytes.Buffer
+	recvBytes, err := filestreamClient.Download(&downloadBuffer, downloadActionMetadata)
+	if err != nil {
+		return nil, errors.New("download metadata failed, error: " + err.Error())
+	}
+	if recvBytes == 0 {
+		return nil, errors.New("no byte received, please check storage config and target path")
+	}
+	metadata := &factory.MetadataBackup{}
+	err = json.Unmarshal(downloadBuffer.Bytes(), &metadata)
+	if err != nil {
+		return nil, errors.New("failed to parse metadata, error: " + err.Error())
+	}
+	return metadata, nil
+}
+
+// CreateDummyBackupObject creates dummy polardbx backup when BackupSetPath provided.
+// The dummy backup object has only necessary information for restore.
+var CreateDummyBackupObject = polardbxv1reconcile.NewStepBinder("CreateDummyBackupObject",
+	func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+		polardbx := rc.MustGetPolarDBX()
+		if polardbx.Spec.Restore.BackupSet != "" {
+			return flow.Continue("Backup set is specified, no need to create dummy backup object")
+		}
+		if polardbx.Spec.Restore.From.BackupSetPath == "" {
+			return flow.Continue("BackupSetPath is not specified, no need to create dummy backup object")
+		}
+
+		metadata, err := downloadMetadataBackup(rc)
+		if err != nil {
+			helper.TransferPhase(polardbx, polardbxv1polardbx.PhaseFailed)
+			return flow.Error(err, "Failed to download metadata from backup set path",
+				"path", polardbx.Spec.Restore.From.BackupSetPath)
+		}
+
+		// Create dummy polardbx backup
+		objectFactory := factory.NewObjectFactory(rc)
+		polardbxBackup, err := objectFactory.NewDummyPolarDBXBackup(metadata)
+		if err != nil {
+			return flow.Error(err, "Failed to new dummy polardbx backup")
+		}
+		err = rc.SetControllerRefAndCreate(polardbxBackup)
+		if err != nil {
+			return flow.Error(err, "Failed to create dummy polardbx backup")
+		}
+		polardbxSecretBackup, err := objectFactory.NewDummySecretBackup(metadata.PolarDBXClusterMetadata.Name, metadata)
+		if err != nil {
+			return flow.Error(err, "Failed to new dummy polardbx secret backup")
+		}
+		err = rc.SetControllerToOwnerAndCreate(polardbxBackup, polardbxSecretBackup)
+		if err != nil {
+			return flow.Error(err, "Failed to create dummy polardbx secret backup")
+		}
+
+		// Create dummy xstore backup and update its status
+		for _, xstoreName := range metadata.GetXstoreNameList() {
+			xstoreBackup, err := objectFactory.NewDummyXstoreBackup(xstoreName, polardbxBackup, metadata)
+			if err != nil {
+				return flow.Error(err, "Failed to new dummy xstore backup", "xstore", xstoreName)
+			}
+			err = rc.SetControllerToOwnerAndCreate(polardbxBackup, xstoreBackup)
+			if err != nil {
+				return flow.Error(err, "Failed to create dummy xstore backup", "xstore", xstoreName)
+			}
+			err = rc.Client().Status().Update(rc.Context(), xstoreBackup)
+			if err != nil {
+				return flow.Error(err, "Failed to update dummy xstore backup status", "xstore", xstoreName)
+			}
+
+			xstoreSecretBackup, err := objectFactory.NewDummySecretBackup(xstoreName, metadata)
+			if err != nil {
+				return flow.Error(err, "Failed to new dummy xstore secret backup", "xstore", xstoreName)
+			}
+			err = rc.SetControllerToOwnerAndCreate(polardbxBackup, xstoreSecretBackup)
+			if err != nil {
+				return flow.Error(err, "Failed to create dummy xstore secret backup", "xstore", xstoreName)
+			}
+
+			// record xstore and its backup for restore
+			polardbxBackup.Status.Backups[xstoreName] = xstoreBackup.Name
+		}
+
+		// Update status of polardbx backup
+		err = rc.Client().Status().Update(rc.Context(), polardbxBackup)
+		if err != nil {
+			return flow.Error(err, "Failed to update dummy polardbx backup status")
+		}
+
+		// The dummy backup object will be used in the later restore by setting it as backup set
+		polardbx.Spec.Restore.BackupSet = polardbxBackup.Name
+		err = rc.Client().Update(rc.Context(), polardbx)
+		if err != nil {
+			return flow.Error(err, "Failed to update backup set of restore spec")
+		}
+
+		return flow.Continue("Dummy backup object created!")
+	})
+
 // SyncSpecFromBackupSet aims to sync spec with original pxc cluster from backup set,
-// currently restore does not support change DN replicas
+// if `SyncSpecWithOriginalCluster` is true, all the spec from original pxc will be applied to new pxc,
+// otherwise only original dn replicas will be applied, currently restore does not support change DN replicas.
 var SyncSpecFromBackupSet = polardbxv1reconcile.NewStepBinder("SyncSpecFromBackupSet",
 	func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
 		polardbx := rc.MustGetPolarDBX()
 		pxcBackup, err := rc.GetPXCBackupByName(polardbx.Spec.Restore.BackupSet)
-		if err != nil {
-			return flow.Error(err, "Unable to get polardbx backup {}", pxcBackup.Name)
+
+		// just let the creation fail if pxb not found
+		if err != nil || pxcBackup == nil {
+			helper.TransferPhase(polardbx, polardbxv1polardbx.PhaseFailed)
+			return flow.Error(errors.New("sync spec failed"), "Unable to get polardbx backup in current namespace",
+				"pxb", polardbx.Spec.Restore.BackupSet, "error", err)
 		}
 
-		// TODO(dengli): load spec from remote backup set
 		if polardbx.Spec.Restore.SyncSpecWithOriginalCluster {
+			restoreSpec := polardbx.Spec.Restore.DeepCopy()
+			serviceName := polardbx.Spec.ServiceName
 			polardbx.Spec = *pxcBackup.Status.ClusterSpecSnapshot
-		} else { // ensure that restored cluster have the same dn replicas with original cluster
+			// ensure the operator can enter the restoring phase
+			polardbx.Spec.Restore = restoreSpec
+			// avoid using service name of original cluster
+			polardbx.Spec.ServiceName = serviceName
+		} else {
+			// ensure that restored cluster have the same dn replicas with original cluster
 			polardbx.Spec.Topology.Nodes.DN.Replicas = pxcBackup.Status.ClusterSpecSnapshot.Topology.Nodes.DN.Replicas
 		}
+
 		err = rc.Client().Update(rc.Context(), polardbx)
 		if err != nil {
 			return flow.Error(err, "Failed to sync topology from backup set")
 		}
-		return flow.Pass()
+		return flow.Continue("Spec synced!")
+	},
+)
+
+var CleanDummyBackupObject = polardbxv1reconcile.NewStepBinder("CleanDummyBackupObject",
+	func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+		polardbx := rc.MustGetPolarDBX()
+		pxcBackup, err := rc.GetPXCBackupByName(polardbx.Spec.Restore.BackupSet)
+		if client.IgnoreNotFound(err) != nil {
+			return flow.Error(err, "Failed to get polardbx backup", "backup set", pxcBackup.Name)
+		}
+		if pxcBackup == nil || pxcBackup.Annotations[polardbxmeta.AnnotationDummyBackup] != "true" {
+			return flow.Continue("Dummy backup object not exists, just skip")
+		}
+		if err := rc.Client().Delete(rc.Context(), pxcBackup); err != nil {
+			return flow.Error(err, "Failed to delete dummy backup object")
+		}
+		return flow.Continue("Dummy backup object cleaned!")
 	},
 )

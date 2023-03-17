@@ -17,31 +17,36 @@ limitations under the License.
 package factory
 
 import (
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/rand"
-
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/convention"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/helper"
 	"github.com/alibaba/polardbx-operator/pkg/util/defaults"
 	"github.com/alibaba/polardbx-operator/pkg/util/ssl"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/rand"
 )
 
-func (f *objectFactory) NewSecretFromPolarDBX(secret *corev1.Secret) (*corev1.Secret, error) {
+func (f *objectFactory) NewSecretForRestore() (*corev1.Secret, error) {
 	polardbx := f.rc.MustGetPolarDBX()
 
-	data := make(map[string][]byte)
-	for user, passwd := range secret.Data {
-		data[user] = passwd
+	originalSecret, err := f.rc.GetPolarDBXSecretForRestore()
+	if err != nil || originalSecret == nil {
+		return nil, err
 	}
-	return &corev1.Secret{
+	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      convention.NewSecretName(polardbx, convention.SecretTypeAccount),
 			Namespace: polardbx.Namespace,
 			Labels:    convention.ConstLabels(polardbx),
 		},
-		Data: data,
-	}, nil
+	}
+
+	data := make(map[string][]byte)
+	for user, passwd := range originalSecret.Data {
+		data[user] = passwd
+	}
+	secret.Data = data
+	return secret, nil
 }
 
 func (f *objectFactory) NewSecret() (*corev1.Secret, error) {

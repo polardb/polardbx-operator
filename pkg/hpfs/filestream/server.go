@@ -18,13 +18,19 @@ package filestream
 
 import (
 	"archive/tar"
+	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
+	. "github.com/alibaba/polardbx-operator/pkg/hpfs/common"
+	. "github.com/alibaba/polardbx-operator/pkg/hpfs/config"
+	"github.com/alibaba/polardbx-operator/pkg/hpfs/discovery"
 	"github.com/alibaba/polardbx-operator/pkg/hpfs/remote"
 	polarxJson "github.com/alibaba/polardbx-operator/pkg/util/json"
 	polarxMap "github.com/alibaba/polardbx-operator/pkg/util/map"
+	polarxPath "github.com/alibaba/polardbx-operator/pkg/util/path"
 	"github.com/go-logr/logr"
 	"github.com/google/uuid"
 	"github.com/pkg/sftp"
@@ -34,6 +40,7 @@ import (
 	"os"
 	"path/filepath"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -82,13 +89,6 @@ func NewFileServer(host string, port int, fileRootPath string, flowControl FlowC
 }
 
 func (f *FileServer) Start() error {
-	InitConfig()
-	go func() {
-		for {
-			time.Sleep(70 * time.Second)
-			ReloadConfig()
-		}
-	}()
 	listen, err := net.Listen(NetType, fmt.Sprintf("%s:%d", f.host, f.port))
 	if err != nil {
 		f.logger.Error(err, "Failed to listen")
@@ -141,11 +141,11 @@ func (f *FileServer) handleRequest(conn net.Conn) error {
 	case strings.ToLower(string(UploadLocal)):
 		f.markTask(logger, metadata, TaskStateDoing)
 		err := f.processUploadLocal(logger, metadata, conn)
-		f.processTaskResult(err, metadata)
+		f.processTaskResult(logger, err, metadata)
 	case strings.ToLower(string(UploadRemote)):
 		f.markTask(logger, metadata, TaskStateDoing)
 		err := f.processUploadRemote(logger, metadata, conn)
-		f.processTaskResult(err, metadata)
+		f.processTaskResult(logger, err, metadata)
 	case strings.ToLower(string(DownloadLocal)):
 		f.processDownloadLocal(logger, metadata, conn)
 	case strings.ToLower(string(DownloadRemote)):
@@ -153,15 +153,19 @@ func (f *FileServer) handleRequest(conn net.Conn) error {
 	case strings.ToLower(string(UploadOss)):
 		f.markTask(logger, metadata, TaskStateDoing)
 		err := f.processUploadOss(logger, metadata, conn)
-		f.processTaskResult(err, metadata)
+		f.processTaskResult(logger, err, metadata)
 	case strings.ToLower(string(DownloadOss)):
 		f.processDownloadOss(logger, metadata, conn)
+	case strings.ToLower(string(ListOss)):
+		f.processListOss(logger, metadata, conn)
 	case strings.ToLower(string(UploadSsh)):
 		f.markTask(logger, metadata, TaskStateDoing)
 		err := f.processUploadSsh(logger, metadata, conn)
-		f.processTaskResult(err, metadata)
+		f.processTaskResult(logger, err, metadata)
 	case strings.ToLower(string(DownloadSsh)):
 		f.processDownloadSsh(logger, metadata, conn)
+	case strings.ToLower(string(ListSsh)):
+		f.processListSsh(logger, metadata, conn)
 	case strings.ToLower(string(CheckTask)):
 		f.processCheckTask(logger, metadata, conn)
 	default:
@@ -176,9 +180,10 @@ func (f *FileServer) markTask(logger logr.Logger, metadata ActionMetadata, value
 	TaskMap.Store(metadata.RequestId, value)
 }
 
-func (f *FileServer) processTaskResult(err error, metadata ActionMetadata) {
+func (f *FileServer) processTaskResult(logger logr.Logger, err error, metadata ActionMetadata) {
 	taskState := TaskStateSuccess
 	if err != nil {
+		logger.Error(err, "Failed to process task result")
 		taskState = TaskStateFailed
 	}
 	TaskMap.Store(metadata.RequestId, taskState)
@@ -238,6 +243,9 @@ func (f *FileServer) processUploadSsh(logger logr.Logger, metadata ActionMetadat
 		metadata.Filepath = filepath
 	}
 	destFilepath := metadata.Filepath
+	if !strings.HasPrefix(destFilepath, "/") {
+		destFilepath = filepath.Join(sink.RootPath, destFilepath)
+	}
 	sshConn, err := getSshConn(*sink)
 	if err != nil {
 		logger.Error(err, "failed to get ssh conn")
@@ -281,6 +289,9 @@ func (f *FileServer) processDownloadSsh(logger logr.Logger, metadata ActionMetad
 		metadata.Filepath = filepath
 	}
 	destFilepath := metadata.Filepath
+	if !strings.HasPrefix(destFilepath, "/") {
+		destFilepath = filepath.Join(sink.RootPath, destFilepath)
+	}
 	sshConn, err := getSshConn(*sink)
 	if err != nil {
 		logger.Error(err, "failed to get ssh conn")
@@ -317,8 +328,84 @@ func (f *FileServer) processDownloadSsh(logger logr.Logger, metadata ActionMetad
 	sizeBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(sizeBytes, uint64(size))
 	writer.Write(sizeBytes[:])
-	len, _ := f.flowControl.LimitFlow(fd, writer, nil)
+	var reader io.Reader = fd
+	if metadata.LimitSize != "" {
+		limitSize, _ := strconv.ParseInt(metadata.LimitSize, 10, 64)
+		reader = io.LimitReader(reader, limitSize)
+	}
+	len, _ := f.flowControl.LimitFlow(reader, writer, nil)
 	logger.Info("limitFlow", "len", len)
+	return nil
+}
+
+func (f *FileServer) processListSsh(logger logr.Logger, metadata ActionMetadata, writer io.Writer) error {
+	sink, err := GetSink(metadata.Sink, SinkTypeSftp)
+	if err != nil {
+		logger.Error(err, "fail to get sink", "sinkName", metadata.Sink)
+		return err
+	}
+	if metadata.Filepath == "" {
+		logger.Info("no path provided, only root path will be used: " + sink.RootPath)
+	}
+	metadata.Filepath = filepath.Join(sink.RootPath, metadata.Filepath)
+	sshConn, err := getSshConn(*sink)
+	if err != nil {
+		logger.Error(err, "failed to get ssh conn")
+		return err
+	}
+	defer sshConn.Close()
+	client, err := sftp.NewClient(sshConn)
+	if err != nil {
+		logger.Error(err, "failed to get sftp client")
+		return err
+	}
+	defer client.Close()
+	entries, err := client.ReadDir(metadata.Filepath)
+	if err != nil {
+		logger.Error(err, "failed to read dir: "+metadata.Filepath)
+		return err
+	}
+	// just extract name from os.FileInfo
+	entryNames := make([]string, len(entries))
+	for _, entry := range entries {
+		entryNames = append(entryNames, entry.Name())
+	}
+	// encode the slice using json
+	encodedEntryNames, err := json.Marshal(entryNames)
+	if err != nil {
+		logger.Error(err, "failed to encode entry names")
+		return err
+	}
+	size := len(encodedEntryNames)
+	sizeBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(sizeBytes, uint64(size))
+	writer.Write(sizeBytes[:])
+	len, _ := f.flowControl.LimitFlow(bytes.NewReader(encodedEntryNames), writer, nil)
+	logger.Info("limitFlow", "len", len)
+	return nil
+}
+
+func sftpRemove(client *sftp.Client, file string) error {
+	fileInfo, err := client.Stat(file)
+	if err != nil {
+		return err
+	}
+	if fileInfo.IsDir() {
+		fileInfos, err := client.ReadDir(file)
+		if err != nil {
+			return err
+		}
+		for _, fi := range fileInfos {
+			err = sftpRemove(client, filepath.Join(file, fi.Name()))
+			if err != nil {
+				return err
+			}
+		}
+	}
+	err = client.Remove(file)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -402,18 +489,29 @@ func (f *FileServer) processDownloadOss(logger logr.Logger, metadata ActionMetad
 		filepath := filepath.Join(metadata.InstanceId, metadata.Filename)
 		metadata.Filepath = filepath
 	}
-	reader, writer := io.Pipe()
+	pReader, writer := io.Pipe()
 	defer func() {
 		writer.Close()
-		reader.Close()
+		pReader.Close()
 	}()
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
 		defer func() {
-			reader.Close()
+			err := recover()
+			if err != nil {
+				logger.Info("panic", "err", err)
+			}
+		}()
+		defer func() {
+			pReader.Close()
 			wg.Done()
 		}()
+		var reader io.Reader = pReader
+		if metadata.LimitSize != "" {
+			limitSize, _ := strconv.ParseInt(metadata.LimitSize, 10, 64)
+			reader = io.LimitReader(reader, limitSize)
+		}
 		len, _ := f.flowControl.LimitFlow(reader, conn, nil)
 		logger.Info("limitFlow", "len", len)
 	}()
@@ -436,8 +534,57 @@ func (f *FileServer) processDownloadOss(logger logr.Logger, metadata ActionMetad
 	return nil
 }
 
+func (f *FileServer) processListOss(logger logr.Logger, metadata ActionMetadata, conn net.Conn) error {
+	sink, err := GetSink(metadata.Sink, SinkTypeOss)
+	if err != nil {
+		logger.Error(err, "fail to get sink", "sinkName", metadata.Sink)
+		return err
+	}
+	fileService, err := remote.GetFileService("aliyun-oss")
+	if err != nil {
+		logger.Error(err, "Failed to get file service of aliyun-oss")
+		return err
+	}
+	if metadata.Filepath != "" && metadata.Filepath[len(metadata.Filepath)-1] != '/' {
+		metadata.Filepath = polarxPath.NewPathFromStringSequence(metadata.Filepath, "")
+	}
+	logger.Info("filepath to be listed: " + metadata.Filepath)
+	reader, writer := io.Pipe()
+	defer func() {
+		writer.Close()
+		reader.Close()
+	}()
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer func() {
+			reader.Close()
+			wg.Done()
+		}()
+		len, _ := f.flowControl.LimitFlow(reader, conn, nil)
+		logger.Info("limitFlow", "len", len)
+	}()
+	ctx := context.Background()
+	nowOssParams := polarxMap.MergeMap(map[string]string{}, OssParams, false).(map[string]string)
+	nowOssParams["bucket"] = sink.Bucket
+	ossAuth := getOssAuth(*sink)
+	ft, err := fileService.ListFiles(ctx, writer, metadata.Filepath, ossAuth, nowOssParams)
+	if err != nil {
+		logger.Error(err, "Failed to list file from oss ")
+		return err
+	}
+	err = ft.Wait()
+	writer.Close()
+	if err != nil {
+		logger.Error(err, "Failed to list file from oss ")
+		return err
+	}
+	wg.Wait()
+	return nil
+}
+
 func (f *FileServer) processUploadRemote(logger logr.Logger, metadata ActionMetadata, conn net.Conn) error {
-	host, port := ParseNetAddr(metadata.RedirectAddr)
+	host, port := f.parseNetAddr(metadata.RedirectAddr)
 	fileClient := NewFileClient(host, port, f.flowControl)
 	remoteMetadata := metadata
 	remoteMetadata.Action = ActionLocal2Remote2[metadata.Action]
@@ -529,6 +676,9 @@ func (f *FileServer) writeTarFiles(logger logr.Logger, dirPath string, metadata 
 	}()
 	len, err := f.flowControl.LimitFlow(conn, pipeWriter, conn)
 	logger.Info("limitFlow", "len", len)
+	if err == io.EOF {
+		return nil
+	}
 	return err
 }
 
@@ -657,13 +807,34 @@ func (f *FileServer) processDownloadLocal(logger logr.Logger, metadata ActionMet
 	sizeBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(sizeBytes, uint64(size))
 	writer.Write(sizeBytes[:])
-	len, _ := f.flowControl.LimitFlow(fd, writer, nil)
+	var reader io.Reader = fd
+	if metadata.LimitSize != "" {
+		limitSize, _ := strconv.ParseInt(metadata.LimitSize, 10, 64)
+		reader = io.LimitReader(reader, limitSize)
+	}
+	len, _ := f.flowControl.LimitFlow(reader, writer, nil)
 	logger.Info("limitFlow", "len", len)
 	return nil
 }
 
+func (f *FileServer) parseNetAddr(addr string) (string, int) {
+	nodeName := GetNodeNameFromRemoteAddr(addr)
+	if nodeName != "" {
+		hostInfos, err := GetHostInfoFromConfig(discovery.HpfsNodeJsonFilePath)
+		if err != nil {
+			panic(err)
+		}
+		hostInfo, ok := hostInfos[nodeName]
+		if !ok {
+			panic(fmt.Sprintf("failed to find node %s in host infos", nodeName))
+		}
+		return hostInfo.HpfsHost, int(hostInfo.FsPort)
+	}
+	return ParseNetAddr(addr)
+}
+
 func (f *FileServer) processDownloadRemote(logger logr.Logger, metadata ActionMetadata, conn net.Conn) error {
-	host, port := ParseNetAddr(metadata.RedirectAddr)
+	host, port := f.parseNetAddr(metadata.RedirectAddr)
 	fileClient := NewFileClient(host, port, f.flowControl)
 	remoteMetadata := metadata
 	remoteMetadata.Action = ActionLocal2Remote2[metadata.Action]
@@ -720,6 +891,7 @@ func (f *FileServer) readMetadata(reader io.Reader) (actionMeta ActionMetadata, 
 		Sink:          metadata[MetadataSinkOffset],
 		RequestId:     metadata[MetadataRequestIdOffset],
 		OssBufferSize: metadata[MetadataOssBufferSizeOffset],
+		LimitSize:     metadata[MetadataLimitSize],
 	}
 	return
 }

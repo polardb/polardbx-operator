@@ -49,6 +49,8 @@ type XStoreRestoreSpec struct {
 	// TimeZone defines the specified time zone of the restore time. Default is the location of current cluster.
 	// +optional
 	TimeZone string `json:"timezone,omitempty"`
+
+	PitrEndpoint string `json:"pitrEndpoiint,omitempty"`
 }
 
 type XStoreSpec struct {

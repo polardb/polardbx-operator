@@ -31,15 +31,25 @@ import (
 func init() {
 	xstore_ext.RegisterXStoreExt("galaxy",
 		newXStoreExt(func(ctx context.Context, host string, db *sql.DB) error {
-			// Check for private protocol port.
-			row := db.QueryRowContext(ctx, "select @@galaxyx_port")
-			var polarxPort uint16
-			if err := row.Scan(&polarxPort); err != nil {
+
+			//check if galaxy engine or xdb 8.0
+			row := db.QueryRowContext(ctx, "select @@version")
+			var version string
+			if err := row.Scan(&version); err != nil {
 				return err
 			}
+			galaxyEngine := !strings.Contains(version, "X-Cluster")
 
-			if err := network.TestTcpConnectivity(ctx, host, polarxPort); err != nil {
-				return err
+			if galaxyEngine {
+				// Check for private protocol port.
+				row := db.QueryRowContext(ctx, "select @@galaxyx_port")
+				var polarxPort uint16
+				if err := row.Scan(&polarxPort); err != nil {
+					return err
+				}
+				if err := network.TestTcpConnectivity(ctx, host, polarxPort); err != nil {
+					return err
+				}
 			}
 
 			if featuregate.EnableGalaxyClusterMode.Enabled() {

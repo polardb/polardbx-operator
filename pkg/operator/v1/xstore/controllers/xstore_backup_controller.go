@@ -22,6 +22,7 @@ import (
 	"github.com/alibaba/polardbx-operator/pkg/k8s/control"
 	"github.com/alibaba/polardbx-operator/pkg/operator/hint"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/config"
+	"github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/meta"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/plugin"
 	xstorev1reconcile "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/reconcile"
 	"github.com/go-logr/logr"
@@ -45,7 +46,7 @@ type XStoreBackupReconciler struct {
 }
 
 func (r *XStoreBackupReconciler) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
-	log := r.Logger.WithValues("namespace", request.Namespace, "xstore", request.Name)
+	log := r.Logger.WithValues("namespace", request.Namespace, "xstore-backup", request.Name)
 
 	if hint.IsNamespacePaused(request.Namespace) {
 		log.Info("Reconciling is paused, skip")
@@ -91,6 +92,12 @@ func (r *XStoreBackupReconciler) Reconcile(ctx context.Context, request reconcil
 		return reconcile.Result{}, nil
 	}
 
+	// check whether backup is dummy
+	if xstoreBackup.Annotations[meta.AnnotationDummyBackup] == "true" {
+		log.Info("Dummy xstore backup, skip")
+		return reconcile.Result{}, nil
+	}
+
 	return reconciler.Reconcile(rc, log.WithValues("engine", engine), request)
 }
 
@@ -100,8 +107,8 @@ func (r *XStoreBackupReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			MaxConcurrentReconciles: r.MaxConcurrency,
 			RateLimiter: workqueue.NewMaxOfRateLimiter(
 				workqueue.NewItemExponentialFailureRateLimiter(5*time.Millisecond, 300*time.Second),
-				// 10 qps, 100 bucket size.  This is only for retry speed. It's only the overall factor (not per item).
-				&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
+				// 60 qps, 10 bucket size.  This is only for retry speed. It's only the overall factor (not per item).
+				&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(60), 10)},
 			),
 		}).
 		For(&xstorev1.XStoreBackup{}).

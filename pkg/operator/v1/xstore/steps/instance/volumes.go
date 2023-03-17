@@ -80,7 +80,20 @@ var PrepareHostPathVolumes = xstorev1reconcile.NewStepBinder("PrepareHostPathVol
 				Type:        corev1.HostPathDirectory,
 			}
 		}
-		xstore.Status.BoundVolumes = volumes
+		if xstore.Status.BoundVolumes == nil {
+			xstore.Status.BoundVolumes = volumes
+		} else {
+			for pod, newVolume := range volumes {
+				volume, ok := xstore.Status.BoundVolumes[pod]
+				if !ok {
+					return flow.Error(errors.New("failed to find pod in BoundVolumes"), "", "")
+				}
+				volume.Pod = newVolume.Pod
+				volume.HostPath = newVolume.HostPath
+				volume.LogHostPath = newVolume.LogHostPath
+				volume.Type = newVolume.Type
+			}
+		}
 
 		return flow.Continue("Host path volumes prepared.")
 	},

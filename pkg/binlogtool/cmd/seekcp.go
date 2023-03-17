@@ -21,7 +21,6 @@ package cmd
 import (
 	"bufio"
 	"compress/gzip"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -256,37 +255,11 @@ func writeRecoverableConsistentPoint(recoverableTxs []uint64, borders map[string
 		return err
 	}
 	defer gw.Close()
-
-	if err := binary.Write(gw, binary.LittleEndian, uint32(len(recoverableTxs))); err != nil {
+	bytes, err := algo.SerializeCpResult(recoverableTxs, borders)
+	if err != nil {
 		return err
 	}
-	for _, txid := range recoverableTxs {
-		if err := binary.Write(gw, binary.LittleEndian, txid); err != nil {
-			return err
-		}
-	}
-
-	if err := binary.Write(gw, binary.LittleEndian, uint16(len(borders))); err != nil {
-		return err
-	}
-	for streamName, offset := range borders {
-		if err := binary.Write(gw, binary.LittleEndian, uint8(len(streamName))); err != nil {
-			return err
-		}
-		if _, err := gw.Write([]byte(streamName)); err != nil {
-			return err
-		}
-		if err := binary.Write(gw, binary.LittleEndian, uint8(len(offset.File))); err != nil {
-			return err
-		}
-		if _, err := gw.Write([]byte(offset.File)); err != nil {
-			return err
-		}
-		if err := binary.Write(gw, binary.LittleEndian, offset.Offset); err != nil {
-			return err
-		}
-	}
-
+	gw.Write(bytes)
 	return nil
 }
 

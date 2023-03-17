@@ -39,14 +39,14 @@ type probeConfigure struct {
 	polardbx *polardbxv1.PolarDBXCluster
 }
 
-func (p *probeConfigure) newProbeWithProber(endpoint string, ports CNPorts) corev1.Handler {
+func (p *probeConfigure) newProbeWithProber(endpoint string, probeTarget string, ports ProberPort) corev1.Handler {
 	return corev1.Handler{
 		HTTPGet: &corev1.HTTPGetAction{
 			Path: endpoint,
-			Port: intstr.FromInt(ports.ProbePort),
+			Port: intstr.FromInt(ports.GetProbePort()),
 			HTTPHeaders: []corev1.HTTPHeader{
-				{Name: "Probe-Target", Value: probe.TypePolarDBX},
-				{Name: "Probe-Port", Value: strconv.Itoa(ports.AccessPort)},
+				{Name: "Probe-Target", Value: probeTarget},
+				{Name: "Probe-Port", Value: strconv.Itoa(ports.GetAccessPort())},
 				{Name: "Probe-Timeout", Value: "10s"},
 			},
 		},
@@ -59,17 +59,17 @@ func (p *probeConfigure) ConfigureForCNEngine(container *corev1.Container, ports
 		TimeoutSeconds:      10,
 		PeriodSeconds:       10,
 		FailureThreshold:    6,
-		Handler:             p.newProbeWithProber("/liveness", ports),
+		Handler:             p.newProbeWithProber("/liveness", probe.TypePolarDBX, &ports),
 	}
 	container.LivenessProbe = &corev1.Probe{
 		TimeoutSeconds: 10,
 		PeriodSeconds:  10,
-		Handler:        p.newProbeWithProber("/liveness", ports),
+		Handler:        p.newProbeWithProber("/liveness", probe.TypePolarDBX, &ports),
 	}
 	container.ReadinessProbe = &corev1.Probe{
 		TimeoutSeconds: 10,
 		PeriodSeconds:  10,
-		Handler:        p.newProbeWithProber("/readiness", ports),
+		Handler:        p.newProbeWithProber("/readiness", probe.TypePolarDBX, &ports),
 	}
 }
 
@@ -97,23 +97,17 @@ func (p *probeConfigure) ConfigureForCNExporter(container *corev1.Container, por
 
 func (p *probeConfigure) ConfigureForCDCEngine(container *corev1.Container, ports CDCPorts) {
 	container.StartupProbe = &corev1.Probe{
+		InitialDelaySeconds: 10,
+		TimeoutSeconds:      10,
+		PeriodSeconds:       10,
+		FailureThreshold:    18,
+		Handler:             p.newProbeWithProber("/liveness", probe.TypeCdc, &ports),
+	}
+	container.LivenessProbe = &corev1.Probe{
 		TimeoutSeconds:   10,
 		PeriodSeconds:    10,
-		FailureThreshold: 30,
-		Handler: corev1.Handler{
-			TCPSocket: &corev1.TCPSocketAction{
-				Port: intstr.FromInt(ports.DaemonPort),
-			},
-		},
-	}
-
-	container.LivenessProbe = &corev1.Probe{
-		PeriodSeconds: 20,
-		Handler: corev1.Handler{
-			TCPSocket: &corev1.TCPSocketAction{
-				Port: intstr.FromInt(ports.DaemonPort),
-			},
-		},
+		FailureThreshold: 5,
+		Handler:          p.newProbeWithProber("/liveness", probe.TypeCdc, &ports),
 	}
 }
 

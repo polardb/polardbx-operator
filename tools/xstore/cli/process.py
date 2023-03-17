@@ -69,6 +69,18 @@ def kill_engine_all_process():
 process_group.add_command(kill_engine_all_process)
 
 
+@click.command(name='kill_mysqld')
+def kill_process_mysqld():
+    subprocess.Popen(
+        ["/usr/bin/sh", "-c",
+         "pid=`ps -ef |grep mysqld | grep  loose-pod-name |  grep defaults-file | grep -v mysqld_safe | awk '{print "
+         "$2}'`&&kill $pid"],
+        cwd=None, stdout=None, stderr=None)
+
+
+process_group.add_command(kill_process_mysqld)
+
+
 @click.command(name='check_std_err_complete')
 @click.option('--filepath', type=str)
 def check_std_err_complete(filepath: str, keyword="completed OK!"):

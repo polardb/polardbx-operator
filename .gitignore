@@ -555,3 +555,7 @@ vendor
 !test/testcases/inner
 !pkg/debug
 tools/xstore/venv
+
+docs/**
+/hack/make-rules/venv/
+/hack/make-rules/.idea/

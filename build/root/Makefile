@@ -172,7 +172,7 @@ endif
 
 .PHONY: manifests
 manifests:
-	@controller-gen crd:crdVersions=v1 rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=charts/polardbx-operator/crds
+	@controller-gen crd:crdVersions=v1 rbac:roleName=manager-role webhook paths="./api/..." output:crd:artifacts:config=charts/polardbx-operator/crds
 
 .PHONY: generate-notice
 generate-notice:

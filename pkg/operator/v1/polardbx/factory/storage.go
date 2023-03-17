@@ -478,6 +478,7 @@ func (f *objectFactory) newXStore(
 						Value: &mycnfOverlay,
 					},
 				},
+				Envs: polardbx.Spec.Config.DN.Envs,
 			},
 			Topology: polardbxv1xstore.Topology{
 				NodeSets: nodeSets,
@@ -502,11 +503,16 @@ func (f *objectFactory) newXStore(
 			if err != nil {
 				return nil, err
 			}
+			var pitrEndpoint string
+			if polardbx.Status.PitrStatus != nil {
+				pitrEndpoint = polardbx.Status.PitrStatus.PrepareJobEndpoint
+			}
 			xstore.Spec.Restore = &polardbxv1.XStoreRestoreSpec{
 				BackupSet: backupSet,
 				From: polardbxv1.XStoreRestoreFrom{
 					XStoreName: restoreName,
 				},
+				PitrEndpoint: pitrEndpoint,
 			}
 
 		}
@@ -515,22 +521,23 @@ func (f *objectFactory) newXStore(
 	return xstore, nil
 }
 
-func (f *objectFactory) GetXStoreName(polardbx polardbxv1.PolarDBXCluster, name string) (string, error) {
+func (f *objectFactory) GetOriginalXstoreNameForRestore(polardbx polardbxv1.PolarDBXCluster, name string) (string, error) {
 	backup := &polardbxv1.PolarDBXBackup{}
+	var err error
 	if polardbx.Spec.Restore.BackupSet == "" && len(polardbx.Spec.Restore.BackupSet) == 0 {
-		backup, _ = f.rc.GetCompletedPXCBackup(map[string]string{polardbxmeta.LabelName: polardbx.Spec.Restore.From.PolarBDXName})
+		backup, err = f.rc.GetCompletedPXCBackup(map[string]string{polardbxmeta.LabelName: polardbx.Spec.Restore.From.PolarBDXName})
 	} else {
-		backup, _ = f.rc.GetPXCBackupByName(polardbx.Spec.Restore.BackupSet)
+		backup, err = f.rc.GetPXCBackupByName(polardbx.Spec.Restore.BackupSet)
 	}
-	if backup == nil {
-		return "", nil
+	if err != nil {
+		return "", err
 	}
 	for _, xstoreName := range backup.Status.XStores {
-		if xstoreName[len(xstoreName)-4:] == name[len(name)-4:] {
+		if xstoreName[len(xstoreName)-4:] == name[len(name)-4:] { // safe when quantity of dn less than 10000
 			return xstoreName, nil
 		}
 	}
-	return "", nil
+	return "", errors.New("failed to find matched xstore")
 }
 
 func (f *objectFactory) GetXStoreBackupName(backupName, xstoreName string) (string, error) {
@@ -538,11 +545,13 @@ func (f *objectFactory) GetXStoreBackupName(backupName, xstoreName string) (stri
 	if err != nil {
 		return "", err
 	}
-	xstoreBackupName, ok := backup.Status.Backups[xstoreName]
-	if ok {
-		return xstoreBackupName, nil
+	if backup != nil {
+		xstoreBackupName, ok := backup.Status.Backups[xstoreName]
+		if ok {
+			return xstoreBackupName, nil
+		}
 	}
-	return "", errors.New("not found xstoreBackup")
+	return "", errors.New("failed to get xstore backup name")
 }
 
 func (f *objectFactory) newMycnfOverlayInfFile(polardbxstore *polardbxv1.PolarDBXCluster, enforceTso bool) (*ini.File, error) {
@@ -560,14 +569,6 @@ func (f *objectFactory) newMycnfOverlayInfFile(polardbxstore *polardbxv1.PolarDB
 	if err != nil {
 		return nil, err
 	}
-
-	file.Section("").Key("loose_query_cache_type").SetValue("OFF")
-	file.Section("").Key("loose_query_cache_size").SetValue("0")
-	file.Section("").Key("loose_innodb_thread_concurrency").SetValue("0")
-	file.Section("").Key("loose_concurrent_insert").SetValue("0")
-	file.Section("").Key("loose_gts_lease").SetValue("2000")
-	file.Section("").Key("loose_log_bin_use_v1_row_events").SetValue("off")
-	file.Section("").Key("loose_binlog_checksum").SetValue("crc32")
 
 	if enforceTso {
 		file.Section("").Key("loose_enable_gts").SetValue("1")
@@ -619,7 +620,7 @@ func (f *objectFactory) NewXStoreGMS() (*polardbxv1.XStore, error) {
 
 	restoreName := ""
 	if polardbx.Status.Phase == polardbxv1polardbx.PhaseRestoring {
-		restoreName, err = f.GetXStoreName(*polardbx, xstoreName)
+		restoreName, err = f.GetOriginalXstoreNameForRestore(*polardbx, xstoreName)
 		if err != nil {
 			return nil, err
 		}
@@ -663,7 +664,7 @@ func (f *objectFactory) NewXStoreDN(idx int) (*polardbxv1.XStore, error) {
 	xstoreName := convention.NewDNName(polardbx, idx)
 	restoreName := ""
 	if polardbx.Status.Phase == polardbxv1polardbx.PhaseRestoring {
-		restoreName, err = f.GetXStoreName(*polardbx, xstoreName)
+		restoreName, err = f.GetOriginalXstoreNameForRestore(*polardbx, xstoreName)
 		if err != nil {
 			return nil, err
 		}

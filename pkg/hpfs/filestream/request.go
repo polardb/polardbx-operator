@@ -27,9 +27,12 @@ const (
 	DownloadRemote Action = "downloadRemote"
 	UploadOss      Action = "uploadOss"
 	DownloadOss    Action = "downloadOss"
-	CheckTask      Action = "CheckTask"
+	ListOss        Action = "listOss"
+	CheckTask      Action = "checkTask"
 	UploadSsh      Action = "uploadSsh"
-	DownloadSsh    Action = "DownloadSsh"
+	DownloadSsh    Action = "downloadSsh"
+	ListSsh        Action = "listSsh"
+	InvalidAction  Action = ""
 )
 
 const (
@@ -40,7 +43,7 @@ const (
 
 const (
 	MetaDataLenLen              = 4
-	MetaFiledLen                = 10
+	MetaFiledLen                = 11
 	MetadataActionOffset        = 0
 	MetadataInstanceIdOffset    = 1
 	MetadataFilenameOffset      = 2
@@ -51,6 +54,7 @@ const (
 	MetadataSinkOffset          = 7
 	MetadataRequestIdOffset     = 8
 	MetadataOssBufferSizeOffset = 9
+	MetadataLimitSize           = 10
 )
 
 var ActionLocal2Remote2 = map[Action]Action{
@@ -71,9 +75,25 @@ type ActionMetadata struct {
 	Sink          string `json:"sink,omitempty"`
 	RequestId     string `json:"requestId,omitempty"`
 	OssBufferSize string `json:"ossBufferSize,omitempty"`
+	LimitSize     string `json:"limitSize,omitempty"`
 	redirect      bool
 }
 
 func (action *ActionMetadata) ToString() string {
-	return strings.Join([]string{string(action.Action), action.InstanceId, action.Filename, action.RedirectAddr, action.Filepath, action.RetentionTime, action.Stream, action.Sink, action.RequestId, action.OssBufferSize}, ",")
+	return strings.Join([]string{string(action.Action), action.InstanceId, action.Filename, action.RedirectAddr, action.Filepath, action.RetentionTime, action.Stream, action.Sink, action.RequestId, action.OssBufferSize, action.LimitSize}, ",")
+}
+
+const (
+	RemoteNodePrefix = "RemoteNode="
+)
+
+func GetRemoteAddrByNodeName(nodeName string) string {
+	return RemoteNodePrefix + nodeName
+}
+
+func GetNodeNameFromRemoteAddr(addr string) string {
+	if strings.HasPrefix(addr, RemoteNodePrefix) {
+		return addr[len(RemoteNodePrefix):]
+	}
+	return ""
 }

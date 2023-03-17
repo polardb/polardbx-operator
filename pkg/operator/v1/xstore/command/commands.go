@@ -143,7 +143,7 @@ func (b *commandConsensusBuilder) PurgeLogs(local, force bool) *CommandBuilder {
 }
 
 func (b *commandConsensusBuilder) SetLeader(pod string) *CommandBuilder {
-	b.args = append(b.args, "change-leader", "--node", pod)
+	b.args = append(b.args, "change-leader", pod)
 	return b.end()
 }
 
@@ -154,6 +154,31 @@ func (b *commandConsensusBuilder) AddLearner(pod string) *CommandBuilder {
 
 func (b *commandConsensusBuilder) DropLearner(pod string) *CommandBuilder {
 	b.args = append(b.args, "drop-learner", pod)
+	return b.end()
+}
+
+func (b *commandConsensusBuilder) DisableElection() *CommandBuilder {
+	b.args = append(b.args, "disable-election")
+	return b.end()
+}
+
+func (b *commandConsensusBuilder) EnableElection() *CommandBuilder {
+	b.args = append(b.args, "enable-election")
+	return b.end()
+}
+
+func (b *commandConsensusBuilder) UpdateClusterInfo(clusterInfo string) *CommandBuilder {
+	b.args = append(b.args, "update-cluster-info", clusterInfo)
+	return b.end()
+}
+
+func (b *commandConsensusBuilder) PrepareHandleIndicate(action string) *CommandBuilder {
+	b.args = append(b.args, "prepare-handle-indicate", action)
+	return b.end()
+}
+
+func (b *commandConsensusBuilder) ChangeLearnerToFollower(node string) *CommandBuilder {
+	b.args = append(b.args, "learner-to-follower", node)
 	return b.end()
 }
 
@@ -180,6 +205,11 @@ func (b *commandConsensusBuilder) DropNode(pod, role string) *CommandBuilder {
 
 func (b *commandConsensusBuilder) ForceSingleMode() *CommandBuilder {
 	b.args = append(b.args, "force-single-mode")
+	return b.end()
+}
+
+func (b *commandConsensusBuilder) SetReadonly() *CommandBuilder {
+	b.args = append(b.args, "set-readonly")
 	return b.end()
 }
 
@@ -304,6 +334,11 @@ func (b *commandEngineBuilder) Version() *CommandBuilder {
 	return b.end()
 }
 
+func (b *commandEngineBuilder) Shutdown() *CommandBuilder {
+	b.args = append(b.args, "shutdown")
+	return b.end()
+}
+
 type commandProcessBuilder struct {
 	*commandBuilder
 }
@@ -318,6 +353,11 @@ func (b *nullCommandBuilder) Process() *commandProcessBuilder {
 
 func (b *commandProcessBuilder) KillAllMyProcess() *CommandBuilder {
 	b.args = append(b.args, "kill_all_mysql")
+	return b.end()
+}
+
+func (b *commandProcessBuilder) KillMySQLDProcess() *CommandBuilder {
+	b.args = append(b.args, "kill_mysqld")
 	return b.end()
 }
 

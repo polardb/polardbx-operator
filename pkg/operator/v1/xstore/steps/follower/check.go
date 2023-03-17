@@ -21,6 +21,7 @@ import (
 	polarxv1 "github.com/alibaba/polardbx-operator/api/v1"
 	polarxv1xstore "github.com/alibaba/polardbx-operator/api/v1/xstore"
 	"github.com/alibaba/polardbx-operator/pkg/k8s/control"
+	k8shelper "github.com/alibaba/polardbx-operator/pkg/k8s/helper"
 	xstoremeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/meta"
 	xstorev1reconcile "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -42,8 +43,11 @@ var CheckXStore = NewStepBinder("CheckXStore",
 			rc.MarkChanged()
 			flow.Wait("WaitUntil xstore is being")
 		}
-		xStoreFollower.SetLabels(map[string]string{
+		if xStoreFollower.GetLabels() == nil {
+			xStoreFollower.SetLabels(map[string]string{})
+		}
+		xStoreFollower.SetLabels(k8shelper.PatchLabels(xStoreFollower.GetLabels(), map[string]string{
 			xstoremeta.LabelName: xStoreFollower.Spec.XStoreName,
-		})
+		}))
 		return flow.Continue("CheckXStore success.")
 	})

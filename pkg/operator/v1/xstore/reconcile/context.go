@@ -21,7 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/alibaba/polardbx-operator/pkg/meta/core/gms"
-	"github.com/alibaba/polardbx-operator/pkg/util"
+	"github.com/alibaba/polardbx-operator/pkg/util/name"
 	"k8s.io/utils/pointer"
 	"strings"
 	"time"
@@ -324,6 +324,18 @@ func (rc *Context) GetXStoreClusterAddr(serviceType convention.ServiceType, port
 	return k8shelper.GetClusterAddrFromService(svc, port)
 }
 
+func (rc *Context) GetSecretByName(name string) (*corev1.Secret, error) {
+	secretKey := types.NamespacedName{
+		Namespace: rc.xstoreKey.Namespace,
+		Name:      name,
+	}
+	secret, err := rc.objectCache.GetObject(rc.Context(), secretKey, &corev1.Secret{})
+	if err != nil {
+		return nil, err
+	}
+	return secret.(*corev1.Secret), nil
+}
+
 func (rc *Context) GetXStoreSecret() (*corev1.Secret, error) {
 	xstore, err := rc.GetXStore()
 	if err != nil {
@@ -385,9 +397,13 @@ func (rc *Context) GetXStoreAccountPassword(user string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	return rc.GetXstoreAccountPasswordFromSecret(user, secret)
+}
+
+func (rc *Context) GetXstoreAccountPasswordFromSecret(user string, secret *corev1.Secret) (string, error) {
 	passwd, ok := secret.Data[user]
 	if !ok {
-		return "", errors.New("not found")
+		return "", errors.New("account " + user + " not found")
 	}
 	return string(passwd), nil
 }
@@ -731,7 +747,7 @@ func (rc *Context) GetOrCreateXStoreTaskConfigMap() (*corev1.ConfigMap, error) {
 		xstore := rc.MustGetXStore()
 
 		var cm corev1.ConfigMap
-		err := rc.Client().Get(rc.Context(), types.NamespacedName{Namespace: rc.Namespace(), Name: util.StableName(xstore, "restore")}, &cm)
+		err := rc.Client().Get(rc.Context(), types.NamespacedName{Namespace: rc.Namespace(), Name: name.StableName(xstore, "restore")}, &cm)
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				rc.taskConfigMap = NewTaskConfigMap(xstore)

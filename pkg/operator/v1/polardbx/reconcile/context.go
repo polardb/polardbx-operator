@@ -20,10 +20,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/alibaba/polardbx-operator/pkg/debug"
+	"github.com/alibaba/polardbx-operator/pkg/hpfs/filestream"
 	xstoreconvention "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/convention"
 	xstoremeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/meta"
-	"github.com/alibaba/polardbx-operator/pkg/util"
+	"github.com/alibaba/polardbx-operator/pkg/util/name"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -79,10 +79,15 @@ type Context struct {
 	polardbxBackupKey            types.NamespacedName
 	polardbxBackupStatusSnapshot *polardbxv1.PolarDBXBackupStatus
 	polardbxSeekCpJob            *batchv1.Job
-	polardbxParameterTemplate    *polardbxv1.PolarDBXParameterTemplate
-	polardbxTemplateParams       map[string]map[string]polardbxv1.TemplateParams
-	polardbxParamsRoleMap        map[string]map[string]polardbxv1.Params
-	roleToRestart                map[string]bool
+
+	polardbxBackupScheduleKey    types.NamespacedName
+	polardbxBackupSchedule       *polardbxv1.PolarDBXBackupSchedule
+	polardbxBackupScheduleStatus *polardbxv1.PolarDBXBackupScheduleStatus
+
+	polardbxParameterTemplate *polardbxv1.PolarDBXParameterTemplate
+	polardbxTemplateParams    map[string]map[string]polardbxv1.TemplateParams
+	polardbxParamsRoleMap     map[string]map[string]polardbxv1.Params
+	roleToRestart             map[string]bool
 
 	polardbxParameter       *polardbxv1.PolarDBXParameter
 	polardbxParameterKey    types.NamespacedName
@@ -95,11 +100,19 @@ type Context struct {
 	configLoader func() config.Config
 
 	// Managers
-	gmsManager    gms.Manager
-	groupManager  group.GroupManager
-	xstoreManager group.GroupManager
+	gmsManager   gms.Manager
+	groupManager group.GroupManager
+	// xstoreManagerMap records xstore's pod name and its related group manager
+	xstoreManagerMap map[string]group.GroupManager
 
 	taskConfigMap *corev1.ConfigMap
+
+	// Filestream client
+	filestreamClient *filestream.FileClient
+
+	//backup binlog
+	backupBinlog    *polardbxv1.PolarDBXBackupBinlog
+	backupBinlogKey types.NamespacedName
 }
 
 func (rc *Context) Debug() bool {
@@ -194,31 +207,6 @@ func (rc *Context) MustGetPolarDBX() *polardbxv1.PolarDBXCluster {
 		panic(err)
 	}
 	return polardbx
-}
-
-func (rc *Context) GetXStoreNameForOldPXC() (string, string, error) {
-	polardbx := rc.MustGetPolarDBX()
-	backup := &polardbxv1.PolarDBXBackup{}
-	if polardbx.Spec.Restore.BackupSet == "" && len(polardbx.Spec.Restore.BackupSet) == 0 {
-		backup, _ = rc.GetCompletedPXCBackup(map[string]string{polardbxmeta.LabelName: polardbx.Spec.Restore.From.PolarBDXName})
-	} else {
-		backup, _ = rc.GetPXCBackupByName(polardbx.Spec.Restore.BackupSet)
-	}
-	if backup == nil {
-		return "", "", errors.New("backup not found")
-	}
-	pxcName := backup.Spec.Cluster.Name
-
-	for _, xstoreName := range backup.Status.XStores {
-		splitXStoreName := strings.Split(xstoreName, "-")
-		if splitXStoreName[len(splitXStoreName)-2] == "dn" {
-			return splitXStoreName[len(splitXStoreName)-3], pxcName, nil
-		} else {
-			continue
-		}
-	}
-
-	return "", "", errors.New("Not found DN")
 }
 
 func (rc *Context) GetPrimaryPolarDBX() (*polardbxv1.PolarDBXCluster, error) {
@@ -360,6 +348,13 @@ func (rc *Context) SetControllerRefAndUpdate(obj client.Object) error {
 	return rc.Client().Update(rc.Context(), obj)
 }
 
+func (rc *Context) SetControllerToOwnerAndCreate(owner, obj client.Object) error {
+	if err := ctrl.SetControllerReference(owner, obj, rc.Scheme()); err != nil {
+		return err
+	}
+	return rc.Client().Create(rc.Context(), obj)
+}
+
 func (rc *Context) IsPolarDBXStatusChanged() bool {
 	if rc.polardbxStatus == nil {
 		return false
@@ -492,12 +487,12 @@ func (rc *Context) ParseRestoreTime() (time.Time, error) {
 		return time.Time{}, nil
 	}
 
-	location, err := time.LoadLocation(gms.StrOrDefault(polarDBX.Spec.Restore.TimeZone, "Asia/Shanghai"))
+	location, err := time.LoadLocation(gms.StrOrDefault(polarDBX.Spec.Restore.TimeZone, "UTC"))
 	if err != nil {
 		return time.Time{}, nil
 	}
 
-	return time.ParseInLocation("2006-01-02 15:04:05", polarDBX.Spec.Restore.Time, location)
+	return time.ParseInLocation("2006-01-02T15:04:05Z", polarDBX.Spec.Restore.Time, location)
 }
 
 func (rc *Context) MustParseRestoreTime() time.Time {
@@ -764,12 +759,22 @@ func (rc *Context) GetDN(i int) (*polardbxv1.XStore, error) {
 
 func (rc *Context) GetLeaderOfDN(xstore *polardbxv1.XStore) (*corev1.Pod, error) {
 	var leaderPod corev1.Pod
-	leadrPodName := types.NamespacedName{Namespace: rc.Namespace(), Name: xstore.Status.LeaderPod}
-	err := rc.Client().Get(rc.Context(), leadrPodName, &leaderPod)
+	leaderPodName := types.NamespacedName{Namespace: rc.Namespace(), Name: xstore.Status.LeaderPod}
+	err := rc.Client().Get(rc.Context(), leaderPodName, &leaderPod)
 	if err != nil {
 		return nil, err
 	}
 	return &leaderPod, nil
+}
+
+func (rc *Context) GetXstoreByPod(pod *corev1.Pod) (*polardbxv1.XStore, error) {
+	var xstore polardbxv1.XStore
+	xstoreName := types.NamespacedName{Namespace: pod.Namespace, Name: pod.Labels[xstoremeta.LabelName]}
+	err := rc.Client().Get(rc.Context(), xstoreName, &xstore)
+	if err != nil {
+		return nil, err
+	}
+	return &xstore, nil
 }
 
 func (rc *Context) getDeploymentMap(polardbx *polardbxv1.PolarDBXCluster, role string) (map[string]*appsv1.Deployment, error) {
@@ -983,7 +988,8 @@ func (rc *Context) GetPolarDBXGMSManager() (gms.Manager, error) {
 		}
 
 		gmsEngine := gmsStore.Spec.Engine
-		storageType, err := gms.GetStorageType(gmsEngine, gmsStore.Status.EngineVersion)
+		annoStorageType, _ := polardbx.Annotations[polardbxmeta.AnnotationStorageType]
+		storageType, err := gms.GetStorageType(gmsEngine, gmsStore.Status.EngineVersion, annoStorageType)
 		if err != nil {
 			return nil, err
 		}
@@ -1063,7 +1069,7 @@ func (rc *Context) GetPolarDBXGroupManager() (group.GroupManager, error) {
 	return rc.groupManager, nil
 }
 
-func (rc *Context) GetPolarDBXCNGroupManager(backup *polardbxv1.PolarDBXBackup) (group.GroupManager, error) {
+func (rc *Context) GetPolarDBXGroupManagerByBackup(backup *polardbxv1.PolarDBXBackup) (group.GroupManager, error) {
 	serviceKey := types.NamespacedName{Namespace: backup.Namespace, Name: backup.Spec.Cluster.Name}
 	service := corev1.Service{}
 	err := rc.Client().Get(rc.Context(), serviceKey, &service)
@@ -1090,41 +1096,44 @@ func (rc *Context) GetPolarDBXCNGroupManager(backup *polardbxv1.PolarDBXBackup) 
 	return rc.groupManager, nil
 }
 
-func (rc *Context) GetPolarDBXGroupManagerByXStorePod(pod corev1.Pod) (group.GroupManager, *polardbxv1.XStore, error) {
-	var xstore polardbxv1.XStore
-	var serviceList corev1.ServiceList
-	err := rc.Client().List(rc.Context(), &serviceList, client.InNamespace(rc.Namespace()), client.MatchingLabels{
-		xstoremeta.LabelPod: pod.Name,
-	})
-	if err != nil || len(serviceList.Items) == 0 {
-		return nil, nil, err
+func (rc *Context) GetXstoreGroupManagerByPod(pod *corev1.Pod) (group.GroupManager, error) {
+	if rc.xstoreManagerMap != nil {
+		if mgr, ok := rc.xstoreManagerMap[pod.Name]; ok {
+			return mgr, nil
+		}
 	}
-	host := serviceList.Items[0].Name + "." + pod.Namespace
-	xstoreSpec := types.NamespacedName{Namespace: pod.Namespace, Name: pod.Labels[xstoremeta.LabelName]}
-	err = rc.Client().Get(rc.Context(), xstoreSpec, &xstore)
+
+	podService, err := rc.GetService(xstoreconvention.NewXstorePodServiceName(pod))
 	if err != nil {
-		return nil, nil, err
+		return nil, err
+	}
+	host, port, err := k8shelper.GetClusterIpPortFromService(podService, convention.PortAccess)
+	if err != nil {
+		return nil, err
+	}
+	xstore, err := rc.GetXstoreByPod(pod)
+	if err != nil {
+		return nil, err
 	}
 	passwd, err := rc.GetXStoreAccountPassword(xstoreconvention.SuperAccount, xstore)
 	if err != nil {
-		return nil, nil, err
-	}
-	port, err := strconv.Atoi(pod.Labels[xstoremeta.LabelPortLock])
-	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	rc.groupManager = group.NewGroupManager(
+	if rc.xstoreManagerMap == nil {
+		rc.xstoreManagerMap = make(map[string]group.GroupManager)
+	}
+	rc.xstoreManagerMap[pod.Name] = group.NewGroupManager(
 		rc.Context(),
 		dbutil.MySQLDataSource{
 			Host:     host,
-			Port:     port,
+			Port:     int(port),
 			Username: xstoreconvention.SuperAccount,
 			Password: passwd,
 		},
 		true,
 	)
-	return rc.groupManager, &xstore, nil
+	return rc.xstoreManagerMap[pod.Name], nil
 }
 
 func (rc *Context) Close() error {
@@ -1141,6 +1150,15 @@ func (rc *Context) Close() error {
 		err := rc.groupManager.Close()
 		if err != nil {
 			errs = append(errs, err)
+		}
+	}
+
+	if rc.xstoreManagerMap != nil {
+		for _, mgr := range rc.xstoreManagerMap {
+			err := mgr.Close()
+			if err != nil {
+				errs = append(errs, err)
+			}
 		}
 	}
 
@@ -1222,11 +1240,8 @@ func (rc *Context) UpdatePolarDBXBackup() error {
 }
 
 func (rc *Context) UpdatePolarDBXBackupStatus() error {
-	if debug.IsDebugEnabled() {
-	} else {
-		if rc.polardbxBackupStatusSnapshot == nil {
-			return nil
-		}
+	if rc.polardbxBackupStatusSnapshot == nil {
+		return nil
 	}
 	err := rc.Client().Status().Update(rc.Context(), rc.polardbxBackup)
 	if err != nil {
@@ -1257,6 +1272,19 @@ func (rc *Context) GetXStoreBackups() (*polardbxv1.XStoreBackupList, error) {
 	return &xstoreBackups, nil
 }
 
+func (rc *Context) GetXstoreBackupByName(xstoreBackupName string) (*polardbxv1.XStoreBackup, error) {
+	var xstoreBackup polardbxv1.XStoreBackup
+	xstoreBackupKey := types.NamespacedName{
+		Namespace: rc.Namespace(),
+		Name:      xstoreBackupName,
+	}
+	err := rc.Client().Get(rc.Context(), xstoreBackupKey, &xstoreBackup)
+	if err != nil {
+		return nil, err
+	}
+	return &xstoreBackup, nil
+}
+
 func (rc *Context) GetXStoreBackupPods() ([]corev1.Pod, error) {
 	xstoreBackups, err := rc.GetXStoreBackups()
 	if err != nil {
@@ -1275,7 +1303,7 @@ func (rc *Context) GetXStoreBackupPods() ([]corev1.Pod, error) {
 	return pods, nil
 }
 
-func (rc *Context) GetXStoreAccountPassword(user string, xstore polardbxv1.XStore) (string, error) {
+func (rc *Context) GetXStoreAccountPassword(user string, xstore *polardbxv1.XStore) (string, error) {
 	secret, err := rc.GetXStoreSecret(xstore)
 	if err != nil {
 		return "", err
@@ -1287,13 +1315,13 @@ func (rc *Context) GetXStoreAccountPassword(user string, xstore polardbxv1.XStor
 	return string(passwd), nil
 }
 
-func (rc *Context) GetXStoreSecret(xstore polardbxv1.XStore) (*corev1.Secret, error) {
+func (rc *Context) GetXStoreSecret(xstore *polardbxv1.XStore) (*corev1.Secret, error) {
 	secretKey := types.NamespacedName{Namespace: xstore.Namespace, Name: xstore.Name}
 	secret, err := rc.objectCache.GetObject(rc.Context(), secretKey, &corev1.Secret{})
 	if err != nil {
 		return nil, err
 	}
-	if err := k8shelper.CheckControllerReference(secret, &xstore); err != nil {
+	if err := k8shelper.CheckControllerReference(secret, xstore); err != nil {
 		return nil, err
 	}
 	return secret.(*corev1.Secret), nil
@@ -1355,18 +1383,18 @@ func (rc *Context) GetLastCompletedPXCBackup(matchLabels map[string]string, befo
 		return nil, err
 	}
 	var lastBackup *polardbxv1.PolarDBXBackup = nil
-	var lastBackupStartTime *time.Time = nil
+	var lastBackupRestoreTime *time.Time = nil
 	for i := range polardbxBackupList.Items {
 		backup := &polardbxBackupList.Items[i]
 		if backup.Status.Phase != polardbxv1.BackupFinished {
 			continue
 		}
-		if backup.Status.EndTime.After(beforeTime) {
+		if backup.Status.LatestRecoverableTimestamp.After(beforeTime) {
 			continue
 		}
-		if lastBackupStartTime == nil ||
-			lastBackupStartTime.Before(backup.Status.StartTime.Time) {
-			lastBackupStartTime = &backup.Status.StartTime.Time
+		if lastBackupRestoreTime == nil ||
+			lastBackupRestoreTime.Before(backup.Status.LatestRecoverableTimestamp.Time) {
+			lastBackupRestoreTime = &backup.Status.LatestRecoverableTimestamp.Time
 			lastBackup = backup
 		}
 	}
@@ -1417,7 +1445,7 @@ func (rc *Context) GetOrCreatePolarDBXBackupTaskConfigMap() (*corev1.ConfigMap, 
 		backup := rc.MustGetPolarDBXBackup()
 
 		var cm corev1.ConfigMap
-		err := rc.Client().Get(rc.Context(), types.NamespacedName{Namespace: rc.Namespace(), Name: util.PolarDBXBackupStableName(backup, "seekcp")}, &cm)
+		err := rc.Client().Get(rc.Context(), types.NamespacedName{Namespace: rc.Namespace(), Name: name.PolarDBXBackupStableName(backup, "seekcp")}, &cm)
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				rc.taskConfigMap = NewTaskConfigMap(backup)
@@ -1665,4 +1693,113 @@ func (rc *Context) NewSecretFromPolarDBX(secret *corev1.Secret) (*corev1.Secret,
 		},
 		Data: data,
 	}, nil
+}
+
+func (rc *Context) GetFilestreamClient() (*filestream.FileClient, error) {
+	if rc.filestreamClient == nil {
+		hostPort := strings.SplitN(rc.Config().Store().FilestreamServiceEndpoint(), ":", 2)
+		if len(hostPort) < 2 {
+			return nil, errors.New("invalid filestream endpoint: " + rc.Config().Store().FilestreamServiceEndpoint())
+		}
+		port, err := strconv.Atoi(hostPort[1])
+		if err != nil {
+			return nil, errors.New("invalid filestream port: " + hostPort[1])
+		}
+		rc.filestreamClient = filestream.NewFileClient(hostPort[0], port, nil)
+	}
+	return rc.filestreamClient, nil
+}
+
+func (rc *Context) SetPolarDBXBackupScheduleKey(key types.NamespacedName) {
+	rc.polardbxBackupScheduleKey = key
+}
+
+func (rc *Context) GetPolarDBXBackupSchedule() (*polardbxv1.PolarDBXBackupSchedule, error) {
+	if rc.polardbxBackupSchedule == nil {
+		schedule, err := rc.objectCache.GetObject(
+			rc.Context(),
+			rc.polardbxBackupScheduleKey,
+			&polardbxv1.PolarDBXBackupSchedule{},
+		)
+		if err != nil {
+			return nil, err
+		}
+		rc.polardbxBackupSchedule = schedule.(*polardbxv1.PolarDBXBackupSchedule)
+		rc.polardbxBackupScheduleStatus = rc.polardbxBackupSchedule.Status.DeepCopy()
+	}
+	return rc.polardbxBackupSchedule, nil
+}
+
+func (rc *Context) MustGetPolarDBXBackupSchedule() *polardbxv1.PolarDBXBackupSchedule {
+	schedule, err := rc.GetPolarDBXBackupSchedule()
+	if err != nil {
+		panic(err)
+	}
+	return schedule
+}
+
+func (rc *Context) IsPolarDBXBackupScheduleStatusChanged() bool {
+	if rc.polardbxBackupScheduleStatus == nil {
+		return false
+	}
+	return !equality.Semantic.DeepEqual(rc.polardbxBackupScheduleStatus, &rc.polardbxBackupSchedule.Status)
+}
+
+func (rc *Context) UpdatePolarDBXBackupScheduleStatus() error {
+	if rc.polardbxBackupScheduleStatus == nil {
+		return nil
+	}
+	err := rc.Client().Status().Update(rc.Context(), rc.polardbxBackupSchedule)
+	if err != nil {
+		return err
+	}
+	rc.polardbxBackupScheduleStatus = rc.polardbxBackupSchedule.Status.DeepCopy()
+	return nil
+}
+
+func (rc *Context) GetPolarDBXBackupListByPolarDBXName(polardbxName string) (*polardbxv1.PolarDBXBackupList, error) {
+	return rc.GetPolarDBXBackupListByLabels(map[string]string{polardbxmeta.LabelName: polardbxName})
+}
+
+func (rc *Context) GetPolarDBXBackupListByScheduleName(scheduleName string) (*polardbxv1.PolarDBXBackupList, error) {
+	return rc.GetPolarDBXBackupListByLabels(map[string]string{polardbxmeta.LabelBackupSchedule: scheduleName})
+}
+
+func (rc *Context) GetPolarDBXBackupListByLabels(labels map[string]string) (*polardbxv1.PolarDBXBackupList, error) {
+	var backupList polardbxv1.PolarDBXBackupList
+	err := rc.Client().List(rc.Context(), &backupList, client.InNamespace(rc.Namespace()), client.MatchingLabels(labels))
+	if err != nil {
+		return nil, err
+	}
+	return &backupList, nil
+}
+
+func (rc *Context) SetBackupBinlogKey(key types.NamespacedName) {
+	rc.backupBinlogKey = key
+}
+
+func (rc *Context) GetPolarDBXBackupBinlog() (*polardbxv1.PolarDBXBackupBinlog, error) {
+	if rc.backupBinlog == nil {
+		var backupBinlog polardbxv1.PolarDBXBackupBinlog
+		err := rc.Client().Get(rc.Context(), rc.backupBinlogKey, &backupBinlog)
+		if err != nil {
+			return nil, err
+		}
+		rc.backupBinlog = &backupBinlog
+	}
+	return rc.backupBinlog, nil
+}
+
+func (rc *Context) MustGetPolarDBXBackupBinlog() *polardbxv1.PolarDBXBackupBinlog {
+	backupBinlog, err := rc.GetPolarDBXBackupBinlog()
+	if err != nil {
+		panic(err)
+	}
+	return backupBinlog
+}
+
+func (rc *Context) UpdatePolarDbXBackupBinlog() error {
+	backupBinlog := rc.MustGetPolarDBXBackupBinlog()
+	err := rc.Client().Update(rc.Context(), backupBinlog)
+	return err
 }

@@ -32,6 +32,7 @@ const (
 	PhaseFailed     Phase = "Failed"
 	PhaseRestarting Phase = "Restarting"
 	PhaseUnknown    Phase = "Unknown"
+	PhaseAdapting   Phase = "Adapting"
 )
 
 type Stage string
@@ -42,4 +43,11 @@ const (
 	StageLocking Stage = "Locking"
 	StageClean   Stage = "Clean"
 	StageUpdate  Stage = "Update"
+)
+
+// valid stage of xstore adapting
+const (
+	StageAdapting      Stage = "StageAdapting"
+	StageFlushMetadata Stage = "StageFlushMetadata"
+	StageBeforeSuccess Stage = "StageBeforeSuccess"
 )

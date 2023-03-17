@@ -133,3 +133,15 @@ func (h *hdfsFs) DownloadFile(ctx context.Context, writer io.Writer, path string
 
 	return ft, nil
 }
+
+func (h *hdfsFs) DeleteExpiredFile(ctx context.Context, path string, auth, params map[string]string) (FileTask, error) {
+	panic("Not implemented")
+}
+
+func (h *hdfsFs) ListFiles(ctx context.Context, writer io.Writer, path string, auth, params map[string]string) (FileTask, error) {
+	panic("Not implemented")
+}
+
+func (h *hdfsFs) ListAllFiles(ctx context.Context, path string, auth, params map[string]string) (FileTask, error) {
+	panic("Not implemented")
+}

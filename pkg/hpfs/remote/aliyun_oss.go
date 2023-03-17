@@ -17,10 +17,15 @@ limitations under the License.
 package remote
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"github.com/alibaba/polardbx-operator/pkg/hpfs/common"
 	polarxIo "github.com/alibaba/polardbx-operator/pkg/util/io"
+	polarxPath "github.com/alibaba/polardbx-operator/pkg/util/path"
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
+	"github.com/eapache/queue"
 	"io"
 	"os"
 	"path/filepath"
@@ -58,8 +63,39 @@ func (o *aliyunOssFs) DeleteFile(ctx context.Context, path string, auth, params 
 	if err != nil {
 		return fmt.Errorf("failed to open oss bucket: %w", err)
 	}
-
 	return bucket.DeleteObject(path)
+}
+
+func (o aliyunOssFs) DeleteExpiredFile(ctx context.Context, path string, auth, params map[string]string) (FileTask, error) {
+	ossCtx, err := newAliyunOssContext(ctx, auth, params)
+	if err != nil {
+		return nil, err
+	}
+	client, err := o.newClient(ossCtx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create oss client: %w", err)
+	}
+	bucket, err := client.Bucket(ossCtx.bucket)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open oss bucket: %w", err)
+	}
+	ft := newFileTask(ctx)
+	go func() {
+		err := o.ListFileWithDeadline(path, bucket, ossCtx.deadline, func(objs []string) error {
+			_, err := bucket.DeleteObjects(objs)
+			if err != nil {
+				return err
+			}
+			for _, obj := range objs {
+				if val, ok := ctx.Value(common.AffectedFiles).(*[]string); ok {
+					*val = append(*val, obj)
+				}
+			}
+			return nil
+		})
+		ft.complete(err)
+	}()
+	return ft, nil
 }
 
 type ossProgressListener4FileTask struct {
@@ -183,7 +219,12 @@ func (o *aliyunOssFs) UploadFile(ctx context.Context, reader io.Reader, path str
 		}()
 		var uploadedLen int64
 		parts := make([]oss.UploadPart, 0)
+		emptyBytes := make([]byte, 0)
 		for {
+			_, err := pipeReader.Read(emptyBytes)
+			if err != nil {
+				break
+			}
 			limitedReader := io.LimitReader(pipeReader, limitReaderSize)
 			uploadPart, err := bucket.UploadPart(imur, limitedReader, limitReaderSize, partIndex, opts...)
 			partIndex++
@@ -458,6 +499,135 @@ func (o *aliyunOssFs) DownloadFile(ctx context.Context, writer io.Writer, path s
 	return ft, nil
 }
 
+func (o *aliyunOssFs) ListFiles(ctx context.Context, writer io.Writer, path string, auth, params map[string]string) (FileTask, error) {
+	ossCtx, err := newAliyunOssContext(ctx, auth, params)
+	if err != nil {
+		return nil, err
+	}
+
+	client, err := o.newClient(ossCtx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create oss client: %w", err)
+	}
+	bucket, err := client.Bucket(ossCtx.bucket)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open oss bucket: %w", err)
+	}
+
+	ft := newFileTask(ctx)
+	go func() {
+		// list entries in path use oss sdk
+		entryNames := make([]string, 0)
+		marker := ""
+		prefix := oss.Prefix(path)
+		delimiter := oss.Delimiter("/")
+		for {
+			lsRes, err := bucket.ListObjects(oss.Marker(marker), prefix, delimiter)
+			if err != nil {
+				ft.complete(fmt.Errorf("failed to list oss objects in path %s: %w", path, err))
+				return
+			}
+			for _, object := range lsRes.Objects { // file
+				entryNames = append(entryNames, polarxPath.GetBaseNameFromPath(object.Key))
+			}
+			for _, dir := range lsRes.CommonPrefixes { // subdirectory
+				entryNames = append(entryNames, polarxPath.GetBaseNameFromPath(dir))
+			}
+			if lsRes.IsTruncated {
+				marker = lsRes.NextMarker
+			} else {
+				break
+			}
+		}
+
+		// parse entry slice and send response
+		encodedEntryNames, err := json.Marshal(entryNames)
+		if err != nil {
+			ft.complete(fmt.Errorf("failed to encode entry name slice,: %w", err))
+			return
+		}
+		if ossCtx.writeLen {
+			bytesCount := int64(len(encodedEntryNames))
+			err := polarxIo.WriteUint64(writer, uint64(bytesCount))
+			if err != nil {
+				ft.complete(fmt.Errorf("failed to send content bytes count: %w", err))
+				return
+			}
+			_, err = io.CopyN(writer, bytes.NewReader(encodedEntryNames), bytesCount)
+		} else {
+			_, err = io.Copy(writer, bytes.NewReader(encodedEntryNames))
+		}
+		if err != nil {
+			ft.complete(fmt.Errorf("failed to copy content: %w", err))
+			return
+		}
+		ft.complete(nil)
+	}()
+	return ft, nil
+}
+
+func (o *aliyunOssFs) ListFileWithDeadline(path string, bucket *oss.Bucket, deadline int64, callback func([]string) error) error {
+	marker := ""
+	delimiter := oss.Delimiter("/")
+	fileQueue := queue.New()
+	fileQueue.Add([]string{path, marker})
+	for fileQueue.Length() != 0 {
+		element := fileQueue.Remove().([]string)
+		lsRes, err := bucket.ListObjects(oss.Marker(element[1]), oss.Prefix(element[0]), delimiter)
+		if err != nil {
+			return err
+		}
+		if lsRes.IsTruncated {
+			fileQueue.Add([]string{element[0], lsRes.NextMarker})
+		}
+		for _, commonPrefix := range lsRes.CommonPrefixes {
+			fileQueue.Add([]string{commonPrefix, ""})
+		}
+		objs := make([]string, 0)
+		for _, obj := range lsRes.Objects {
+			if obj.LastModified.Unix() < deadline {
+				// delete it
+				objs = append(objs, obj.Key)
+			}
+		}
+		if len(objs) > 0 {
+			err := callback(objs)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (o *aliyunOssFs) ListAllFiles(ctx context.Context, path string, auth, params map[string]string) (FileTask, error) {
+	ossCtx, err := newAliyunOssContext(ctx, auth, params)
+	if err != nil {
+		return nil, err
+	}
+	client, err := o.newClient(ossCtx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create oss client: %w", err)
+	}
+	bucket, err := client.Bucket(ossCtx.bucket)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open oss bucket: %w", err)
+	}
+	ft := newFileTask(ctx)
+	go func() {
+		err := o.ListFileWithDeadline(path, bucket, ossCtx.deadline, func(objs []string) error {
+			for _, obj := range objs {
+				if val, ok := ctx.Value(common.AffectedFiles).(*[]string); ok {
+					*val = append(*val, obj)
+				}
+			}
+			return nil
+		})
+		ft.complete(err)
+	}()
+	return ft, nil
+}
+
 type aliyunOssContext struct {
 	ctx context.Context
 
@@ -469,6 +639,7 @@ type aliyunOssContext struct {
 	writeLen      bool
 	bufferSize    int64
 	useTmpFile    bool
+	deadline      int64
 }
 
 func newAliyunOssContext(ctx context.Context, auth, params map[string]string) (*aliyunOssContext, error) {
@@ -496,6 +667,14 @@ func newAliyunOssContext(ctx context.Context, auth, params map[string]string) (*
 		}
 		useTmpFile = toUseTmpFile
 	}
+	var deadline int64 = 0
+	if val, ok := params["deadline"]; ok {
+		parsedDeadline, err := strconv.ParseInt(val, 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		deadline = parsedDeadline
+	}
 	ossCtx := &aliyunOssContext{
 		ctx:          ctx,
 		endpoint:     auth["endpoint"],
@@ -505,6 +684,7 @@ func newAliyunOssContext(ctx context.Context, auth, params map[string]string) (*
 		writeLen:     writeLen,
 		bufferSize:   bufferSize,
 		useTmpFile:   useTmpFile,
+		deadline:     deadline,
 	}
 
 	if t, ok := params["retention-time"]; ok {

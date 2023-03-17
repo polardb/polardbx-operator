@@ -21,7 +21,7 @@ import time
 from abc import ABC, abstractmethod
 from core import consensus, convention
 from core.consensus import AbstractConsensusManager
-from core.context import Context
+from core.context import Context, PodInfo
 from typing import ClassVar, Sequence, AnyStr
 
 
@@ -179,6 +179,19 @@ class Engine(ABC):
         shutdown mysql
         """
 
+    @abstractmethod
+    def prepare_handle_indicate(self, action):
+        """
+        prepare indicate
+        """
+
+    @abstractmethod
+    def try_handle_indicate(self):
+        """
+        check if it is necessary to handle indicate
+        try to handle indicate
+        """
+
 
 class Mock(Engine):
     """
@@ -253,6 +266,12 @@ class Mock(Engine):
         return
 
     def shutdown(self):
+        return
+
+    def prepare_handle_indicate(self, action):
+        return
+
+    def try_handle_indicate(self):
         return
 
 
@@ -341,7 +360,7 @@ class EngineCommon(Engine, ABC):
             f.write('')
 
         retry_count = 0
-        while limit is None or retry_count < limit:
+        while limit is None or retry_count < limit or 'debug' == PodInfo().annotation(convention.ANNOTATION_RUNMODE):
             self.logger.info('starting process...')
             p = self.start_process(cmd)
 
@@ -525,3 +544,16 @@ class EngineCommon(Engine, ABC):
 
     def is_restore_prepare(self) -> bool:
         return self.restore_prepare
+
+    def prepare_handle_indicate(self, action):
+        indicate_file = self.context.volume_path(convention.VOLUME_DATA, 'handle_indicate')
+        with open(indicate_file, "w") as f:
+            f.write(action)
+
+    def try_handle_indicate(self):
+        indicate_file = self.context.volume_path(convention.VOLUME_DATA, 'handle_indicate')
+        if os.path.exists(indicate_file):
+            with open(indicate_file, "r") as f:
+                action = f.readline()
+                self.handle_indicate(action)
+            os.remove(indicate_file)

@@ -58,16 +58,17 @@ func (b *rawLogEventWriter) Write(ev event.LogEvent) error {
 			algo := data[len(data)-1]
 			b.binlogChecksumAlgorithm = spec.BinlogChecksumAlgorithm(algo)
 		}
-		b.parseFirstEvent = false
 	}
 
-	if b.binlogChecksumAlgorithm == spec.BinlogChecksumAlgorithmCrc32 {
+	if b.binlogChecksumAlgorithm == spec.BinlogChecksumAlgorithmCrc32 || b.parseFirstEvent {
 		// Configure and write checksum
 		var checksum uint32
 		checksum = crc32.Update(checksum, crc32.IEEETable, headerBytes)
 		checksum = crc32.Update(checksum, crc32.IEEETable, ev.EventData().(event.RawLogEventData))
 		binary.Write(b.w, binary.LittleEndian, checksum)
 	}
+
+	b.parseFirstEvent = false
 
 	return nil
 }

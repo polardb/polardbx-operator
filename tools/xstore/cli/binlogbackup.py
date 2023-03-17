@@ -123,11 +123,12 @@ def get_max_log_from_offset_gms(filestream_client, binlog_end_offset_path, binlo
 def get_max_log_from_cp(filestream_client, indexes_path, binlog_backup_dir, xstore_name, logger):
     indexes_local_path = os.path.join(binlog_backup_dir, "indexes")
     filestream_client.download_to_file(remote=indexes_path, local=indexes_local_path, logger=logger)
+    xstore_pattern = xstore_name + ':'  # such as "pxc-dn-1:"
     with open(indexes_local_path, 'r') as f:
         for text_line in f.readlines():
-            m = re.search(xstore_name, text_line)
+            m = re.search(xstore_pattern, text_line)
             if m:
-                max_log_info = text_line.split(xstore_name+":")[-1].strip()
+                max_log_info = text_line.split(xstore_pattern)[-1].strip()
                 break
     logger.info("max_log_info:" + max_log_info)
     return max_log_info.split(':')[0], max_log_info.split(':')[1]

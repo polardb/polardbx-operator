@@ -14,6 +14,7 @@
 
 import collections
 import configparser
+import fcntl
 import os
 from typing import AnyStr, Any
 
@@ -24,6 +25,8 @@ class MySQLConfigManager(ConfigManager):
     """
     Config manager for MySQL (my.cnf).
     """
+
+    opt_canonical_white_list = {"loose_performance_schema_instrument"}
 
     def __init__(self, config_path):
         super().__init__(config_path)
@@ -37,7 +40,7 @@ class MySQLConfigManager(ConfigManager):
         for section, proxy in config.items():
             for opt, value in proxy.items():
                 c_opt = cls._canonical_option_key(opt)
-                if c_opt != opt:
+                if c_opt != opt and c_opt not in MySQLConfigManager.opt_canonical_white_list:
                     proxy.pop(opt)
                     proxy[c_opt] = value
         return config
@@ -76,6 +79,48 @@ class MySQLConfigManager(ConfigManager):
             config = cls._hack_sort_config(config)
         with open(path, 'w') as f:
             config.write(fp=f)
+
+    @classmethod
+    def check_config_version(cls, config_version_path, override_version_path) -> bool:
+        if not os.path.exists(override_version_path):
+            return False
+        with open(override_version_path, 'r') as o:
+            override_version = o.read()
+
+        if not os.path.exists(config_version_path):
+            return True
+        else:
+            with open(config_version_path, 'r+') as c:
+                config_version = c.read()
+                if int(override_version) > int(config_version):
+                    return True
+        return False
+
+    @classmethod
+    def write_config_version(cls, config_version_path, override_version_path):
+        if not os.path.exists(override_version_path):
+            override_version = "0"
+        else:
+            with open(override_version_path, 'r') as o:
+                override_version = o.read()
+
+        if not os.path.exists(config_version_path):
+            with open(config_version_path, 'w+') as c:
+                fcntl.flock(c.fileno(), fcntl.LOCK_EX)
+                try:
+                    c.write(override_version)
+                finally:
+                    fcntl.flock(c.fileno(), fcntl.LOCK_UN)
+        else:
+            with open(config_version_path, 'r+') as c:
+                fcntl.flock(c.fileno(), fcntl.LOCK_EX)
+                try:
+                    config_version = c.read()
+                    if int(override_version) > int(config_version):
+                        c.seek(0)
+                        c.write(override_version)
+                finally:
+                    fcntl.flock(c.fileno(), fcntl.LOCK_UN)
 
     def _update_config(self, config: configparser.ConfigParser):
         # Write to resource first.

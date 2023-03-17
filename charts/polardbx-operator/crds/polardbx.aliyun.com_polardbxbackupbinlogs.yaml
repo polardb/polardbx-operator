@@ -1,0 +1,106 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.9.0
+  creationTimestamp: null
+  name: polardbxbackupbinlogs.polardbx.aliyun.com
+spec:
+  group: polardbx.aliyun.com
+  names:
+    kind: PolarDBXBackupBinlog
+    listKind: PolarDBXBackupBinlogList
+    plural: polardbxbackupbinlogs
+    shortNames:
+    - pxcblog
+    singular: polardbxbackupbinlog
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.phase
+      name: PHASE
+      type: string
+    name: v1
+    schema:
+      openAPIV3Schema:
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            properties:
+              binlogChecksum:
+                default: CRC32
+                type: string
+              localExpireLogHours:
+                anyOf:
+                - type: integer
+                - type: string
+                default: 7
+                x-kubernetes-int-or-string: true
+              maxLocalBinlogCount:
+                default: 60
+                format: int64
+                type: integer
+              pointInTimeRecover:
+                default: true
+                type: boolean
+              pxcName:
+                type: string
+              pxcUid:
+                type: string
+              remoteExpireLogHours:
+                anyOf:
+                - type: integer
+                - type: string
+                default: 168
+                x-kubernetes-int-or-string: true
+              storageProvider:
+                description: StorageProvider defines the backend storage to store
+                  the backup files.
+                properties:
+                  sink:
+                    description: Sink defines the storage configuration choose to
+                      perform backup
+                    type: string
+                  storageName:
+                    description: StorageName defines the storage medium used to perform
+                      backup
+                    type: string
+                type: object
+            type: object
+          status:
+            properties:
+              checkExpireFileLastTime:
+                description: CheckExpireFileLastTime represents a timestamp of checking
+                  expired files
+                format: int64
+                type: integer
+              lastDeletedFiles:
+                description: LastDeletedFiles represent the files deleted recently
+                items:
+                  type: string
+                type: array
+              observedGeneration:
+                description: ObservedGeneration represents the observed generation
+                  of PolarDBXBackupBinlogSpec.
+                format: int64
+                type: integer
+              phase:
+                description: Phase represents the executing phase in the controller
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources: {}

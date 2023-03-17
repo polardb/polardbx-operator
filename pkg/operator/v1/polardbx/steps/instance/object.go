@@ -57,30 +57,25 @@ var CreateSecretsIfNotFound = polardbxv1reconcile.NewStepBinder("CreateSecretsIf
 		}
 		if accountSecret == nil {
 			if polarDBX.Spec.Restore != nil {
-				secret, err := rc.GetPolarDBXSecretForRestore()
-				if err != nil {
-					return flow.Error(err, "Unable to get old secret for restore")
+				if client.IgnoreNotFound(err) != nil {
+					return flow.Error(err, "Unable to get original secret for restore")
 				}
-				accountSecret, err = factory.NewObjectFactory(rc).NewSecretFromPolarDBX(secret)
+				accountSecret, err = factory.NewObjectFactory(rc).NewSecretForRestore()
 				if err != nil {
-					return flow.Error(err, "Unable to new account secret while restoring.")
-				}
-				err = rc.SetControllerRefAndCreate(accountSecret)
-				if err != nil {
-					return flow.Error(err, "Unable to create account secret while restoring.")
+					return flow.Error(err, "Unable to new account secret during restoring.")
 				}
 			} else {
 				accountSecret, err = factory.NewObjectFactory(rc).NewSecret()
 				if err != nil {
 					return flow.Error(err, "Unable to new account secret.")
 				}
-				err = rc.SetControllerRefAndCreate(accountSecret)
-				if err != nil {
-					return flow.Error(err, "Unable to create account secret.")
-				}
-
+			}
+			err = rc.SetControllerRefAndCreate(accountSecret)
+			if err != nil {
+				return flow.Error(err, "Unable to create account secret.")
 			}
 		}
+
 		keySecret, err := rc.GetPolarDBXSecret(convention.SecretTypeSecurity)
 		if client.IgnoreNotFound(err) != nil {
 			return flow.Error(err, "Unable to get encode key secret.")
@@ -650,6 +645,14 @@ var CreateFileStorage = polardbxv1reconcile.NewStepBinder("CreateFileStorage",
 		groupManager, err := rc.GetPolarDBXGroupManager()
 		if err != nil {
 			return flow.Error(err, "Failed to get CN group manager.")
+		}
+
+		supportFileStorage, err := groupManager.CheckFileStorageCompatibility()
+		if err != nil {
+			return flow.Error(err, "Failed to check compatibility of file storage.")
+		}
+		if !supportFileStorage {
+			return flow.Continue("Current pxc does not support file storage.")
 		}
 
 		fileStorageInfoList, err := groupManager.ListFileStorage()

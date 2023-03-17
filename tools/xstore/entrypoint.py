@@ -110,6 +110,8 @@ def _start(initialize, restore_prepare, debug, ignore_indicates, cluster_start_i
         engine.update_config()
         # mv log file if log_data_separation config changes
         engine.try_move_log_file()
+        # try to flush metadata
+        engine.try_handle_indicate()
         engine.bootstrap()
 
 

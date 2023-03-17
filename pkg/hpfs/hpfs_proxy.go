@@ -41,6 +41,81 @@ type proxy struct {
 	local proto.HpfsServiceServer
 }
 
+func (p *proxy) GetWatcherInfoHash(ctx context.Context, request *proto.GetWatcherInfoHashRequest) (*proto.GetWatcherInfoHashResponse, error) {
+	resp, err := p.executeOnHost(ctx, "GetWatcherInfoHash", request.Host, request,
+		func(c proto.HpfsServiceClient) (protobuf.Message, error) {
+			return c.GetWatcherInfoHash(ctx, request)
+		},
+		func(s proto.HpfsServiceServer) (protobuf.Message, error) {
+			return s.GetWatcherInfoHash(ctx, request)
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	return resp.(*proto.GetWatcherInfoHashResponse), err
+}
+
+func (p *proxy) OpenBackupBinlog(ctx context.Context, request *proto.OpenBackupBinlogRequest) (*proto.OpenBackupBinlogResponse, error) {
+	resp, err := p.executeOnHost(ctx, "OpenBackupBinlog", request.Host, request,
+		func(c proto.HpfsServiceClient) (protobuf.Message, error) {
+			return c.OpenBackupBinlog(ctx, request)
+		},
+		func(s proto.HpfsServiceServer) (protobuf.Message, error) {
+			return s.OpenBackupBinlog(ctx, request)
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	return resp.(*proto.OpenBackupBinlogResponse), err
+}
+
+func (p *proxy) CloseBackupBinlog(ctx context.Context, request *proto.CloseBackupBinlogRequest) (*proto.CloseBackupBinlogResponse, error) {
+	resp, err := p.executeOnHost(ctx, "CloseBackupBinlog", request.Host, request,
+		func(c proto.HpfsServiceClient) (protobuf.Message, error) {
+			return c.CloseBackupBinlog(ctx, request)
+		},
+		func(s proto.HpfsServiceServer) (protobuf.Message, error) {
+			return s.CloseBackupBinlog(ctx, request)
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	return resp.(*proto.CloseBackupBinlogResponse), err
+}
+
+func (p *proxy) UploadLatestBinlogFile(ctx context.Context, request *proto.UploadLatestBinlogFileRequest) (*proto.UploadLatestBinlogFileResponse, error) {
+	resp, err := p.executeOnHost(ctx, "UploadLatestBinlogFile", request.Host, request,
+		func(c proto.HpfsServiceClient) (protobuf.Message, error) {
+			return c.UploadLatestBinlogFile(ctx, request)
+		},
+		func(s proto.HpfsServiceServer) (protobuf.Message, error) {
+			return s.UploadLatestBinlogFile(ctx, request)
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	return resp.(*proto.UploadLatestBinlogFileResponse), err
+}
+
+func (p *proxy) DeleteBinlogFilesBefore(ctx context.Context, request *proto.DeleteBinlogFilesBeforeRequest) (*proto.DeleteBinlogFilesBeforeResponse, error) {
+	resp, err := p.executeOnHost(ctx, "DeleteBinlogFilesBefore", nil, request,
+		func(c proto.HpfsServiceClient) (protobuf.Message, error) {
+			return c.DeleteBinlogFilesBefore(ctx, request)
+		},
+		func(s proto.HpfsServiceServer) (protobuf.Message, error) {
+			return s.DeleteBinlogFilesBefore(ctx, request)
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	return resp.(*proto.DeleteBinlogFilesBeforeResponse), err
+}
+
 func (p *proxy) executeOnHost(ctx context.Context, api string, host *proto.Host, request protobuf.Message,
 	remoteFn func(c proto.HpfsServiceClient) (protobuf.Message, error),
 	localFn func(s proto.HpfsServiceServer) (protobuf.Message, error)) (protobuf.Message, error) {
@@ -343,6 +418,38 @@ func (p *proxy) ShowDiskInfo(ctx context.Context, request *proto.ShowDiskInfoReq
 		return nil, err
 	}
 	return resp.(*proto.ShowDiskInfoResponse), err
+}
+
+func (p *proxy) ListLocalBinlogList(ctx context.Context, request *proto.ListLocalBinlogListRequest) (*proto.ListLocalBinlogListResponse, error) {
+	resp, err := p.executeOnHost(ctx, "ListLocalBinlogList", request.Host, request,
+		func(c proto.HpfsServiceClient) (protobuf.Message, error) {
+			return c.ListLocalBinlogList(ctx, request)
+		},
+		func(s proto.HpfsServiceServer) (protobuf.Message, error) {
+			return s.ListLocalBinlogList(ctx, request)
+		},
+	)
+
+	if err != nil {
+		return nil, err
+	}
+	return resp.(*proto.ListLocalBinlogListResponse), err
+}
+
+func (p *proxy) ListRemoteBinlogList(ctx context.Context, request *proto.ListRemoteBinlogListRequest) (*proto.ListRemoteBinlogListResponse, error) {
+	resp, err := p.executeOnHost(ctx, "ListRemoteBinlogList", nil, request,
+		func(c proto.HpfsServiceClient) (protobuf.Message, error) {
+			return c.ListRemoteBinlogList(ctx, request)
+		},
+		func(s proto.HpfsServiceServer) (protobuf.Message, error) {
+			return s.ListRemoteBinlogList(ctx, request)
+		},
+	)
+
+	if err != nil {
+		return nil, err
+	}
+	return resp.(*proto.ListRemoteBinlogListResponse), err
 }
 
 func NewHpfsServiceServer(hostDiscovery discovery.HostDiscovery, localFileService local.LocalFileService, taskManager task.Manager) proto.HpfsServiceServer {

@@ -33,3 +33,17 @@ const (
 	AnnotationTopologyModeGuide = "polardbx/topology-mode-guide"
 	AnnotationTopologyRuleGuide = "polardbx/topology-rule-guide"
 )
+
+// Backup annotations
+const (
+	AnnotationDummyBackup  = "polardbx/dummy-backup"
+	AnnotationBackupBinlog = "polardbx/backupbinlog"
+)
+
+const (
+	AnnotationStorageType = "polardbx/storage-type"
+)
+
+const (
+	AnnotationPitrConfig = "polardbx/pitr-config"
+)

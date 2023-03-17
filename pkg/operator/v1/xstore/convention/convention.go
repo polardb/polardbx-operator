@@ -19,6 +19,9 @@ package convention
 import (
 	"errors"
 	"fmt"
+	"github.com/alibaba/polardbx-operator/pkg/util/name"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/rand"
 	"strconv"
 	"strings"
 
@@ -66,6 +69,10 @@ func NewServiceName(xstore *polardbxv1.XStore, serviceType ServiceType) string {
 		return xstoreServiceName + "-metrics"
 	}
 	panic("invalid service type: " + serviceType)
+}
+
+func NewXstorePodServiceName(pod *corev1.Pod) string {
+	return pod.Name + "-service"
 }
 
 // Conventions for port names.
@@ -223,8 +230,8 @@ const (
 	FileStreamRootDir               = "/filestream"
 	XClusterBackupBinFilepath       = "/u01/xcluster_xtrabackup/bin/innobackupex"
 	XClusterBackupSetPrepareArg     = "--apply-log"
-	GalaxyEngineBackupSlaveInfoArgs = "--slave-info --lock-ddl "
-	XClusterBackupSlaveInfoArgs     = ""
+	GalaxyEngineBackupExtraArgs     = " --slave-info --lock-ddl "
+	XClusterBackupExtraArgs         = " --rds-execute-backup-lock-timeout=120 "
 	GalaxyEngineBackupStreamArgs    = "--stream=xbstream"
 	XClusterBackupStreamArgs        = "--stream=tar"
 	GalaxyEngineTargetDirArgs       = "--target-dir="
@@ -256,4 +263,23 @@ func GetParameterLabel() map[string]string {
 	return map[string]string{
 		ParameterName: ParameterType,
 	}
+}
+
+const AutoRebuildConfigMapName = "auto-build"
+
+// Conventions for backup
+
+type BackupJobType string
+
+const (
+	BackupJobTypeFullBackup   = "backup"
+	BackupJobTypeBinlogBackup = "binlog"
+	BackupJobTypeCollect      = "collect"
+)
+
+func NewBackupJobName(targetPod *corev1.Pod, jobType BackupJobType) string {
+	return name.NewSplicedName(
+		name.WithTokens(string(jobType), "job", targetPod.Name, rand.String(4)),
+		name.WithPrefix(fmt.Sprintf("%s-job", jobType)),
+	)
 }

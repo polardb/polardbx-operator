@@ -49,7 +49,13 @@ def _slave_status_from_row(r):
         slave_io_running=r['slave_io_running'],
         slave_sql_running=r['slave_sql_running'],
         slave_sql_running_state=r['slave_sql_running_state'],
-        seconds_behind_master=r['seconds_behind_master']
+        seconds_behind_master=r['seconds_behind_master'],
+        last_errno=r['last_errno'],
+        last_error=r['last_error'],
+        last_io_errno=r['last_io_errno'],
+        last_io_error=r['last_io_error'],
+        last_sql_errno=r['last_sql_errno'],
+        last_sql_error=r['last_sql_error']
     )
 
 
@@ -211,23 +217,21 @@ class LegacyConsensusManager(AbstractConsensusManager):
         with self._conn.cursor() as cur:
             cur.execute('drop consensus_follower %d' % target_server_id)
 
-    def upgrade_learner_to_follower(self, target: Union[str, ConsensusNode]) -> ConsensusNode:
+    def upgrade_learner_to_follower(self, addr) -> ConsensusNode:
         self.check_current_role(ConsensusRole.LEADER)
 
-        target_server_id = self._get_server_id(target)
         with self._conn.cursor() as cur:
-            cur.execute('change consensus_learner %d to consensus_follower' % target_server_id)
+            cur.execute("change consensus_learner '%s' to consensus_follower" % addr)
 
-        return self.get_consensus_node(self._get_address(target))
+        return self.get_consensus_node(addr)
 
-    def downgrade_follower_to_learner(self, target: Union[str, ConsensusNode]) -> ConsensusNode:
+    def downgrade_follower_to_learner(self, addr) -> ConsensusNode:
         self.check_current_role(ConsensusRole.LEADER)
 
-        target_server_id = self._get_server_id(target)
         with self._conn.cursor() as cur:
-            cur.execute('change consensus_follower %d to consensus_learner' % target_server_id)
+            cur.execute('change consensus_follower "%s" to consensus_learner' % addr)
 
-        return self.get_consensus_node(self._get_address(target))
+        return self.get_consensus_node(addr)
 
     def configure_learner_source(self, learner: Union[str, ConsensusNode], source: Union[str, ConsensusNode], *,
                                  applied_index: bool):
@@ -254,16 +258,24 @@ class LegacyConsensusManager(AbstractConsensusManager):
             cur.execute('change consensus_learner for consensus_meta')
 
     def enable_follower_election(self):
-        self.check_current_role(ConsensusRole.FOLLOWER)
+        current_node = self._get_current_node()
+        if current_node.role != ConsensusRole.FOLLOWER:
+            return
 
         with self._conn.cursor() as cur:
-            cur.execute('set global consensus_disable_election = OFF')
+            cur.execute("set force_revise=ON")
+            cur.execute("set sql_log_bin=OFF")
+            cur.execute("set global consensus_disable_election = OFF")
 
     def disable_follower_election(self):
-        self.check_current_role(ConsensusRole.FOLLOWER)
+        current_node = self._get_current_node()
+        if current_node.role != ConsensusRole.FOLLOWER:
+            return
 
         with self._conn.cursor() as cur:
-            cur.execute('set global consensus_disable_election = ON')
+            cur.execute("set force_revise=ON")
+            cur.execute("set sql_log_bin=OFF")
+            cur.execute("set global consensus_disable_election = ON")
 
     def enable_weak_consensus_mode(self):
         self.check_current_role(ConsensusRole.LEADER)
@@ -312,6 +324,17 @@ class LegacyConsensusManager(AbstractConsensusManager):
             cur.execute('show slave status')
             row = fetchone_with_lowercase_fieldnames(cur)
             return _slave_status_from_row(row)
+
+    def update_cluster_info(self, cluster_info):
+        with self._conn.cursor() as cur:
+            cur.execute("set force_revise=ON")
+            cur.execute("set sql_log_bin=OFF")
+            cur.execute('update mysql.consensus_info set cluster_info="%s"' % cluster_info)
+
+    def set_readonly(self):
+        with self._conn.cursor() as cur:
+            cur.execute("FLUSH TABLES WITH READ LOCK")
+            cur.execute("SET GLOBAL read_only = 1")
 
 
 class ConsensusManager(AbstractConsensusManager):
@@ -475,23 +498,21 @@ class ConsensusManager(AbstractConsensusManager):
         node = self.downgrade_follower_to_learner(target)
         return self.drop_learner(node)
 
-    def upgrade_learner_to_follower(self, target: Union[str, ConsensusNode]) -> ConsensusNode:
+    def upgrade_learner_to_follower(self, addr) -> ConsensusNode:
         self.check_current_role(ConsensusRole.LEADER)
 
-        target_server_id = self._get_server_id(target)
         with self._conn.cursor() as cur:
-            cur.execute('call dbms_consensus.upgrade_learner(%d)' % target_server_id)
+            cur.execute("call dbms_consensus.upgrade_learner('%s')" % addr)
 
-        return self.get_consensus_node(self._get_address(target))
+        return self.get_consensus_node(addr)
 
-    def downgrade_follower_to_learner(self, target: Union[str, ConsensusNode]) -> ConsensusNode:
+    def downgrade_follower_to_learner(self, addr) -> ConsensusNode:
         self.check_current_role(ConsensusRole.LEADER)
 
-        target_server_id = self._get_server_id(target)
         with self._conn.cursor() as cur:
-            cur.execute('call dbms_consensus.downgrade_follower(%d)' % target_server_id)
+            cur.execute('call dbms_consensus.downgrade_follower("%s")' % addr)
 
-        return self.get_consensus_node(self._get_address(target))
+        return self.get_consensus_node(addr)
 
     def configure_learner_source(self, learner: Union[str, ConsensusNode], source: Union[str, ConsensusNode], *,
                                  applied_index: bool):
@@ -516,16 +537,24 @@ class ConsensusManager(AbstractConsensusManager):
             cur.execute('call dbms_consensus.refresh_learner_meta()')
 
     def enable_follower_election(self):
-        self.check_current_role(ConsensusRole.FOLLOWER)
+        current_node = self._get_current_node()
+        if current_node.role != ConsensusRole.FOLLOWER:
+            return
 
         with self._conn.cursor() as cur:
-            cur.execute('set global consensus_disable_election = OFF')
+            cur.execute("set force_revise=ON")
+            cur.execute("set sql_log_bin=OFF")
+            cur.execute("set global consensus_disable_election = OFF")
 
     def disable_follower_election(self):
-        self.check_current_role(ConsensusRole.FOLLOWER)
+        current_node = self._get_current_node()
+        if current_node.role != ConsensusRole.FOLLOWER:
+            return
 
         with self._conn.cursor() as cur:
-            cur.execute('set global consensus_disable_election = ON')
+            cur.execute("set force_revise=ON")
+            cur.execute("set sql_log_bin=OFF")
+            cur.execute("set global consensus_disable_election = ON")
 
     def enable_weak_consensus_mode(self):
         self.check_current_role(ConsensusRole.LEADER)
@@ -574,18 +603,20 @@ class ConsensusManager(AbstractConsensusManager):
             else:
                 cur.execute('call dbms_consensus.local_purge_log(%d)' % to_purge_logs[-1].start_log_index)
 
-    def _slave_status_from_row(r) -> SlaveStatus:
-        return SlaveStatus(
-            relay_log_file=r['relay_log_file'],
-            relay_log_pos=int(r['relay_log_pos']),
-            slave_io_running=r['slave_io_running'],
-            slave_sql_running=r['slave_sql_running'],
-            slave_sql_running_state=r['slave_sql_running_state'],
-            seconds_behind_master=float(r['seconds_behind_master'])
-        )
 
     def show_slave_status(self) -> SlaveStatus:
         with self._conn.cursor() as cur:
             cur.execute('show slave status')
             row = fetchone_with_lowercase_fieldnames(cur)
-            return self._slave_status_from_row(row)
+            return _slave_status_from_row(row)
+
+    def update_cluster_info(self, cluster_info):
+        with self._conn.cursor() as cur:
+            cur.execute("set force_revise=ON")
+            cur.execute("set sql_log_bin=OFF")
+            cur.execute('update mysql.consensus_info set cluster_info="%s"' % cluster_info)
+
+    def set_readonly(self):
+        with self._conn.cursor() as cur:
+            cur.execute("FLUSH TABLES WITH READ LOCK")
+            cur.execute("SET GLOBAL read_only = 1")
