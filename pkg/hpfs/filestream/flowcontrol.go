@@ -113,6 +113,9 @@ func (f *FlowControlManger) LimitFlow(reader io.Reader, writer io.Writer, notify
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
+		defer func() {
+			recover()
+		}()
 		defer wg.Done()
 		for {
 			bytes, ok := <-bufChan

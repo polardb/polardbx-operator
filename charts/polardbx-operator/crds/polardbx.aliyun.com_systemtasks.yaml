@@ -94,6 +94,10 @@ spec:
                       to an implementation-defined value. More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
                     type: object
                 type: object
+              nodes:
+                items:
+                  type: string
+                type: array
               taskType:
                 type: string
             type: object
