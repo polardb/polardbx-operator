@@ -78,6 +78,8 @@ spec:
                       backup
                     type: string
                 type: object
+            required:
+            - pxcName
             type: object
           status:
             properties:

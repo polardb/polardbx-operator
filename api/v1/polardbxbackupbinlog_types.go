@@ -8,9 +8,9 @@ import (
 
 type PolarDBXBackupBinlogSpec struct {
 	// +kubebuilder:validation:Required
-	PxcName string `json:"pxcName,omitempty"`
-	// +kubebuilder:validation:Required
-	PxcUid string `json:"pxcUid,omitempty"`
+	PxcName string `json:"pxcName"`
+	// +optional
+	PxcUid string `json:"pxcUid"`
 	// +kubebuilder:default=168
 	RemoteExpireLogHours intstr.IntOrString `json:"remoteExpireLogHours,omitempty"`
 	// +kubebuilder:default=7
