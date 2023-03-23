@@ -27,6 +27,7 @@ type SystemTaskSpec struct {
 	CnReplicas  int                         `json:"cnReplicas,omitempty"`
 	CnResources corev1.ResourceRequirements `json:"cnResources,omitempty"`
 	DnResources corev1.ResourceRequirements `json:"dnResources,omitempty"`
+	Nodes       []string                    `json:"nodes,omitempty"`
 }
 
 type SystemTaskStatus struct {

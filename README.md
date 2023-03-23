@@ -11,12 +11,14 @@ Follow the [快速开始](https://doc.polardbx.com/quickstart/topics/quickstart-
 
 ## Documentation
 
-Please refer to the [CHANGELOG](./CHANGELOG/README.md) for the notable changes for each version.**
+Please refer to the [CHANGELOG](./CHANGELOG.md) for the notable changes for each version.**
 
 Refer to the documentations for more details, such as CRD definitions and operation guides.
 
 + [简体中文](https://doc.polardbx.com/quickstart/topics/quickstart-k8s.html)
-+ [English](docs/en/index.md)
++ English(TODO)
+
+如对文档有疑问，可提Issue或者Pull Request到[文档仓库](https://github.com/polardb/polardbx-operator-docs)
 
 ## Roadmap
 
@@ -42,9 +44,7 @@ Implemented:
 
 Working in progress:
 
-+ [T0] Backup Plan
-+ [T1] Point in Time Recovery
-+ [T2] Dashboard
++ [T0] Dashboard
 + ...
 
 ## License

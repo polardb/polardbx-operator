@@ -116,7 +116,7 @@ func (ctx *Context) GetXStoreByName(name string) (*v1.XStore, error) {
 
 func (ctx *Context) GetAllXStorePods() ([]corev1.Pod, error) {
 	pods := make([]corev1.Pod, 0)
-	for _, role := range []string{polardbxmeta.RoleDN, polardbxmeta.RoleGMS} {
+	for _, role := range []string{polardbxmeta.RoleDN} {
 		var podList corev1.PodList
 		err := ctx.Client().List(ctx.Context(), &podList, client.InNamespace(ctx.Namespace()), client.MatchingLabels(map[string]string{
 			polardbxmeta.LabelRole: role,
@@ -177,9 +177,23 @@ func (ctx *Context) GetNodeXStorePodMap(separateRole bool, logger bool) (map[str
 }
 
 func (ctx *Context) GetAllNodes() ([]corev1.Node, error) {
+	systemtask := ctx.MustGetSystemTask()
 	var nodeList corev1.NodeList
 	err := ctx.Client().List(ctx.Context(), &nodeList)
-	return nodeList.Items, err
+	result := make([]corev1.Node, 0)
+	if len(systemtask.Spec.Nodes) > 0 {
+		nodeMap := make(map[string]bool, len(systemtask.Spec.Nodes))
+		for _, nodeName := range systemtask.Spec.Nodes {
+			nodeMap[nodeName] = true
+		}
+		for _, item := range nodeList.Items {
+			if _, ok := nodeMap[item.Name]; ok {
+				result = append(result, item)
+			}
+		}
+	}
+
+	return result, err
 }
 
 func (rc *Context) SetControllerRef(obj client.Object) error {
