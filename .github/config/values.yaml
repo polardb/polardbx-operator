@@ -1,6 +1,6 @@
 clusterDefaults:
   version: latest
   images:
-    galaxysql: docker.io/polardbx/galaxysql
-    galaxyengine: docker.io/polardbx/galaxyengine
-    galaxycdc: docker.io/polardbx/galaxycdc
+    galaxysql: docker.io/polardbx/polardbx-sql
+    galaxyengine: docker.io/polardbx/polardbx-engine
+    galaxycdc: docker.io/polardbx/polardbx-cdc
