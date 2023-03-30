@@ -228,6 +228,7 @@ var _ = ginkgo.Describe("[PolarDBXCluster] [Lifecycle:Upgrade]", func() {
 		obj.Spec.Topology.Nodes.CDC = &polardbxv1polardbx.TopologyNodeCDC{
 			Replicas: 1,
 		}
+		obj.Spec.Topology.Nodes.CDC.Template.Resources = resources
 		err := f.Client.Update(f.Ctx, obj)
 		framework.ExpectNoError(err)
 
