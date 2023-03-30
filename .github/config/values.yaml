@@ -1,6 +1,6 @@
 clusterDefaults:
   version: latest
   images:
-    galaxysql: docker.io/polardbx/polardbx-sql
-    galaxyengine: docker.io/polardbx/polardbx-engine
-    galaxycdc: docker.io/polardbx/polardbx-cdc
+    galaxysql: pxc-registry.cn-shanghai.cr.aliyuncs.com/polardbx/polardbx-sql
+    galaxyengine: pxc-registry.cn-shanghai.cr.aliyuncs.com/polardbx/polardbx-engine
+    galaxycdc: pxc-registry.cn-shanghai.cr.aliyuncs.com/polardbx/polardbx-cdc
