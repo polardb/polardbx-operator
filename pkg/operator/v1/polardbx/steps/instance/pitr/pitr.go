@@ -11,6 +11,8 @@ import (
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/helper"
 	polardbxmeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/meta"
 	polardbxv1reconcile "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/reconcile"
+	"io"
+	corev1 "k8s.io/api/core/v1"
 	"net/http"
 	"time"
 
@@ -91,6 +93,38 @@ var WaitPreparePitrBinlogs = polardbxv1reconcile.NewStepBinder("WaitPreparePitrB
 		if err != nil {
 			return flow.RetryErr(err, "failed to job and pod")
 		}
+		if pod.Status.Phase != corev1.PodRunning {
+			return flow.Retry("wait for the pitr pod to be running")
+		}
+		port := k8shelper.MustGetPortFromContainer(
+			k8shelper.MustGetContainerFromPod(pod, ContainerName),
+			PortName,
+		).ContainerPort
+		endpoint := fmt.Sprintf("http://%s:%d", pod.Status.PodIP, port)
+		lastErrUrl := endpoint + "/lastErr"
+		client := http.Client{
+			Timeout: 1 * time.Second,
+		}
+		rep, err := client.Get(lastErrUrl)
+		if err != nil {
+			return flow.RetryErr(err, "failed to request pitr  service ", "lastErrUrl", lastErrUrl)
+		}
+		if rep.StatusCode != http.StatusOK {
+			return flow.RetryErr(err, "failed to request pitr  service ", "lastErrUrl", lastErrUrl, "response", rep)
+		}
+		defer rep.Body.Close()
+		if rep.ContentLength != 0 {
+			bodyContent, err := io.ReadAll(rep.Body)
+			if err != nil {
+				return flow.RetryErr(err, "failed to read body")
+			}
+			flow.Logger().Error(fmt.Errorf("lastErr %s", string(bodyContent)), "get lastErr from pitr service")
+			polardbxObj := rc.MustGetPolarDBX()
+			polardbxObj.Status.Phase = polarxv1polarx.PhaseFailed
+			rc.UpdatePolarDBXStatus()
+			return flow.Error(errors.New("changed to failed phase"), "")
+		}
+
 		if len(pod.Status.ContainerStatuses) > 0 {
 			ready := true
 			for _, containerStatus := range pod.Status.ContainerStatuses {
@@ -98,12 +132,8 @@ var WaitPreparePitrBinlogs = polardbxv1reconcile.NewStepBinder("WaitPreparePitrB
 			}
 			if ready {
 				polardbxObj := rc.MustGetPolarDBX()
-				port := k8shelper.MustGetPortFromContainer(
-					k8shelper.MustGetContainerFromPod(pod, ContainerName),
-					PortName,
-				).ContainerPort
 				polardbxObj.Status.PitrStatus = &polarxv1polarx.PitrStatus{
-					PrepareJobEndpoint: fmt.Sprintf("http://%s:%d", pod.Status.PodIP, port),
+					PrepareJobEndpoint: endpoint,
 					Job:                job.Name,
 				}
 				return flow.Continue("The container is ready")

@@ -82,6 +82,25 @@ webhooks:
       resources:
         - polardbxbackups
       scope: "Namespaced"
+- admissionReviewVersions:
+    - "v1"
+  clientConfig:
+    service:
+      name: kubernetes
+      namespace: default
+      path: /apis/admission.polardbx.aliyun.com/v1/validate-polardbx-aliyun-com-v1-polardbxbackupbinlog
+  name: "polardbxbackupbinlog-validate.polardbx.aliyun.com"
+  sideEffects: None
+  rules:
+    - apiGroups:
+        - polardbx.aliyun.com
+      apiVersions:
+        - v1
+      operations:
+        - CREATE
+      resources:
+        - polardbxbackupbinlogs
+      scope: "Namespaced"
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingWebhookConfiguration

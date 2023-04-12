@@ -48,10 +48,11 @@ const (
 )
 
 const (
-	RoleGMS = "gms"
-	RoleCN  = "cn"
-	RoleDN  = "dn"
-	RoleCDC = "cdc"
+	RoleGMS      = "gms"
+	RoleCN       = "cn"
+	RoleDN       = "dn"
+	RoleCDC      = "cdc"
+	RoleColumnar = "columnar"
 )
 
 const (

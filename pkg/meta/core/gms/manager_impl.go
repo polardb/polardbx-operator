@@ -728,7 +728,7 @@ func (meta *manager) EnableComputeNodes(computeNodes ...ComputeNodeInfo) error {
 }
 
 func (c *ComputeNodeInfo) toSelectCriteria() string {
-	return fmt.Sprintf("(ip = '%s' AND port = %d)", c.Host, c.Port)
+	return fmt.Sprintf("(ip = '%s' AND port = %d AND (extras like '%%%s%%' or  extras is null))", c.Host, c.Port, c.Extra)
 }
 
 func (meta *manager) DisableComputeNodes(computeNodes ...ComputeNodeInfo) error {

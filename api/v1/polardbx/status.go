@@ -98,6 +98,8 @@ type ReplicaStatusForPrint struct {
 	DN string `json:"dn,omitempty"`
 	// CDC status, e.g. 1/2 or - when CDC nodes not requested.
 	CDC string `json:"cdc,omitempty"`
+	// Columnar status, e.g. 1/2 or - when Columnar nodes not requested.
+	Columnar string `json:"columnar,omitempty"`
 }
 
 // StatusForPrint represents the overall printable status of the cluster.
@@ -151,6 +153,9 @@ type ClusterReplicasStatus struct {
 
 	// CDC defines the replica status for CDC.
 	CDC *ReplicasStatus `json:"cdc,omitempty"`
+
+	// Columnar defines the replica status for CDC.
+	Columnar *ReplicasStatus `json:"columnar,omitempty"`
 }
 
 // PitrStatus represents the status ot pitr restore

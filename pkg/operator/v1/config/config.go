@@ -70,11 +70,12 @@ func (c *config) Nfs() NfsConfig {
 }
 
 type imagesConfig struct {
-	Repo          string                       `json:"repo,omitempty"`
-	Common        map[string]string            `json:"common,omitempty"`
-	ComputeImages map[string]string            `json:"compute,omitempty"`
-	CdcImages     map[string]string            `json:"cdc,omitempty"`
-	StoreImages   map[string]map[string]string `json:"store,omitempty"`
+	Repo           string                       `json:"repo,omitempty"`
+	Common         map[string]string            `json:"common,omitempty"`
+	ComputeImages  map[string]string            `json:"compute,omitempty"`
+	CdcImages      map[string]string            `json:"cdc,omitempty"`
+	ColumnarImages map[string]string            `json:"columnar,omitempty"`
+	StoreImages    map[string]map[string]string `json:"store,omitempty"`
 }
 
 func newImage(image string, defaultRepo, defaultTag string) string {
@@ -141,6 +142,8 @@ func (c *imagesConfig) DefaultImageForCluster(role string, container string, ver
 		image = defaults.NonEmptyStrOrDefault(c.ComputeImages[container], c.Common[container])
 	case "cdc":
 		image = defaults.NonEmptyStrOrDefault(c.CdcImages[container], c.Common[container])
+	case "columnar":
+		image = defaults.NonEmptyStrOrDefault(c.ColumnarImages[container], c.Common[container])
 	default:
 		panic("invalid role: " + role)
 	}

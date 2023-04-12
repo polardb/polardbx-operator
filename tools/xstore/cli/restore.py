@@ -81,7 +81,7 @@ def start(restore_context):
     apply_backup_file(context, logger)
 
     mysql_bin_list = download_binlogbackup_file(binlog_dir_path, filestream_client, logger) if len(
-        pitr_endpoint) == 0 else download_pitr_binloglist(pitr_endpoint, pitr_xstore, logger)
+        pitr_endpoint) == 0 else download_pitr_binloglist(context, pitr_endpoint, pitr_xstore, logger)
 
     copy_binlog_to_new_path(mysql_bin_list, context, logger)
 
@@ -150,7 +150,7 @@ def download_binlogbackup_file(binlog_dir_path, filestream_client, logger):
     return mysql_binlog_list
 
 
-def download_pitr_binloglist(pitrEndpoint, xstore, logger):
+def download_pitr_binloglist(context, pitrEndpoint, xstore, logger):
     binlogListUrl = "/".join([pitrEndpoint, "binlogs"]) + ("?xstore=%s" % xstore)
     response = requests.get(binlogListUrl)
     mysql_binlog_list = []
@@ -162,9 +162,23 @@ def download_pitr_binloglist(pitrEndpoint, xstore, logger):
     else:
         raise Exception("failed to get binlogs url = %s" % binlogListUrl)
     for binlog in mysql_binlog_list:
-        downloadUrl = "/".join([pitrEndpoint, "download", "binlog"]) + ("?xstore=%s" % xstore) + "&" + (
+        downloadUrl = "/".join([pitrEndpoint, "download", "binlog"]) + ("?xstore=%s&only_meta=true" % xstore) + "&" + (
                 "filename=%s" % binlog)
-        wget.download(downloadUrl, os.path.join(RESTORE_TEMP_DIR, binlog))
+        response = requests.get(downloadUrl)
+        if response.status_code == 200:
+            binlog_datasource = response.content.decode("utf-8")
+            cmd = " ".join(
+                [os.path.join("/tools/xstore/current/bin", "polardbx-job"), "-job-type=PitrDownloadFile",
+                 "-output=" + os.path.join(RESTORE_TEMP_DIR, binlog), "-binlog-source='%s'" % binlog_datasource])
+            logger.info("binlog_datasource %s" % response.content)
+            p = subprocess.Popen(cmd, shell=True, stdout=sys.stdout)
+            p.wait()
+
+            if p.returncode > 0:
+                raise Exception("failed to get download binlog url = %s " % downloadUrl)
+        # logger.info("apply backup")
+        else:
+            raise Exception("failed to get download binlog url = %s" % downloadUrl)
     return mysql_binlog_list
 
 

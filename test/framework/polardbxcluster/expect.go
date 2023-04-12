@@ -565,9 +565,47 @@ func (e *Expectation) ExpectCDCDeploymentsOk() {
 	})
 }
 
+func (e *Expectation) ExpectColumnarDeploymentsOk() {
+	labels := map[string]string{
+		"polardbx/name": e.obj.Name,
+		"polardbx/role": "columnar",
+	}
+	ns := e.obj.Namespace
+
+	var deploymentList appsv1.DeploymentList
+	framework.ExpectNoError(e.c.List(e.ctx, &deploymentList, client.InNamespace(ns), client.MatchingLabels(labels)))
+	deployments := deploymentList.Items
+	e.ExpectOwnerReferenceCorrect(common.GetObjectList(deployments)...)
+
+	columnarNode := e.obj.Spec.Topology.Nodes.Columnar
+	if columnarNode == nil || columnarNode.Replicas == 0 {
+		gomega.Expect(deployments).To(gomega.BeEmpty(), "cdc not defined or replicas is 0, should be empty")
+		return
+	}
+
+	gomega.Expect(deployments).NotTo(gomega.BeEmpty(), "columnar is defined, should not empty")
+
+	nodeSelectors := e.obj.Spec.Topology.Rules.Selectors
+	cdcRules := e.obj.Spec.Topology.Rules.Components.CDC
+	replicas := columnarNode.Replicas
+	template := columnarNode.Template
+
+	e.expectDeploymentsMatchesRulesAndReplicas(deployments, nodeSelectors, cdcRules, int(replicas), "cdc")
+	e.expectDeploymentsMatchesTemplate(deployments, func(deploy *appsv1.Deployment) {
+		podSpec := &deploy.Spec.Template.Spec
+		gomega.Expect(podSpec.HostNetwork).To(gomega.BeEquivalentTo(template.HostNetwork), "host network should be the same as template: "+deploy.Name)
+		engineContainer := k8shelper.GetContainerFromPodSpec(podSpec, "engine")
+		gomega.Expect(engineContainer.Resources).To(gomega.BeEquivalentTo(template.Resources), "resources of engine container should be the same as template: "+deploy.Name)
+		if template.Image != "" {
+			gomega.Expect(engineContainer.Image).To(gomega.BeEquivalentTo(template.Image), "image of engine container should be the same as template if specified: "+deploy.Name)
+		}
+	})
+}
+
 func (e *Expectation) ExpectDeploymentsOk() {
 	e.ExpectCNDeploymentsOk()
 	e.ExpectCDCDeploymentsOk()
+	e.ExpectColumnarDeploymentsOk()
 }
 
 func (e *Expectation) ExpectOwnerReferenceCorrect(subResources ...client.Object) {
@@ -703,23 +741,28 @@ func (e *Expectation) ExpectXStoresOk() {
 	dnRule := e.obj.Spec.Topology.Rules.Components.DN
 	dnNode := &e.obj.Spec.Topology.Nodes.DN
 	dnReplicas := dnNode.Replicas
+	readOnly := e.obj.Spec.Readonly
 
-	if !shareGms {
-		gomega.Expect(xstoresByRole).To(gomega.HaveLen(2), "must have 2 roles of xstores")
-		gomega.Expect(xstoresByRole["gms"]).To(gomega.HaveLen(1), "1 gms")
-
-		gmsStore := xstoresByRole["gms"][0]
-		gmsRule := e.obj.Spec.Topology.Rules.Components.GMS
-		if gmsRule == nil {
-			gmsRule = dnRule
-		}
-		gmsTemplate := e.obj.Spec.Topology.Nodes.GMS.Template
-		if gmsTemplate == nil {
-			gmsTemplate = &dnNode.Template
-		}
-		e.expectXStoreToMatch(gmsStore.(*polardbxv1.XStore), nodeSelectors, gmsRule, gmsTemplate)
+	if readOnly {
+		gomega.Expect(xstoresByRole).To(gomega.HaveLen(1), "must have 1 role of xstores for readonly pxc")
 	} else {
-		gomega.Expect(xstoresByRole).To(gomega.HaveLen(1), "must have 1 roles of xstores in share gms mode")
+		if !shareGms {
+			gomega.Expect(xstoresByRole).To(gomega.HaveLen(2), "must have 2 roles of xstores")
+			gomega.Expect(xstoresByRole["gms"]).To(gomega.HaveLen(1), "1 gms")
+
+			gmsStore := xstoresByRole["gms"][0]
+			gmsRule := e.obj.Spec.Topology.Rules.Components.GMS
+			if gmsRule == nil {
+				gmsRule = dnRule
+			}
+			gmsTemplate := e.obj.Spec.Topology.Nodes.GMS.Template
+			if gmsTemplate == nil {
+				gmsTemplate = &dnNode.Template
+			}
+			e.expectXStoreToMatch(gmsStore.(*polardbxv1.XStore), nodeSelectors, gmsRule, gmsTemplate)
+		} else {
+			gomega.Expect(xstoresByRole).To(gomega.HaveLen(1), "must have 1 roles of xstores in share gms mode")
+		}
 	}
 
 	dnStores := xstoresByRole["dn"]
@@ -763,14 +806,24 @@ func (e *Expectation) ExpectPodsWithPaxosModeOk() {
 	gomega.Expect(pods).NotTo(gomega.BeEmpty(), "no pods found")
 	podsByRole := common.MapObjectsFromObjectListByLabel(pods, "polardbx/role")
 
-	gomega.Expect(podsByRole).To(gomega.HaveLen(4), "must be pods with 4 roles (when running)")
+	readOnly := e.obj.Spec.Readonly
+	if !readOnly {
+		gomega.Expect(podsByRole).To(gomega.HaveLen(4), "must be pods with 4 roles (when running)")
 
-	framework.ExpectHaveKeys(podsByRole, "cn", "dn", "gms", "cdc")
+		framework.ExpectHaveKeys(podsByRole, "cn", "dn", "gms", "cdc")
 
-	gomega.Expect(podsByRole["cn"]).To(gomega.HaveLen(1), "must be 1 cn pod")
-	gomega.Expect(podsByRole["cdc"]).To(gomega.HaveLen(1), "must be 1 cdc pod")
-	gomega.Expect(podsByRole["dn"]).To(gomega.HaveLen(3), "must be 3 dn pod")
-	gomega.Expect(podsByRole["gms"]).To(gomega.HaveLen(3), "must be 3 gms pod")
+		gomega.Expect(podsByRole["cn"]).To(gomega.HaveLen(1), "must be 1 cn pod")
+		gomega.Expect(podsByRole["cdc"]).To(gomega.HaveLen(1), "must be 1 cdc pod")
+		gomega.Expect(podsByRole["dn"]).To(gomega.HaveLen(3), "must be 3 dn pod")
+		gomega.Expect(podsByRole["gms"]).To(gomega.HaveLen(3), "must be 3 gms pod")
+	} else {
+		gomega.Expect(podsByRole).To(gomega.HaveLen(2), "must be pods with 2 roles for readonly pxc (when running)")
+
+		framework.ExpectHaveKeys(podsByRole, "cn", "dn")
+
+		gomega.Expect(podsByRole["cn"]).To(gomega.HaveLen(1), "must be 1 cn pod")
+		gomega.Expect(podsByRole["dn"]).To(gomega.HaveLen(1), "must be 1 dn pod")
+	}
 }
 
 func (e *Expectation) ExpectSubResourcesOk(withPaxosMode bool) {

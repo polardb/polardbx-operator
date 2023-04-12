@@ -34,6 +34,7 @@ type ObjectFactory interface {
 
 	NewDeployments4CN() (map[string]appsv1.Deployment, error)
 	NewDeployments4CDC() (map[string]appsv1.Deployment, error)
+	NewDeployments4Columnar() (map[string]appsv1.Deployment, error)
 
 	NewXStoreMyCnfOverlay4GMS() (string, error)
 	NewXStoreMyCnfOverlay4DN(idx int) (string, error)

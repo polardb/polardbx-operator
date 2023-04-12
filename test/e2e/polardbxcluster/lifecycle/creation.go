@@ -17,6 +17,7 @@ limitations under the License.
 package lifecycle
 
 import (
+	polardbxv1 "github.com/alibaba/polardbx-operator/api/v1"
 	"time"
 
 	polardbxv1polardbx "github.com/alibaba/polardbx-operator/api/v1/polardbx"
@@ -243,5 +244,46 @@ var _ = ginkgo.Describe("[PolarDBXCluster] [Lifecycle:Create]", func() {
 
 		// Expect TLS enabled.
 		pxcframework.NewExpectation(f, obj).ExpectSecurityTLSOk()
+	})
+
+	ginkgo.It("readonly pxc should be created as expected", func() {
+		readOnlyName := "ro-test"
+		obj := pxcframework.NewPolarDBXCluster(
+			"e2e-test-readonly",
+			f.Namespace,
+			pxcframework.ProtocolVersion(5),
+			pxcframework.InitReadonly(1, readOnlyName, true),
+			pxcframework.TopologyModeGuide("quick-start-paxos"),
+		)
+
+		// Always run clean up to make sure objects are cleaned.
+		defer DeletePolarDBXClusterAndWaitUntilItDisappear(f, obj, 1*time.Minute)
+
+		// Do create and verify.
+		CreatePolarDBXClusterAndWaitUntilRunningOrFail(f, obj, 10*time.Minute)
+
+		// Fetch the readonly object
+		readonlyObj := &polardbxv1.PolarDBXCluster{}
+		framework.ExpectNoError(f.Client.Get(f.Ctx, types.NamespacedName{
+			Name:      obj.Name + "-" + readOnlyName,
+			Namespace: f.Namespace,
+		}, readonlyObj))
+
+		WaitPolarDBXClusterRunningOrFail(f, readonlyObj, 20*time.Minute)
+
+		// Update object.
+		framework.ExpectNoError(f.Client.Get(f.Ctx, types.NamespacedName{
+			Name: obj.Name, Namespace: f.Namespace,
+		}, obj))
+
+		// Update readonly object
+		framework.ExpectNoError(f.Client.Get(f.Ctx, types.NamespacedName{
+			Name:      obj.Name + "-" + readOnlyName,
+			Namespace: f.Namespace,
+		}, readonlyObj))
+
+		// Expect all ok in running.
+		pxcframework.NewExpectation(f, obj).ExpectAllOk(true)
+		pxcframework.NewExpectation(f, readonlyObj).ExpectAllOk(true)
 	})
 })
