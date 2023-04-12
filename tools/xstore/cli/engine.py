@@ -88,3 +88,13 @@ def shutdown():
 
 
 engine_group.add_command(shutdown)
+
+
+@click.command(name="xtrabackup")
+def xtrabackup_home():
+    xtrabackup = global_mgr.engine().context.xtrabackup
+    print(xtrabackup)
+    return
+
+
+engine_group.add_command(xtrabackup_home)

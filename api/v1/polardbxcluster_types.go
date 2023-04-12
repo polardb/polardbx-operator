@@ -141,6 +141,7 @@ type PolarDBXClusterStatus struct {
 // +kubebuilder:printcolumn:name="CN",type=string,JSONPath=`.status.statusForPrint.replicaStatus.cn`
 // +kubebuilder:printcolumn:name="DN",type=string,JSONPath=`.status.statusForPrint.replicaStatus.dn`
 // +kubebuilder:printcolumn:name="CDC",type=string,JSONPath=`.status.statusForPrint.replicaStatus.cdc`
+// +kubebuilder:printcolumn:name="COLUMNAR",type=string,JSONPath=`.status.statusForPrint.replicaStatus.columnar`
 // +kubebuilder:printcolumn:name="PHASE",type=string,JSONPath=`.status.phase`
 // +kubebuilder:printcolumn:name="DISK",type=string,JSONPath=`.status.statusForPrint.storageSize`
 // +kubebuilder:printcolumn:name="STAGE",type=string,priority=1,JSONPath=`.status.stage`

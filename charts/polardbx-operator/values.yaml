@@ -14,7 +14,7 @@ images:
   polardbxJob: polardbx-job
 
 # Default image tag. Use app version if not specified or 'latest' if useLatestImage is true.
-imageTag: v1.4.0
+imageTag: v1.4.1
 
 # Uses the latest images for operator components.
 useLatestImage: false
@@ -30,7 +30,7 @@ clusterDefaults:
   version: latest
   images:
     galaxysql: polardbx-sql
-    galaxyengine: polardbx-engine
+    galaxyengine: polardbx-engine-2.0
     galaxycdc: polardbx-cdc
 
 # Configuration of Kubernetes hosts.

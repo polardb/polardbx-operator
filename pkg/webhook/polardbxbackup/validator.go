@@ -60,21 +60,27 @@ func (v *Validator) getFilestreamClient() (*filestream.FileClient, error) {
 }
 
 func (v *Validator) ValidateCreate(ctx context.Context, obj runtime.Object) error {
-	pxcBackup := obj.(*v1.PolarDBXBackup)
+	var storageProvider polardbx.BackupStorageProvider
+	if pxcBackup, ok := obj.(*v1.PolarDBXBackup); ok {
+		storageProvider = pxcBackup.Spec.StorageProvider
+	}
+	if pxcBinlogBackup, ok := obj.(*v1.PolarDBXBackupBinlog); ok {
+		storageProvider = pxcBinlogBackup.Spec.StorageProvider
+	}
 
 	// validate storage configure
-	if pxcBackup.Spec.StorageProvider.StorageName == "" {
+	if storageProvider.StorageName == "" {
 		return field.Required(field.NewPath("spec", "storageProvider", "storageName"),
 			"storage name must be provided")
 	}
-	if pxcBackup.Spec.StorageProvider.Sink == "" {
+	if storageProvider.Sink == "" {
 		return field.Required(field.NewPath("spec", "storageProvider", "sink"),
 			"sink must be provided")
 	}
-	filestreamAction, err := polardbx.NewBackupStorageFilestreamAction(pxcBackup.Spec.StorageProvider.StorageName)
+	filestreamAction, err := polardbx.NewBackupStorageFilestreamAction(storageProvider.StorageName)
 	if err != nil {
 		return field.Invalid(field.NewPath("spec", "storageProvider", "storageName"),
-			pxcBackup.Spec.StorageProvider.StorageName, "unsupported storage")
+			storageProvider.StorageName, "unsupported storage")
 	}
 
 	// validate whether storage is available
@@ -84,13 +90,13 @@ func (v *Validator) ValidateCreate(ctx context.Context, obj runtime.Object) erro
 	}
 	actionMetadata := filestream.ActionMetadata{
 		Action:    filestreamAction.Upload,
-		Sink:      pxcBackup.Spec.StorageProvider.Sink,
+		Sink:      storageProvider.Sink,
 		RequestId: uuid.New().String(),
 		Filename:  magicString,
 	}
 	sentBytes, err := fsClient.Upload(strings.NewReader(magicString), actionMetadata)
 	if err != nil || sentBytes == 0 {
-		return field.Invalid(field.NewPath("spec", "storageProvider"), pxcBackup.Spec.StorageProvider,
+		return field.Invalid(field.NewPath("spec", "storageProvider"), storageProvider,
 			"invalid storage, please check configuration of both backup and hpfs")
 	}
 
@@ -98,6 +104,9 @@ func (v *Validator) ValidateCreate(ctx context.Context, obj runtime.Object) erro
 }
 
 func (v *Validator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) error {
+	if _, ok := oldObj.(*v1.PolarDBXBackup); !ok {
+		return nil
+	}
 	oldBackup, newBackup := oldObj.(*v1.PolarDBXBackup), newObj.(*v1.PolarDBXBackup)
 	if oldBackup.Name != newBackup.Name {
 		return field.Forbidden(field.NewPath("metadata", "name"), "immutable field")

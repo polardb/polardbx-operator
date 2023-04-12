@@ -59,9 +59,13 @@ func (p *CDCPorts) GetProbePort() int {
 	return p.ProbePort
 }
 
+type ColumnarPorts struct {
+}
+
 type PortsFactory interface {
 	NewPortsForCNEngine(mustStaticPorts bool) CNPorts
 	NewPortsForCDCEngine() CDCPorts
+	NewPortsForColumnarEngine() ColumnarPorts
 }
 
 type portsFactory struct {
@@ -106,6 +110,11 @@ func (f *portsFactory) NewPortsForCDCEngine() CDCPorts {
 		MetricsPort: 8081,
 		ProbePort:   9999,
 	}
+}
+
+func (f *portsFactory) NewPortsForColumnarEngine() ColumnarPorts {
+	// todo: current no ports on columnar.
+	return ColumnarPorts{}
 }
 
 func NewPortsFactory(rc *polardbxv1reconcile.Context, polardbx *polardbxv1.PolarDBXCluster) PortsFactory {

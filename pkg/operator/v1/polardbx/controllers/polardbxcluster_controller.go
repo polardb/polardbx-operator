@@ -197,8 +197,11 @@ func (r *PolarDBXReconciler) newReconcileTask(rc *polardbxreconcile.Context, pol
 			),
 			instancesteps.CreateOrReconcileCNs,
 			instancesteps.CreateOrReconcileCDCs,
+			instancesteps.WaitUntilCNCDCPodsReady,
+			instancesteps.CreateOrReconcileColumnars,
 			instancesteps.WaitUntilCNDeploymentsRolledOut,
 			instancesteps.WaitUntilCDCDeploymentsRolledOut,
+			instancesteps.WaitUntilColumnarDeploymentsRolledOut,
 			instancesteps.CreateFileStorage,
 		)(task)
 
@@ -248,6 +251,8 @@ func (r *PolarDBXReconciler) newReconcileTask(rc *polardbxreconcile.Context, pol
 		// Always reconcile the stateless components (mainly for rebuilt).
 		instancesteps.CreateOrReconcileCNs(task)
 		instancesteps.CreateOrReconcileCDCs(task)
+		instancesteps.WaitUntilCNCDCPodsReady(task)
+		instancesteps.CreateOrReconcileColumnars(task)
 
 		//sync cn label to pod without rebuild pod
 		instancesteps.TrySyncCnLabelToPodsDirectly(task)
@@ -266,7 +271,7 @@ func (r *PolarDBXReconciler) newReconcileTask(rc *polardbxreconcile.Context, pol
 		switch polardbx.Status.Stage {
 		case polardbxv1polardbx.StageEmpty:
 			// Before doing rebalancing, the controller always trying to update
-			// the CN/CDC deployments and DN stores.
+			// the CN/CDC/Columnar deployments and DN stores.
 
 			// Update before doing update.
 			commonsteps.UpdateSnapshotAndObservedGeneration(task)
@@ -283,12 +288,15 @@ func (r *PolarDBXReconciler) newReconcileTask(rc *polardbxreconcile.Context, pol
 				),
 				instancesteps.CreateOrReconcileCNs,
 				instancesteps.CreateOrReconcileCDCs,
+				instancesteps.WaitUntilCNCDCPodsReady,
+				instancesteps.CreateOrReconcileColumnars,
 				// Only add or update, never remove.
 				instancesteps.CreateOrReconcileDNs,
 
 				instancesteps.WaitUntilDNsReady,
 				instancesteps.WaitUntilCNDeploymentsRolledOut,
 				instancesteps.WaitUntilCDCDeploymentsRolledOut,
+				instancesteps.WaitUntilColumnarDeploymentsRolledOut,
 				instancesteps.CreateFileStorage,
 			)(task)
 
@@ -302,9 +310,10 @@ func (r *PolarDBXReconciler) newReconcileTask(rc *polardbxreconcile.Context, pol
 			// Enable added DN stores.
 			gmssteps.EnableDNs(task)
 
-			// Wait terminated CN/CDCs to be finalized in GMS to avoid DDL problems.
+			// Wait terminated CN/CDC/Columnars to be finalized in GMS to avoid DDL problems.
 			instancesteps.WaitUntilCNPodsStable(task)
 			instancesteps.WaitUntilCDCPodsStable(task)
+			instancesteps.WaitUntilColumnarPodsStable(task)
 			// Start to rebalance data after DN stores are reconciled if necessary.
 			rebalancesteps.StartRebalanceTask(task)
 
@@ -375,9 +384,9 @@ func mapRequestsWhenStatelessPodDeletedOrFailed(object client.Object) []reconcil
 	if polardbxName, ok := object.GetLabels()[polardbxmeta.LabelName]; ok {
 		pod := object.(*corev1.Pod)
 
-		// Only for CN & CDC pods.
+		// Only for CN & CDC & Columnar pods.
 		role := pod.Labels[polardbxmeta.LabelRole]
-		if role != polardbxmeta.RoleCN && role != polardbxmeta.RoleCDC {
+		if role != polardbxmeta.RoleCN && role != polardbxmeta.RoleCDC && role != polardbxmeta.RoleColumnar {
 			return nil
 		}
 
@@ -414,7 +423,7 @@ func (r *PolarDBXReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&appsv1.Deployment{}).
 		// Watches owned Parameters
 		Owns(&polardbxv1.PolarDBXParameter{}).
-		// Watches deleted or failed CN/CDC Pods.
+		// Watches deleted or failed CN/CDC/Columnar Pods.
 		Watches(
 			&source.Kind{Type: &corev1.Pod{}},
 			handler.EnqueueRequestsFromMapFunc(mapRequestsWhenStatelessPodDeletedOrFailed),

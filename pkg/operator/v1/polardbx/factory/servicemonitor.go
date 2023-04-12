@@ -211,5 +211,36 @@ func (f *objectFactory) NewServiceMonitors() (map[string]promv1.ServiceMonitor, 
 				},
 			},
 		},
+		polardbxmeta.RoleColumnar: {
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      f.rc.NameInto(suffixPatcher("-columnar")),
+				Namespace: f.rc.Namespace(),
+				Labels:    convention.ConstLabelsWithRole(polardbx, polardbxmeta.RoleColumnar),
+			},
+			Spec: promv1.ServiceMonitorSpec{
+				JobLabel: f.rc.NameInto(suffixPatcher("-columnar")),
+				TargetLabels: []string{
+					polardbxmeta.LabelName,
+					polardbxmeta.LabelRole,
+				},
+				PodTargetLabels: []string{},
+				Endpoints: []promv1.Endpoint{
+					{
+						Port:          "metrics",
+						Interval:      fmt.Sprintf("%.0fs", monitorInterval.Seconds()),
+						ScrapeTimeout: fmt.Sprintf("%.0fs", scrapeTimeout.Seconds()),
+					},
+				},
+				NamespaceSelector: promv1.NamespaceSelector{
+					MatchNames: []string{f.rc.Namespace()},
+				},
+				Selector: metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						polardbxmeta.LabelName: polardbx.Name,
+						polardbxmeta.LabelRole: polardbxmeta.RoleColumnar,
+					},
+				},
+			},
+		},
 	}, nil
 }

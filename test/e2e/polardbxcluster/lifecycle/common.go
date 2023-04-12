@@ -48,6 +48,10 @@ func CreatePolarDBXClusterAndWaitUntilRunningOrFail(f *framework.Framework, pola
 	err := f.Client.Create(f.Ctx, polardbxcluster)
 	framework.ExpectNoError(err)
 
+	WaitPolarDBXClusterRunningOrFail(f, polardbxcluster, timeout)
+}
+
+func WaitPolarDBXClusterRunningOrFail(f *framework.Framework, polardbxcluster *polardbxv1.PolarDBXCluster, timeout time.Duration) {
 	// Wait until not in new / creating / restoring phases.
 	obj, err := pxcframework.WaitUntilPolarDBXClusterToNotInPhases(f.Client,
 		polardbxcluster.Name, polardbxcluster.Namespace,

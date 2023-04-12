@@ -203,7 +203,7 @@ func Do() {
 	fmt.Println("Connected to metadb!")
 
 	fmt.Printf("Try self-registration, register %s:%d to metadb...\n", env.LocalIP, env.ServerPort)
-	stmt := fmt.Sprintf(`INSERT IGNORE INTO server_info 
+	stmt := fmt.Sprintf(`REPLACE INTO server_info 
 		(inst_id, inst_type, ip, port, htap_port, mgr_port, mpp_port, status, cpu_core, mem_size, extras) 
 		VALUES ('%s', '%s', '%s', %d, %d, %d, %d, %d, %d, %d, '%s')`, env.InstanceID, env.InstanceType, env.LocalIP,
 		env.ServerPort, env.HtapPort, env.MgrPort, env.MppPort, 0, env.CpuCore, env.MemSize, env.PodId)

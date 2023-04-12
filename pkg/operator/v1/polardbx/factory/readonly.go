@@ -54,6 +54,8 @@ func (f *objectFactory) newReadonlySpec(readonlyParam *polardbxv1polardbx.Readon
 		}
 	}
 
+	specCopy.Topology.Rules = polardbxv1polardbx.TopologyRules{}
+
 	return specCopy
 }
 

@@ -670,7 +670,7 @@ spec:
         optional: '[ON|OFF]'
         restart: false
         unit: STRING
-      - defaultValue: '9999999999'
+      - defaultValue: '3'
         divisibilityFactor: 1
         mode: readwrite
         name: loose_innodb_commit_cleanout_max_rows
@@ -1202,6 +1202,27 @@ spec:
         optional: '[ON|OFF]'
         restart: false
         unit: STRING
+      - defaultValue: '2'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_log_files_in_group
+        optional: '[2-100]'
+        restart: false
+        unit: INT
+      - defaultValue: ibdata1:12M:autoextend
+        divisibilityFactor: 0
+        mode: readwrite
+        name: innodb_data_file_path
+        optional: .*
+        restart: false
+        unit: STRING
+      - defaultValue: 'OFF'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: innodb_use_native_aio
+        optional: '[OFF|ON]'
+        restart: false
+        unit: STRING
       - defaultValue: '7200'
         divisibilityFactor: 1
         mode: readwrite
@@ -1423,6 +1444,13 @@ spec:
         divisibilityFactor: 1
         mode: readwrite
         name: loose_consensus_prefetch_cache_size
+        optional: .*
+        restart: true
+        unit: INT
+      - defaultValue: '10'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_consensus_prefetch_window_size
         optional: .*
         restart: true
         unit: INT
@@ -2140,13 +2168,6 @@ spec:
         optional: '[0-4294967295]'
         restart: false
         unit: INT
-      - defaultValue: '5532'
-        divisibilityFactor: 1
-        mode: readwrite
-        name: max_connections
-        optional: .*
-        restart: true
-        unit: INT
       - defaultValue: '1024'
         divisibilityFactor: 1
         mode: readwrite
@@ -2217,18 +2238,18 @@ spec:
         optional: '[0-255]'
         restart: false
         unit: INT
-      - defaultValue: '5000'
-        divisibilityFactor: 1
-        mode: readwrite
-        name: max_user_connections
-        optional: .*
-        restart: true
-        unit: INT
       - defaultValue: '102400'
         divisibilityFactor: 1
         mode: readwrite
         name: max_write_lock_count
         optional: '[1-102400]'
+        restart: false
+        unit: INT
+      - defaultValue: '0'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: max_relay_log_size
+        optional: '[0-1073741824]'
         restart: false
         unit: INT
       - defaultValue: '0'
@@ -2287,7 +2308,7 @@ spec:
         optional: '[0-20]'
         restart: true
         unit: int
-      - defaultValue: '65535'
+      - defaultValue: '615350'
         divisibilityFactor: 1
         mode: readwrite
         name: open_files_limit
@@ -2517,6 +2538,19 @@ spec:
         name: slave_type_conversions
         optional: '[s*|ALL_LOSSY|ALL_NON_LOSSY|ALL_SIGNED|ALL_UNSIGNED]'
         restart: true
+        unit: STRING
+      - defaultValue: '512'
+        divisibilityFactor: 8
+        mode: 'false'
+        name: slave_checkpoint_group
+        optional: '[32-524280]'
+        unit: INT
+      - defaultValue: INDEX_SCAN,HASH_SCAN
+        divisibilityFactor: 0
+        mode: readwrite
+        name: slave_rows_search_algorithms
+        optional: '[TABLE_SCAN,INDEX_SCAN|INDEX_SCAN,HASH_SCAN|TABLE_SCAN,HASH_SCAN||TABLE_SCAN,INDEX_SCAN,HASH_SCAN]'
+        restart: false
         unit: STRING
       - defaultValue: '2'
         divisibilityFactor: 1

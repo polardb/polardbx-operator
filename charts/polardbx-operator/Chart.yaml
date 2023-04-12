@@ -2,8 +2,8 @@ apiVersion: v2
 name: polardbx-operator
 description: Helm chart of polardbx-operator
 type: application
-version: 1.4.0
-appVersion: v1.4.0
+version: 1.4.1
+appVersion: v1.4.1
 keywords:
 - polardb-x
 - operator

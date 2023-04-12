@@ -22,6 +22,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -551,7 +552,7 @@ var RemoveTrailingDNs = polardbxv1reconcile.NewStepBinder("RemoveTrailingDNs",
 )
 
 func reconcileGroupedDeployments(rc *polardbxv1reconcile.Context, flow control.Flow, role string) (reconcile.Result, error) {
-	polardbxmeta.AssertRoleIn(role, polardbxmeta.RoleCN, polardbxmeta.RoleCDC)
+	polardbxmeta.AssertRoleIn(role, polardbxmeta.RoleCN, polardbxmeta.RoleCDC, polardbxmeta.RoleColumnar)
 
 	flow = flow.WithLoggerValues("role", role)
 
@@ -569,11 +570,13 @@ func reconcileGroupedDeployments(rc *polardbxv1reconcile.Context, flow control.F
 			return flow.Pass()
 		}
 		deployments, err = factory.NewObjectFactory(rc).NewDeployments4CN()
-	} else {
+	} else if role == polardbxmeta.RoleCDC {
 		if polardbx.Spec.Readonly {
 			return flow.Pass()
 		}
 		deployments, err = factory.NewObjectFactory(rc).NewDeployments4CDC()
+	} else if role == polardbxmeta.RoleColumnar {
+		deployments, err = factory.NewObjectFactory(rc).NewDeployments4Columnar()
 	}
 	if err != nil {
 		return flow.Error(err, "Unable to new deployments.")
@@ -690,10 +693,50 @@ var CreateOrReconcileCDCs = polardbxv1reconcile.NewStepBinder("CreateOrReconcile
 	},
 )
 
+var CreateOrReconcileColumnars = polardbxv1reconcile.NewStepBinder("CreateOrReconcileColumnars",
+	func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+		return reconcileGroupedDeployments(rc, flow, polardbxmeta.RoleColumnar)
+	},
+)
+
 func isXStoreReady(xstore *polardbxv1.XStore) bool {
 	return xstore.Status.ObservedGeneration == xstore.Generation &&
 		xstore.Status.Phase == polardbxv1xstore.PhaseRunning
 }
+
+var WaitUntilCNCDCPodsReady = polardbxv1reconcile.NewStepBinder("WaitUntilCNCDCPodsReady",
+	func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+		cnPods, err := rc.GetPods(polardbxmeta.RoleCN)
+		if err != nil {
+			return flow.Error(err, "Unable to get pods for CN")
+		}
+
+		unready := k8shelper.FilterPodsBy(cnPods, func(pod *corev1.Pod) bool {
+			return !k8shelper.IsPodReady(pod)
+		})
+
+		if len(unready) > 0 {
+			return flow.Wait("Found unready cn pods, keep waiting...", "unready-pods",
+				strings.Join(k8shelper.ToObjectNames(unready), ","))
+		}
+
+		cdcPods, err := rc.GetPods(polardbxmeta.RoleCDC)
+		if err != nil {
+			return flow.Error(err, "Unable to get pods for CDC")
+		}
+
+		unready = k8shelper.FilterPodsBy(cdcPods, func(pod *corev1.Pod) bool {
+			return !k8shelper.IsPodReady(pod)
+		})
+
+		if len(unready) > 0 {
+			return flow.Wait("Found unready cdc pods, keep waiting...", "unready-pods",
+				strings.Join(k8shelper.ToObjectNames(unready), ","))
+		}
+
+		return flow.Pass()
+	},
+)
 
 var WaitUntilGMSReady = polardbxv1reconcile.NewStepBinder("WaitUntilGMSReady",
 	func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
@@ -822,7 +865,7 @@ var WaitUntilCDCPodsStable = polardbxv1reconcile.NewStepBinder("WaitUntilCDCPods
 
 		cdcPods, err := rc.GetPods(polardbxmeta.RoleCDC)
 		if err != nil {
-			return flow.Error(err, "Unable to get pods of CN.")
+			return flow.Error(err, "Unable to get pods of CDC.")
 		}
 
 		unFinalizedPodsSize := k8shelper.FilterPodsBy(cdcPods, func(pod *corev1.Pod) bool {
@@ -852,6 +895,45 @@ var WaitUntilCDCDeploymentsRolledOut = polardbxv1reconcile.NewStepBinder("WaitUn
 			return flow.Continue("Deployments of CDC are rolled out.")
 		}
 		return flow.Wait("Some deployment of CDC is rolling.")
+	},
+)
+
+var WaitUntilColumnarPodsStable = polardbxv1reconcile.NewStepBinder("WaitUntilColumnarPodsStable",
+	func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+		polardbx := rc.MustGetPolarDBX()
+
+		columnarPods, err := rc.GetPods(polardbxmeta.RoleColumnar)
+		if err != nil {
+			return flow.Error(err, "Unable to get pods of Columnar.")
+		}
+
+		unFinalizedPodsSize := k8shelper.FilterPodsBy(columnarPods, func(pod *corev1.Pod) bool {
+			return len(pod.Finalizers) > 0
+		})
+
+		columnarTemplate := polardbx.Status.SpecSnapshot.Topology.Nodes.Columnar
+		columnarReplicas := 0
+		if columnarTemplate != nil {
+			columnarReplicas = int(columnarTemplate.Replicas)
+		}
+		if len(unFinalizedPodsSize) == columnarReplicas {
+			return flow.Pass()
+		}
+		return flow.Wait("Wait until some pod to be finalized.")
+	},
+)
+
+var WaitUntilColumnarDeploymentsRolledOut = polardbxv1reconcile.NewStepBinder("WaitUntilColumnarDeploymentsRolledOut",
+	func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+		columnarDeployments, err := rc.GetDeploymentMap(polardbxmeta.RoleColumnar)
+		if err != nil {
+			return flow.Error(err, "Unable to get deployments of Columnar.")
+		}
+
+		if areDeploymentsRolledOut(columnarDeployments) {
+			return flow.Continue("Deployments of Columnar are rolled out.")
+		}
+		return flow.Wait("Some deployment of Columnar is rolling.")
 	},
 )
 

@@ -45,6 +45,7 @@ type EnvFactory interface {
 	NewSystemEnvVars() []corev1.EnvVar
 	NewEnvVarsForCNEngine(gmsConn StorageConnection, ports CNPorts) []corev1.EnvVar
 	NewEnvVarsForCDCEngine(gmsConn StorageConnection) []corev1.EnvVar
+	NewEnvVarsForColumnarEngine(gmsConn StorageConnection) []corev1.EnvVar
 }
 
 type envFactory struct {
@@ -387,6 +388,53 @@ func (e *envFactory) newBasicEnvVarsForCDCEngine(gmsConn *StorageConnection) []c
 func (e *envFactory) NewEnvVarsForCDCEngine(gmsConn StorageConnection) []corev1.EnvVar {
 	systemEnvs := e.NewSystemEnvVars()
 	basicEnvs := e.newBasicEnvVarsForCDCEngine(&gmsConn)
+	return append(systemEnvs, basicEnvs...)
+}
+
+func (e *envFactory) newBasicEnvVarsForColumnarEngine(gmsConn *StorageConnection) []corev1.EnvVar {
+	topology := e.polardbx.Status.SpecSnapshot.Topology
+	if topology.Nodes.Columnar == nil {
+		return nil
+	}
+
+	template := topology.Nodes.Columnar.Template
+	pxcServiceName := e.polardbx.Spec.ServiceName
+	if len(pxcServiceName) == 0 {
+		pxcServiceName = e.polardbx.Name
+	}
+
+	// FIXME CDC currently doesn't support host network, so ports are hard coded.
+	envs := []corev1.EnvVar{
+		{Name: "switchCloud", Value: "aliyun"},
+		{Name: "ins_id", ValueFrom: e.newValueFromObjectFiled("metadata.uid")},
+		{Name: "ins_ip", ValueFrom: e.newValueFromObjectFiled("status.podIP")},
+		{Name: "cpu_cores", Value: strconv.FormatInt(template.Resources.Limits.Cpu().Value(), 10)},
+		{Name: "mem_size", Value: strconv.FormatInt(template.Resources.Limits.Memory().Value()>>20, 10)},
+		{Name: "metaDbAddr", Value: fmt.Sprintf("%s:%d", gmsConn.Host, gmsConn.Port)},
+		{Name: "metaDbName", Value: fmt.Sprintf(gms.MetaDBName)},
+		{Name: "metaDbUser", Value: gmsConn.User},
+		{Name: "metaDbPasswd", Value: e.cipher.Encrypt(gmsConn.Passwd)},
+		{Name: "metaDbXprotoPort", Value: strconv.Itoa(31306)},
+		{Name: "storageDbXprotoPort", Value: strconv.Itoa(0)},
+		{Name: "polarx_username", Value: "polardbx_root"},
+		{Name: "polarx_password", ValueFrom: e.newValueFromSecretKey(e.polardbx.Name, "polardbx_root")},
+		{Name: "dnPasswordKey", Value: e.cipher.Key()},
+	}
+	configEnvs := e.polardbx.Spec.Config.Columnar.Envs
+	if configEnvs != nil {
+		for k, v := range configEnvs {
+			envs = append(envs, corev1.EnvVar{
+				Name:  k,
+				Value: v.String(),
+			})
+		}
+	}
+	return envs
+}
+
+func (e *envFactory) NewEnvVarsForColumnarEngine(gmsConn StorageConnection) []corev1.EnvVar {
+	systemEnvs := e.NewSystemEnvVars()
+	basicEnvs := e.newBasicEnvVarsForColumnarEngine(&gmsConn)
 	return append(systemEnvs, basicEnvs...)
 }
 

@@ -58,19 +58,20 @@ type Context struct {
 	*control.BaseReconcileContext
 
 	// Caches
-	objectCache     cache.ObjectLoadingCache
-	polardbxKey     types.NamespacedName
-	polardbxChanged bool
-	polardbx        *polardbxv1.PolarDBXCluster
-	primaryPolardbx *polardbxv1.PolarDBXCluster
-	polardbxStatus  *polardbxv1.PolarDBXClusterStatus
-	cnDeployments   map[string]*appsv1.Deployment
-	cdcDeployments  map[string]*appsv1.Deployment
-	podsByRole      map[string][]corev1.Pod
-	nodes           []corev1.Node
-	gmsStore        *polardbxv1.XStore
-	dnStores        map[int]*polardbxv1.XStore
-	primaryDnStore  map[int]*polardbxv1.XStore
+	objectCache         cache.ObjectLoadingCache
+	polardbxKey         types.NamespacedName
+	polardbxChanged     bool
+	polardbx            *polardbxv1.PolarDBXCluster
+	primaryPolardbx     *polardbxv1.PolarDBXCluster
+	polardbxStatus      *polardbxv1.PolarDBXClusterStatus
+	cnDeployments       map[string]*appsv1.Deployment
+	cdcDeployments      map[string]*appsv1.Deployment
+	columnarDeployments map[string]*appsv1.Deployment
+	podsByRole          map[string][]corev1.Pod
+	nodes               []corev1.Node
+	gmsStore            *polardbxv1.XStore
+	dnStores            map[int]*polardbxv1.XStore
+	primaryDnStore      map[int]*polardbxv1.XStore
 
 	polardbxMonitor    *polardbxv1.PolarDBXMonitor
 	polardbxMonitorKey types.NamespacedName
@@ -820,8 +821,10 @@ func (rc *Context) GetDeploymentMap(role string) (map[string]*appsv1.Deployment,
 		deploymentMapPtr = &rc.cnDeployments
 	case polardbxmeta.RoleCDC:
 		deploymentMapPtr = &rc.cdcDeployments
+	case polardbxmeta.RoleColumnar:
+		deploymentMapPtr = &rc.columnarDeployments
 	default:
-		panic("required role to be cn or cdc, but found " + role)
+		panic("required role to be cn, cdc or columnar, but found " + role)
 	}
 
 	if *deploymentMapPtr == nil {
@@ -841,10 +844,9 @@ func (rc *Context) GetDeploymentMap(role string) (map[string]*appsv1.Deployment,
 }
 
 func (rc *Context) GetPods(role string) ([]corev1.Pod, error) {
-	if role != polardbxmeta.RoleCN && role != polardbxmeta.RoleCDC {
-		panic("required role to be cn or cdc, but found " + role)
+	if role != polardbxmeta.RoleCN && role != polardbxmeta.RoleCDC && role != polardbxmeta.RoleColumnar {
+		panic("required role to be cn, cdc or columnar, but found " + role)
 	}
-
 	pods := rc.podsByRole[role]
 	if pods == nil {
 		polardbx, err := rc.GetPolarDBX()
@@ -876,37 +878,45 @@ func (rc *Context) GetPods(role string) ([]corev1.Pod, error) {
 func (rc *Context) GetGMS() (*polardbxv1.XStore, error) {
 	polardbx := rc.MustGetPolarDBX()
 	var err error
+	readonly := polardbx.Spec.Readonly
 
-	if polardbx.Spec.Readonly {
+	if readonly {
 		polardbx, err = rc.GetPrimaryPolarDBX()
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	if polardbx.Spec.ShareGMS {
-		return rc.GetDN(0)
-	} else {
-		if rc.gmsStore == nil {
-			gmsStore, err := rc.objectCache.GetObject(
-				rc.Context(),
-				types.NamespacedName{
-					Namespace: rc.polardbxKey.Namespace,
-					Name:      convention.NewGMSName(polardbx),
-				},
-				&polardbxv1.XStore{},
-			)
-			if err != nil {
-				return nil, err
-			}
-
-			if err := k8shelper.CheckControllerReference(gmsStore, polardbx); err != nil {
-				return nil, err
-			}
-			rc.gmsStore = gmsStore.(*polardbxv1.XStore)
-		}
+	if rc.gmsStore != nil {
 		return rc.gmsStore, nil
 	}
+
+	gmsName := convention.NewGMSName(polardbx)
+	if polardbx.Spec.ShareGMS {
+		gmsName = convention.NewDNName(polardbx, 0)
+	}
+
+	gmsStore, err := rc.objectCache.GetObject(
+		rc.Context(),
+		types.NamespacedName{
+			Namespace: rc.polardbxKey.Namespace,
+			Name:      gmsName,
+		},
+		&polardbxv1.XStore{},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := k8shelper.CheckControllerReference(gmsStore, polardbx); err != nil {
+		return nil, err
+	}
+
+	if !readonly {
+		rc.gmsStore = gmsStore.(*polardbxv1.XStore)
+	}
+
+	return gmsStore.(*polardbxv1.XStore), nil
 }
 
 func (rc *Context) GetService(name string) (*corev1.Service, error) {

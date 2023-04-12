@@ -32,6 +32,8 @@ type VolumeFactory interface {
 	NewVolumeMountsForCNExporter() []corev1.VolumeMount
 	NewVolumesForCDC() []corev1.Volume
 	NewVolumeMountsForCDCEngine() []corev1.VolumeMount
+	NewVolumesForColumnar() []corev1.Volume
+	NewVolumeMountsForColumnarEngine() []corev1.VolumeMount
 }
 
 type volumeFactory struct {
@@ -297,6 +299,40 @@ func (v *volumeFactory) NewVolumeMountsForCDCEngine() []corev1.VolumeMount {
 			MountPath:        "/home/admin/logs",
 			MountPropagation: mountPropagationModePtr(corev1.MountPropagationHostToContainer),
 		},
+	}
+	return append(systemVolMounts, volumeMounts...)
+}
+
+func (v *volumeFactory) NewVolumesForColumnar() []corev1.Volume {
+	systemVols := v.NewSystemVolumes()
+	volumes := []corev1.Volume{
+		{
+			Name:         "columnar-log",
+			VolumeSource: v.newEmptyDirVolumeSource(),
+		},
+		{
+			Name:         "columnar-config",
+			VolumeSource: v.newEmptyDirVolumeSource(),
+		},
+	}
+	return append(systemVols, volumes...)
+}
+
+func (v *volumeFactory) NewVolumeMountsForColumnarEngine() []corev1.VolumeMount {
+	systemVolMounts := v.NewSystemVolumeMounts()
+	volumeMounts := []corev1.VolumeMount{
+		{
+			Name:             "columnar-log",
+			MountPath:        "/home/admin/polardbx-columnar/logs",
+			MountPropagation: mountPropagationModePtr(corev1.MountPropagationHostToContainer),
+		},
+		//{
+		//	Name:             "columnar-config",
+		//	MountPath:        "/home/admin/polardbx-columnar/conf/config.properties",
+		//	ReadOnly:         true,
+		//	SubPath:          "config.properties",
+		//	MountPropagation: mountPropagationModePtr(corev1.MountPropagationHostToContainer),
+		//},
 	}
 	return append(systemVolMounts, volumeMounts...)
 }
