@@ -27,6 +27,7 @@ import (
 	"io"
 	k8snet "k8s.io/apimachinery/pkg/util/net"
 	net "net"
+	"runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -114,7 +115,8 @@ func (f *FlowControlManger) LimitFlow(reader io.Reader, writer io.Writer, notify
 	wg.Add(1)
 	go func() {
 		defer func() {
-			recover()
+			obj := recover()
+			fmt.Println(obj, debug.Stack())
 		}()
 		defer wg.Done()
 		for {

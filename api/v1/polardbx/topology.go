@@ -64,10 +64,11 @@ type XStoreTopologyRule struct {
 }
 
 type TopologyRuleComponents struct {
-	CN  []StatelessTopologyRuleItem `json:"cn,omitempty"`
-	CDC []StatelessTopologyRuleItem `json:"cdc,omitempty"`
-	GMS *XStoreTopologyRule         `json:"gms,omitempty"`
-	DN  *XStoreTopologyRule         `json:"dn,omitempty"`
+	CN       []StatelessTopologyRuleItem `json:"cn,omitempty"`
+	CDC      []StatelessTopologyRuleItem `json:"cdc,omitempty"`
+	Columnar []StatelessTopologyRuleItem `json:"columnar,omitempty"`
+	GMS      *XStoreTopologyRule         `json:"gms,omitempty"`
+	DN       *XStoreTopologyRule         `json:"dn,omitempty"`
 }
 
 type TopologyRules struct {
@@ -157,6 +158,28 @@ type CDCTemplate struct {
 	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
 }
 
+type ColumnarTemplate struct {
+	// Image for Columnar. Should be replaced by default value if not present.
+	// +optional
+	Image string `json:"image,omitempty"`
+
+	// ImagePullPolicy describes a policy for if/when to pull a container image (especially
+	// for the engine container).
+	ImagePullPolicy corev1.PullPolicy `json:"imagePullPolicy,omitempty"`
+
+	// ImagePullSecrets represents the secrets for pulling private images.
+	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
+
+	// HostNetwork mode.
+	// +optional
+	HostNetwork bool `json:"hostNetwork,omitempty"`
+
+	// +kubebuilder:default={limits: {cpu: 4, memory: "8Gi"}}
+
+	// Resources. Default is limits of 4 cpu and 8Gi memory.
+	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
+}
+
 type TopologyNodeGMS struct {
 	// Template of GMS xstore. If not provided, the operator will use
 	// the template for DN as template for GMS.
@@ -200,6 +223,17 @@ type TopologyNodeCDC struct {
 	Template CDCTemplate `json:"template,omitempty"`
 }
 
+type TopologyNodeColumnar struct {
+	// +kubebuilder:default=2
+	// +kubebuilder:validation:Minimum=0
+
+	Replicas int32 `json:"replicas,omitempty"`
+
+	// +kubebuilder:default={resources: {limits: {cpu: 4, memory: "8Gi"}}}
+
+	Template ColumnarTemplate `json:"template,omitempty"`
+}
+
 type TopologyNodes struct {
 	GMS TopologyNodeGMS `json:"gms,omitempty"`
 
@@ -210,6 +244,8 @@ type TopologyNodes struct {
 	DN TopologyNodeDN `json:"dn,omitempty"`
 
 	CDC *TopologyNodeCDC `json:"cdc,omitempty"`
+
+	Columnar *TopologyNodeColumnar `json:"columnar,omitempty"`
 }
 
 type Topology struct {

@@ -182,10 +182,11 @@ var UpdateDisplayReplicas = polardbxv1reconcile.NewStepBinder("UpdateDisplayRepl
 
 		// update replicas status.
 		statusRef.ReplicaStatus = polardbxv1polardbx.ClusterReplicasStatus{
-			GMS: polardbxv1polardbx.ReplicasStatus{Total: 1, Available: int32(countAvailableXStores(gmsStore))},
-			DN:  polardbxv1polardbx.ReplicasStatus{Total: snapshot.Topology.Nodes.DN.Replicas, Available: int32(countAvailableXStores(dnStores...))},
-			CN:  nil,
-			CDC: nil,
+			GMS:      polardbxv1polardbx.ReplicasStatus{Total: 1, Available: int32(countAvailableXStores(gmsStore))},
+			DN:       polardbxv1polardbx.ReplicasStatus{Total: snapshot.Topology.Nodes.DN.Replicas, Available: int32(countAvailableXStores(dnStores...))},
+			CN:       nil,
+			CDC:      nil,
+			Columnar: nil,
 		}
 
 		cnDeployments, err := rc.GetDeploymentMap(polardbxmeta.RoleCN)
@@ -208,6 +209,17 @@ var UpdateDisplayReplicas = polardbxv1reconcile.NewStepBinder("UpdateDisplayRepl
 			}
 		}
 
+		if snapshot.Topology.Nodes.Columnar != nil {
+			columnarDeployments, err := rc.GetDeploymentMap(polardbxmeta.RoleColumnar)
+			if err != nil {
+				return flow.Error(err, "Unable to get deployments of Columnar.")
+			}
+			statusRef.ReplicaStatus.Columnar = &polardbxv1polardbx.ReplicasStatus{
+				Available: int32(countAvailableReplicasFromDeployments(columnarDeployments)),
+				Total:     snapshot.Topology.Nodes.Columnar.Replicas,
+			}
+		}
+
 		gmsDisplay := statusRef.ReplicaStatus.GMS.Display()
 
 		if polardbx.Spec.Readonly {
@@ -215,10 +227,11 @@ var UpdateDisplayReplicas = polardbxv1reconcile.NewStepBinder("UpdateDisplayRepl
 		}
 
 		statusForPrintRef.ReplicaStatus = polardbxv1polardbx.ReplicaStatusForPrint{
-			GMS: gmsDisplay,
-			CN:  statusRef.ReplicaStatus.CN.Display(),
-			DN:  statusRef.ReplicaStatus.DN.Display(),
-			CDC: statusRef.ReplicaStatus.CDC.Display(),
+			GMS:      gmsDisplay,
+			CN:       statusRef.ReplicaStatus.CN.Display(),
+			DN:       statusRef.ReplicaStatus.DN.Display(),
+			CDC:      statusRef.ReplicaStatus.CDC.Display(),
+			Columnar: statusRef.ReplicaStatus.Columnar.Display(),
 		}
 
 		return flow.Pass()

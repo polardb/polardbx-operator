@@ -2,10 +2,12 @@ package pitr
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/alibaba/polardbx-operator/pkg/util/defaults"
 	"net/http"
 	"os"
+	"runtime/debug"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sync"
 	"sync/atomic"
@@ -51,6 +53,7 @@ func Run() error {
 			obj := recover()
 			if obj != nil {
 				pCtx.Logger.Info("panic", "obj", obj)
+				pCtx.LastErr = errors.New(fmt.Sprintf("panic %s", debug.Stack()))
 			}
 		}()
 		steps := []Step{

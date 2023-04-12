@@ -22,7 +22,8 @@ import (
 )
 
 type CNStaticConfig struct {
-	AttendHtap           bool                          `json:"AttendHtap,omitempty"`
+	AttendHtap bool `json:"AttendHtap,omitempty"`
+	// +kubebuilder:default=true
 	EnableCoroutine      bool                          `json:"EnableCoroutine,omitempty"`
 	EnableReplicaRead    bool                          `json:"EnableReplicaRead,omitempty"`
 	EnableJvmRemoteDebug bool                          `json:"EnableJvmRemoteDebug,omitempty"`
@@ -58,6 +59,10 @@ type CDCConfig struct {
 	Envs map[string]intstr.IntOrString `json:"envs,omitempty"`
 }
 
+type ColumnarConfig struct {
+	Envs map[string]intstr.IntOrString `json:"envs,omitempty"`
+}
+
 type Config struct {
 	// CN config.
 	CN CNConfig `json:"cn,omitempty"`
@@ -67,4 +72,7 @@ type Config struct {
 
 	// CDC config
 	CDC CDCConfig `json:"cdc,omitempty"`
+
+	// Columnar config
+	Columnar ColumnarConfig `json:"columnar,omitempty"`
 }

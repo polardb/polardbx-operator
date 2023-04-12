@@ -67,7 +67,7 @@ var (
 	EnableGalaxyClusterMode    = declareFeatureGate("EnableGalaxyCluster", true, false, "Enable cluster mode on galaxy store engine.")
 	EnforceQoSGuaranteed       = declareFeatureGate("EnforceQoSGuaranteed", false, false, "Enforce pod's QoS to Guaranteed.")
 	ResetTrustIpsBeforeStart   = declareFeatureGate("ResetTrustIpsBeforeStart", false, true, "Reset trust ips in CNs to avoid security problems.")
-	EnableXStoreWithPodService = declareFeatureGate("EnableXStoreWithPodService", true, true, "Use services for pods in xstore.")
+	EnableXStoreWithPodService = declareFeatureGate("EnableXStoreWithPodService", true, false, "Use services for pods in xstore.")
 	EnforceClusterIpXStorePod  = declareFeatureGate("EnforceClusterIpXStorePod", false, false, "Use cluster ip services for pods in old xstore.")
 	EnableAutoRebuildFollower  = declareFeatureGate("EnableAutoRebuildFollower", false, false, "Enable creating rebuild task for follower if it is unhealthy.")
 )

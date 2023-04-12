@@ -210,8 +210,8 @@ func ParseGroupFromDeployment(deploy *appsv1.Deployment) string {
 // Convention for names.
 
 func NewDeploymentName(polardbx *polardbxv1.PolarDBXCluster, role string, group string) string {
-	if role != polardbxmeta.RoleCN && role != polardbxmeta.RoleCDC {
-		panic("required role to be cn or cdc, but found " + role)
+	if role != polardbxmeta.RoleCN && role != polardbxmeta.RoleCDC && role != polardbxmeta.RoleColumnar {
+		panic("required role to be cn, cdc or columnar, but found " + role)
 	}
 
 	if group == "" {

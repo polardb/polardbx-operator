@@ -1,5 +1,16 @@
 # Changelog
 
+## 2023-04-12
+
+Release v1.4.1
+
++ Enhancement & New Features
+  + Support PolarDB-X Engine 2.0.0
+  + Remove single download proxy for consensus logs in point-in-time recovery(PITR)
++ Bug Fix
+  + Fix readonly pxc when shareGms is `true`
+  + Fix Compute Nodes metadata inconsistency when upgrading frequently
+
 ## 2023-03-23
 
 Release v1.4.0

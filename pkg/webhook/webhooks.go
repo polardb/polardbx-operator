@@ -20,6 +20,7 @@ import (
 	"context"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/config"
 	"github.com/alibaba/polardbx-operator/pkg/webhook/polardbxbackup"
+	backupbinlog "github.com/alibaba/polardbx-operator/pkg/webhook/polardbxbackup/binlog"
 	"net/http"
 
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -54,6 +55,10 @@ func SetupWebhooks(ctx context.Context, mgr ctrl.Manager, configPath string, con
 	}
 
 	if err := polardbxbackup.SetupWebhooks(ctx, mgr, ApiPath, configLoader); err != nil {
+		return err
+	}
+
+	if err := backupbinlog.SetupWebhooks(ctx, mgr, ApiPath, configLoader); err != nil {
 		return err
 	}
 

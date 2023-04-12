@@ -138,6 +138,16 @@ class MySQLConfigManager(ConfigManager):
                         not target.has_section(section):
                     target.add_section(section)
                 for opt, value in proxy.items():
+                    if opt.startswith("loose_"):
+                        actual_opt = opt[6:]
+                        if target.has_option(section, actual_opt):
+                            target.set(section, actual_opt, value)
+                            continue
+                    else:
+                        loose_opt = "loose_" + opt
+                        if target.has_option(section, loose_opt):
+                            target.set(section, loose_opt, value)
+                            continue
                     target.set(section, opt, value)
 
     def update(self, template_file: None or AnyStr, overrides: None or [Any], create_new: bool = True):

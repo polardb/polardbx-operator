@@ -43,7 +43,7 @@ class Context(object):
         if self.is_galaxy80():
             # galaxy related paths
             self.engine_home = self._env.get('ENGINE_HOME', '/opt/galaxy_engine')
-            self.xtrabackup_home = self._env.get('XTRABACKUP_HOME', '/tools/xstore/current/xcluster_xtrabackup80/bin')
+            self.xtrabackup_home = self._env.get('XTRABACKUP_HOME', self.get_galaxy_xtrabackup_home())
             self.xtrabackup = os.path.join(self.xtrabackup_home, "xtrabackup")
         else:
             self.engine_home = self._env.get('ENGINE_HOME', '/u01/xcluster_current')
@@ -53,6 +53,7 @@ class Context(object):
         self._tools_home = self._env.get('TOOL_HOME', '/tools/xstore/current')
         self.mysqlbinlogtailor = os.path.join(self.xtrabackup_home, "mysqlbinlogtailor")
         self.bb_home = os.path.join(self._tools_home, "bb")
+        self.tools_bin_home = os.path.join(self._tools_home, "bin")
         self._filestream_client_home = os.path.join(self._tools_home, "bin/polardbx-filestream-client")
         self._hostinfo_path = "/tools/xstore/hdfs-nodes.json"
 
@@ -81,7 +82,8 @@ class Context(object):
         if self.is_galaxy80():
             self.mycnf_template_path = os.path.join(self._tools_home, 'core/engine/galaxy/templates', 'my.cnf')
         elif self.is_xcluster57():
-            self.mycnf_template_path = os.path.join(self._tools_home, 'core/engine/xcluster/templates', 'xcluster.57.cnf')
+            self.mycnf_template_path = os.path.join(self._tools_home, 'core/engine/xcluster/templates',
+                                                    'xcluster.57.cnf')
 
         # Set ports.
         self._access_port = int(self._env.get(convention.ENV_PORT_ACCESS, 3306))
@@ -438,3 +440,14 @@ class Context(object):
         :return: path of host info file
         """
         return self._hostinfo_path
+
+    def get_galaxy_xtrabackup_home(self) -> str:
+        res = os.popen("mysqld -V")
+        lines = res.readlines()
+        if res.close() is None and len(lines) > 1:
+            version = lines[1].strip().split()[-1]
+            version0 = int(version.split(".")[0])
+            if version0 > 1:
+                return "/tools/xstore/current/xtrabackup/8.0-2/xcluster_xtrabackup80/bin"
+            return "/tools/xstore/current/xcluster_xtrabackup80/bin"
+        raise Exception("failed to get xtrabackup home by `mysqld -V`")
