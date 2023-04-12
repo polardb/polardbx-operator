@@ -319,6 +319,15 @@ do
 	sleep 3600
 done
 `
+
+	columnarStartCmd = `
+sh /home/admin/entrypoint.sh
+while [ "debug" == $(cat /etc/podinfo/runmode) ]
+do
+	echo "debug mode"
+	sleep 3600
+done
+`
 )
 
 func (f *objectFactory) newDeployment4CN(group string, mr *matchingRule, mustStaticPorts bool) (*appsv1.Deployment, error) {
@@ -781,6 +790,149 @@ func (f *objectFactory) newDeployment4CDC(group string, mr *matchingRule, mustSt
 					Affinity:                      affinity,
 					// FIXME host network for CDC isn't supported
 					// HostNetwork:                   template.HostNetwork,
+				},
+			},
+		},
+	}
+
+	//add hash to label
+	convention.AddLabelHash(polardbxmeta.LabelHash, &deployment)
+	//update generation label
+	deployment.SetLabels(k8shelper.PatchLabels(deployment.Labels, map[string]string{
+		polardbxmeta.LabelGeneration: strconv.FormatInt(polardbx.Status.ObservedGeneration, 10),
+	}))
+
+	// Return
+	return &deployment, nil
+}
+
+func (f *objectFactory) NewDeployments4Columnar() (map[string]appsv1.Deployment, error) {
+	polardbx, err := f.rc.GetPolarDBX()
+	if err != nil {
+		return nil, err
+	}
+	topology := polardbx.Status.SpecSnapshot.Topology
+	rules := topology.Rules.Components.Columnar
+	nodes := topology.Nodes.Columnar
+	if nodes == nil {
+		return nil, nil
+	}
+
+	replicas := topology.Nodes.Columnar.Replicas
+	matchingRules, err := f.getStatelessMatchingRules(int(replicas) /*template.HostNetwork*/, false, rules)
+	if err != nil {
+		return nil, err
+	}
+
+	// Build deployments according rules.
+	return f.buildDeployments(matchingRules, f.newDeployment4Columnar)
+}
+
+func (f *objectFactory) newDeployment4Columnar(group string, mr *matchingRule, mustStaticPorts bool) (*appsv1.Deployment, error) {
+	polardbx := f.rc.MustGetPolarDBX()
+	config := f.rc.Config()
+	topology := polardbx.Status.SpecSnapshot.Topology
+	template := polardbx.Status.SpecSnapshot.Topology.Nodes.Columnar.Template
+
+	// Factories
+	envFactory, err := NewEnvFactory(f.rc, polardbx, f)
+	if err != nil {
+		return nil, err
+	}
+	//portsFactory := NewPortsFactory(f.rc, polardbx)
+	volumeFactory := NewVolumeFactory(f.rc, polardbx)
+
+	// Get GMS connection info.
+	gmsConn, err := f.getGmsConn(polardbx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Ports & Envs
+	//ports := portsFactory.NewPortsForColumnarEngine()
+	envVars := envFactory.NewEnvVarsForColumnarEngine(gmsConn)
+
+	// Affinity
+	var nodeSelector *corev1.NodeSelector
+	if mr.rule != nil {
+		nodeSelector, err = f.getNodeSelectorFromRef(polardbx, mr.rule.NodeSelector)
+		if err != nil {
+			return nil, err
+		}
+	}
+	affinity := f.tryScatterAffinityForStatelessDeployment(
+		convention.ConstLabelsWithRole(polardbx, polardbxmeta.RoleColumnar),
+		nodeSelector,
+	)
+
+	// Name & Labels
+	deployName := convention.NewDeploymentName(polardbx, polardbxmeta.RoleColumnar, group)
+
+	labels := convention.ConstLabelsWithRole(polardbx, polardbxmeta.RoleColumnar)
+	labels[polardbxmeta.LabelGroup] = group
+
+	annotations := f.newPodAnnotations(polardbx)
+
+	// Containers
+
+	// Container engine
+	engineContainer := corev1.Container{
+		Name: convention.ContainerEngine,
+		Image: defaults.NonEmptyStrOrDefault(
+			template.Image,
+			config.Images().DefaultImageForCluster(polardbxmeta.RoleColumnar, convention.ContainerEngine, topology.Version),
+		),
+		Command:         []string{"/bin/bash", "-c"},
+		Args:            []string{columnarStartCmd},
+		ImagePullPolicy: template.ImagePullPolicy,
+		Env:             envVars,
+		Resources:       *template.Resources.DeepCopy(),
+		VolumeMounts:    volumeFactory.NewVolumeMountsForColumnarEngine(),
+		SecurityContext: k8shelper.NewSecurityContext(config.Cluster().ContainerPrivileged()),
+	}
+
+	containers := []corev1.Container{engineContainer}
+
+	dnsPolicy := corev1.DNSClusterFirst
+	if template.HostNetwork {
+		dnsPolicy = corev1.DNSClusterFirstWithHostNet
+	}
+
+	deployment := appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      deployName,
+			Namespace: f.rc.Namespace(),
+			Labels: k8shelper.PatchLabels(
+				copyutil.CopyStrMap(labels),
+				map[string]string{
+					polardbxmeta.LabelGeneration: strconv.FormatInt(polardbx.Status.ObservedGeneration, 10),
+				},
+			),
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: pointer.Int32(int32(mr.replicas)),
+			Selector: &metav1.LabelSelector{
+				MatchLabels: labels,
+			},
+			Strategy: f.newDeploymentUpgradeStrategy(polardbx),
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels:      labels,
+					Annotations: annotations,
+					Finalizers:  []string{polardbxmeta.Finalizer},
+				},
+				Spec: corev1.PodSpec{
+					// TODO: Add a config to control this switch
+					EnableServiceLinks:            pointer.BoolPtr(false),
+					ImagePullSecrets:              template.ImagePullSecrets,
+					Volumes:                       volumeFactory.NewVolumesForColumnar(),
+					Containers:                    containers,
+					RestartPolicy:                 corev1.RestartPolicyAlways,
+					TerminationGracePeriodSeconds: pointer.Int64(30),
+					DNSPolicy:                     dnsPolicy,
+					ShareProcessNamespace:         pointer.Bool(true),
+					Affinity:                      affinity,
+					HostNetwork:                   template.HostNetwork,
 				},
 			},
 		},

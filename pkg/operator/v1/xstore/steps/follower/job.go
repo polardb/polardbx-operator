@@ -74,9 +74,6 @@ var (
 		JobTaskRestoreMoveBack:     JobArgMoveRestoreFunc,
 		JobTaskInitLogger:          JobArgInitLoggerFunc,
 	}
-	BackupToolBinFilePaths = map[string]string{
-		galaxy.Engine: GalaxyEngineBackupBinFilepath,
-	}
 	BackupSetPrepareArgs = map[string]string{
 		galaxy.Engine: GalaxyEngineBackupSetPrepareArg,
 	}
@@ -126,7 +123,7 @@ func JobCommandInitLoggerFunc(ctx JobContext) []string {
 func JobArgBackupFunc(ctx JobContext) []string {
 	return []string{
 		"-c",
-		"touch /tmp/rebuild.log && tail -f /tmp/rebuild.log & " + BackupToolBinFilePaths[ctx.engine] + " --defaults-file=/data/mysql/conf/my.cnf --backup " + BackupExtraArgs[ctx.engine] + " --user=root --socket='/data/mysql/run/mysql.sock' " + BackupStreamTypeArgs[ctx.engine] + " " + TargetDirArgs[ctx.engine] + "/tmp/backup 2>/tmp/rebuild.log " +
+		"touch /tmp/rebuild.log && tail -f /tmp/rebuild.log & " + " `/tools/xstore/current/venv/bin/python3 /tools/xstore/current/cli.py engine xtrabackup` --defaults-file=/data/mysql/conf/my.cnf --backup " + BackupExtraArgs[ctx.engine] + " --user=root --socket='/data/mysql/run/mysql.sock' " + BackupStreamTypeArgs[ctx.engine] + " " + TargetDirArgs[ctx.engine] + "/tmp/backup 2>/tmp/rebuild.log " +
 			"| /tools/xstore/current/bin/polardbx-filestream-client " + BackupStreamTypeArgs[ctx.engine] + " --meta.action=uploadRemote " + fmt.Sprintf(" --meta.instanceId='%s' ", GetFileStreamInstanceId(ctx.otherPod)) +
 			fmt.Sprintf(" --meta.filename='%s' ", FileStreamBackupFilename) + fmt.Sprintf(" --destNodeName='%s' ", ctx.otherPod.Spec.NodeName) + " --hostInfoFilePath=/tools/xstore/hdfs-nodes.json && /tools/xstore/current/venv/bin/python3 /tools/xstore/current/cli.py process check_std_err_complete --filepath=/tmp/rebuild.log ",
 	}
@@ -149,7 +146,7 @@ func JobArgMoveRestoreFunc(ctx JobContext) []string {
 	backupDir := filepath.Join(FileStreamRootDir, GetFileStreamInstanceId(ctx.jobTargetPod), FileStreamBackupFilename)
 	return []string{
 		"-c",
-		BackupToolBinFilePaths[ctx.engine] + " --defaults-file=/data/mysql/conf/my.cnf --force-non-empty-directories --move-back " + TargetDirArgs[ctx.engine] + backupDir,
+		" `/tools/xstore/current/venv/bin/python3 /tools/xstore/current/cli.py engine xtrabackup` --defaults-file=/data/mysql/conf/my.cnf --force-non-empty-directories --move-back " + TargetDirArgs[ctx.engine] + backupDir,
 	}
 }
 
@@ -157,7 +154,7 @@ func JobArgPrepareRestoreFunc(ctx JobContext) []string {
 	backupDir := filepath.Join(FileStreamRootDir, GetFileStreamInstanceId(ctx.jobTargetPod), FileStreamBackupFilename)
 	return []string{
 		"-c",
-		BackupToolBinFilePaths[ctx.engine] + fmt.Sprintf(" %s ", BackupSetPrepareArgs[ctx.engine]) + " --use-memory=1G " + TargetDirArgs[ctx.engine] + backupDir,
+		" `/tools/xstore/current/venv/bin/python3 /tools/xstore/current/cli.py engine xtrabackup` " + fmt.Sprintf(" %s ", BackupSetPrepareArgs[ctx.engine]) + " --use-memory=1G " + TargetDirArgs[ctx.engine] + backupDir,
 	}
 }
 

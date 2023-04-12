@@ -295,6 +295,8 @@ func (v *PolarDBXClusterV1Validator) validateTopologyRules(ctx context.Context, 
 		fieldPath.Child("components", "cn"), rules.Components.CN, validSelectors)...)
 	errList = append(errList, v.validateStatelessTopologyRuleItems(ctx,
 		fieldPath.Child("components", "cdc"), rules.Components.CDC, validSelectors)...)
+	errList = append(errList, v.validateStatelessTopologyRuleItems(ctx,
+		fieldPath.Child("components", "columnar"), rules.Components.Columnar, validSelectors)...)
 	errList = append(errList, v.validateXStoreTopologyRule(ctx,
 		fieldPath.Child("components", "gms"), rules.Components.GMS, validSelectors)...)
 	errList = append(errList, v.validateXStoreTopologyRule(ctx,
@@ -360,6 +362,18 @@ func (v *PolarDBXClusterV1Validator) validateCDCTemplate(ctx context.Context, fl
 	return errList
 }
 
+func (v *PolarDBXClusterV1Validator) validateColumnarTemplate(ctx context.Context, fldPath *field.Path, template *polardbxv1polardbx.ColumnarTemplate) field.ErrorList {
+	var errList field.ErrorList
+
+	errList = append(errList, validateResources(ctx, fldPath.Child("resources"), &template.Resources)...)
+
+	if err := validateImagePullPolicy(fldPath.Child("imagePullPolicy"), template.ImagePullPolicy); err != nil {
+		errList = append(errList, err)
+	}
+
+	return errList
+}
+
 func (v *PolarDBXClusterV1Validator) validateTopologyNodes(ctx context.Context, nodes *polardbxv1polardbx.TopologyNodes) field.ErrorList {
 	var errList field.ErrorList
 	fldPath := field.NewPath("spec", "topology", "nodes")
@@ -376,6 +390,11 @@ func (v *PolarDBXClusterV1Validator) validateTopologyNodes(ctx context.Context, 
 		errList = append(errList, v.validateCDCTemplate(ctx,
 			fldPath.Child("cdc", "template"),
 			&nodes.CDC.Template)...)
+	}
+	if nodes.Columnar != nil {
+		errList = append(errList, v.validateColumnarTemplate(ctx,
+			fldPath.Child("columnar", "template"),
+			&nodes.Columnar.Template)...)
 	}
 	return errList
 }
@@ -495,6 +514,14 @@ func (v *PolarDBXClusterV1Validator) validateReplicas(ctx context.Context, topol
 	if cdcNodes != nil {
 		errList = append(errList, v.validateReplicasOnStatelessComponent(ctx, cdcRules,
 			field.NewPath("spec", "topology", "rules", "cdc"), int(cdcNodes.Replicas+cdcNodes.XReplicas))...)
+	}
+
+	columnarRules := topology.Rules.Components.Columnar
+	columnarNodes := topology.Nodes.Columnar
+	// Skip if Columnar nodes is nil.
+	if columnarNodes != nil {
+		errList = append(errList, v.validateReplicasOnStatelessComponent(ctx, columnarRules,
+			field.NewPath("spec", "topology", "rules", "columnar"), int(columnarNodes.Replicas))...)
 	}
 
 	return errList

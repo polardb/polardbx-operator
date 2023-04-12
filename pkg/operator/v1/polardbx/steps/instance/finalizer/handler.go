@@ -17,6 +17,7 @@ limitations under the License.
 package finalizer
 
 import (
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -57,7 +58,7 @@ func removeFinalizers(rc *polardbxv1reconcile.Context, log logr.Logger, pods []c
 }
 
 func handleFinalizerForPods(rc *polardbxv1reconcile.Context, log logr.Logger, deletedOrFailedPods []corev1.Pod, role string) error {
-	polardbxmeta.AssertRoleIn(role, polardbxmeta.RoleCN, polardbxmeta.RoleCDC)
+	polardbxmeta.AssertRoleIn(role, polardbxmeta.RoleCN, polardbxmeta.RoleCDC, polardbxmeta.RoleColumnar)
 
 	if len(deletedOrFailedPods) == 0 {
 		return nil
@@ -67,6 +68,14 @@ func handleFinalizerForPods(rc *polardbxv1reconcile.Context, log logr.Logger, de
 	if err != nil {
 		return err
 	}
+
+	canDeleteTime := v1.NewTime(time.Now().Add(-5 * time.Second))
+	deletedOrFailedPods = k8shelper.FilterPodsBy(deletedOrFailedPods, func(pod *corev1.Pod) bool {
+		if pod.CreationTimestamp.Before(&canDeleteTime) {
+			return true
+		}
+		return false
+	})
 
 	// Delete records in GMS.
 	if role == polardbxmeta.RoleCN {
@@ -82,13 +91,14 @@ func handleFinalizerForPods(rc *polardbxv1reconcile.Context, log logr.Logger, de
 					k8shelper.MustGetContainerFromPod(&pod, convention.ContainerEngine),
 					convention.PortAccess,
 				).ContainerPort,
+				Extra: pod.Name,
 			})
 		}
 		err := mgr.DeleteComputeNodes(toDeleteInfo...)
 		if err != nil {
 			return err
 		}
-	} else {
+	} else if role == polardbxmeta.RoleCDC {
 		toDeleteInfo := make([]gms.CdcNodeInfo, 0, len(deletedOrFailedPods))
 		for _, pod := range deletedOrFailedPods {
 			if !k8shelper.IsPodScheduled(&pod) {
@@ -124,9 +134,15 @@ var RemoveResidualFinalizersOnPods = polardbxv1reconcile.NewStepBinder("RemoveRe
 			return flow.Error(err, "Unable to get pods for CDC")
 		}
 
+		columnarPods, err := rc.GetPods(polardbxmeta.RoleColumnar)
+		if err != nil {
+			return flow.Error(err, "Unable to get pods for Columnar")
+		}
+
 		if err := errutil.FirstNonNil(
 			removeFinalizers(rc, flow.Logger(), cnPods),
 			removeFinalizers(rc, flow.Logger(), cdcPods),
+			removeFinalizers(rc, flow.Logger(), columnarPods),
 		); err != nil {
 			return flow.Error(err, "Failed to remove some finalizer.")
 		}
@@ -202,6 +218,11 @@ var HandleFinalizerForStatelessPods = polardbxv1reconcile.NewStepBinder("HandleF
 			return flow.Error(err, "Unable to get pods for CDC")
 		}
 
+		columnarPods, err := rc.GetPods(polardbxmeta.RoleColumnar)
+		if err != nil {
+			return flow.Error(err, "Unable to get pods for Columnar")
+		}
+
 		isPodDeletedOrFailedAndContainsFinalizer := func(pod *corev1.Pod) bool {
 			return k8shelper.IsPodDeletedOrFailed(pod) && controllerutil.ContainsFinalizer(pod, polardbxmeta.Finalizer)
 		}
@@ -216,6 +237,11 @@ var HandleFinalizerForStatelessPods = polardbxv1reconcile.NewStepBinder("HandleF
 			handleFinalizerForPods(rc, flow.Logger(),
 				k8shelper.FilterPodsBy(cdcPods, isPodDeletedOrFailedAndContainsFinalizer),
 				polardbxmeta.RoleCDC,
+			),
+			// Handle for Columnar pods.
+			handleFinalizerForPods(rc, flow.Logger(),
+				k8shelper.FilterPodsBy(columnarPods, isPodDeletedOrFailedAndContainsFinalizer),
+				polardbxmeta.RoleColumnar,
 			),
 		); err != nil {
 			return flow.Error(err, "Failed to handle some finalizer.")

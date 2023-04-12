@@ -509,10 +509,17 @@ func FinishAndStartHttpServer(pCtx *Context) error {
 			writer.WriteHeader(http.StatusNotFound)
 			writer.Write([]byte("filename param is required"))
 		}
+		onlyMeta := query.Get("only_meta")
+
 		for _, restoreBinlog := range pCtx.RestoreBinlogs {
 			if restoreBinlog.XStoreName == xStore {
 				for _, source := range restoreBinlog.ResultSources {
 					if filename == source.getBinlogFilename() {
+						if strings.EqualFold(onlyMeta, "true") {
+							binlogSourceJsonBytes := []byte(MustMarshalJSON(source))
+							writer.Write(binlogSourceJsonBytes)
+							return
+						}
 						reader, err := source.OpenStream()
 						if err != nil {
 							pCtx.Logger.Error(err, "failed to open stream", "xstoreName", xStore, "filename", filename)

@@ -1,10 +1,12 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"github.com/alibaba/polardbx-operator/pkg/hpfs/backupbinlog"
 	"github.com/alibaba/polardbx-operator/pkg/pitr"
+	"io"
 	"os"
 	"os/signal"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -16,14 +18,19 @@ type JobType string
 const (
 	PitrHeartbeatJobType JobType = "PitrHeartbeat"
 	PitrPrepareBinlogs   JobType = "PitrPrepareBinlogs"
+	PitrDownloadFile     JobType = "PitrDownloadFile"
 )
 
 var (
-	jobType string
+	jobType          string
+	binlogSourceJson string
+	output           string
 )
 
 func init() {
 	flag.StringVar(&jobType, "job-type", "PitrHeartbeat", "the job type")
+	flag.StringVar(&binlogSourceJson, "binlog-source", "{}", "the BinlogSource json")
+	flag.StringVar(&output, "output", "", "output filepath")
 	flag.Parse()
 }
 
@@ -52,6 +59,25 @@ func main() {
 		waitActions = append(waitActions, func() {
 			waitGroup.Wait()
 		})
+	case PitrDownloadFile:
+		binlogSource := pitr.BinlogSource{}
+		err := json.Unmarshal([]byte(binlogSourceJson), &binlogSource)
+		if err != nil {
+			panic(err)
+		}
+		reader, err := binlogSource.OpenStream()
+		if err != nil {
+			panic(err)
+		}
+		filews, err := os.OpenFile(output, os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0644)
+		if err != nil {
+			panic(err)
+		}
+		defer filews.Close()
+		_, err = io.CopyN(filews, reader, int64(*(binlogSource.GetTrueLength())))
+		if err != nil {
+			panic(err)
+		}
 	default:
 		panic("invalid job type")
 	}

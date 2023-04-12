@@ -60,10 +60,12 @@ ADD third-party third-party
 RUN CGO_ENABLED=0 GOOS=linux GO111MODULE=on go build -tags polardbx -o polardbx-binlog cmd/polardbx-binlog/main.go
 # Build filestream tools
 RUN CGO_ENABLED=0 GOOS=linux GO111MODULE=on go build -o polardbx-filestream-client cmd/polardbx-filestream-cli/main.go
+# Build polardbx-job
+RUN CGO_ENABLED=0 GOOS=linux GO111MODULE=on go build -tags polardbx -o polardbx-job cmd/polardbx-job/main.go
 
 
 # Build the image with scripts
-FROM polardbx/xstore-tools-base:v1.3.0
+FROM polardbx/xstore-tools-base:v1.4.1
 
 ARG VERSION=test
 
@@ -77,6 +79,7 @@ COPY --from=builder /tools/xstore/current/__pycache__ __pycache__
 COPY --from=gobuilder /workspace/polardbx-binlog bb
 RUN mkdir -p /tools/xstore/current/bin
 COPY --from=gobuilder /workspace/polardbx-filestream-client /tools/xstore/current/bin/
+COPY --from=gobuilder /workspace/polardbx-job /tools/xstore/current/bin/
 
 # Copy all scripts
 RUN ln -s cli.py xsl && chmod +x xsl

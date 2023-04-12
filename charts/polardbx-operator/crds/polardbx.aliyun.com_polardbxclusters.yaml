@@ -36,6 +36,9 @@ spec:
     - jsonPath: .status.statusForPrint.replicaStatus.cdc
       name: CDC
       type: string
+    - jsonPath: .status.statusForPrint.replicaStatus.columnar
+      name: COLUMNAR
+      type: string
     - jsonPath: .status.phase
       name: PHASE
       type: string
@@ -138,6 +141,7 @@ spec:
                           AttendHtap:
                             type: boolean
                           EnableCoroutine:
+                            default: true
                             type: boolean
                           EnableJvmRemoteDebug:
                             type: boolean
@@ -162,6 +166,17 @@ spec:
                               - type: string
                               x-kubernetes-int-or-string: true
                             type: object
+                        type: object
+                    type: object
+                  columnar:
+                    description: Columnar config
+                    properties:
+                      envs:
+                        additionalProperties:
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          x-kubernetes-int-or-string: true
                         type: object
                     type: object
                   dn:
@@ -584,6 +599,83 @@ spec:
                                 type: object
                             type: object
                         type: object
+                      columnar:
+                        properties:
+                          replicas:
+                            default: 2
+                            format: int32
+                            minimum: 0
+                            type: integer
+                          template:
+                            default:
+                              resources:
+                                limits:
+                                  cpu: 4
+                                  memory: 8Gi
+                            properties:
+                              hostNetwork:
+                                description: HostNetwork mode.
+                                type: boolean
+                              image:
+                                description: Image for Columnar. Should be replaced
+                                  by default value if not present.
+                                type: string
+                              imagePullPolicy:
+                                description: ImagePullPolicy describes a policy for
+                                  if/when to pull a container image (especially for
+                                  the engine container).
+                                type: string
+                              imagePullSecrets:
+                                description: ImagePullSecrets represents the secrets
+                                  for pulling private images.
+                                items:
+                                  description: LocalObjectReference contains enough
+                                    information to let you locate the referenced object
+                                    inside the same namespace.
+                                  properties:
+                                    name:
+                                      description: 'Name of the referent. More info:
+                                        https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                        TODO: Add other useful fields. apiVersion,
+                                        kind, uid?'
+                                      type: string
+                                  type: object
+                                type: array
+                              resources:
+                                default:
+                                  limits:
+                                    cpu: 4
+                                    memory: 8Gi
+                                description: Resources. Default is limits of 4 cpu
+                                  and 8Gi memory.
+                                properties:
+                                  limits:
+                                    additionalProperties:
+                                      anyOf:
+                                      - type: integer
+                                      - type: string
+                                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                      x-kubernetes-int-or-string: true
+                                    description: 'Limits describes the maximum amount
+                                      of compute resources allowed. More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                                    type: object
+                                  requests:
+                                    additionalProperties:
+                                      anyOf:
+                                      - type: integer
+                                      - type: string
+                                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                      x-kubernetes-int-or-string: true
+                                    description: 'Requests describes the minimum amount
+                                      of compute resources required. If Requests is
+                                      omitted for a container, it defaults to Limits
+                                      if that is explicitly specified, otherwise to
+                                      an implementation-defined value. More info:
+                                      https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                                    type: object
+                                type: object
+                            type: object
+                        type: object
                       dn:
                         default:
                           replicas: 2
@@ -922,6 +1014,126 @@ spec:
                               type: object
                             type: array
                           cn:
+                            items:
+                              properties:
+                                name:
+                                  type: string
+                                replicas:
+                                  anyOf:
+                                  - type: integer
+                                  - type: string
+                                  x-kubernetes-int-or-string: true
+                                selector:
+                                  properties:
+                                    reference:
+                                      type: string
+                                    selector:
+                                      description: A node selector represents the
+                                        union of the results of one or more label
+                                        queries over a set of nodes; that is, it represents
+                                        the OR of the selectors represented by the
+                                        node selector terms.
+                                      properties:
+                                        nodeSelectorTerms:
+                                          description: Required. A list of node selector
+                                            terms. The terms are ORed.
+                                          items:
+                                            description: A null or empty node selector
+                                              term matches no objects. The requirements
+                                              of them are ANDed. The TopologySelectorTerm
+                                              type implements a subset of the NodeSelectorTerm.
+                                            properties:
+                                              matchExpressions:
+                                                description: A list of node selector
+                                                  requirements by node's labels.
+                                                items:
+                                                  description: A node selector requirement
+                                                    is a selector that contains values,
+                                                    a key, and an operator that relates
+                                                    the key and values.
+                                                  properties:
+                                                    key:
+                                                      description: The label key that
+                                                        the selector applies to.
+                                                      type: string
+                                                    operator:
+                                                      description: Represents a key's
+                                                        relationship to a set of values.
+                                                        Valid operators are In, NotIn,
+                                                        Exists, DoesNotExist. Gt,
+                                                        and Lt.
+                                                      type: string
+                                                    values:
+                                                      description: An array of string
+                                                        values. If the operator is
+                                                        In or NotIn, the values array
+                                                        must be non-empty. If the
+                                                        operator is Exists or DoesNotExist,
+                                                        the values array must be empty.
+                                                        If the operator is Gt or Lt,
+                                                        the values array must have
+                                                        a single element, which will
+                                                        be interpreted as an integer.
+                                                        This array is replaced during
+                                                        a strategic merge patch.
+                                                      items:
+                                                        type: string
+                                                      type: array
+                                                  required:
+                                                  - key
+                                                  - operator
+                                                  type: object
+                                                type: array
+                                              matchFields:
+                                                description: A list of node selector
+                                                  requirements by node's fields.
+                                                items:
+                                                  description: A node selector requirement
+                                                    is a selector that contains values,
+                                                    a key, and an operator that relates
+                                                    the key and values.
+                                                  properties:
+                                                    key:
+                                                      description: The label key that
+                                                        the selector applies to.
+                                                      type: string
+                                                    operator:
+                                                      description: Represents a key's
+                                                        relationship to a set of values.
+                                                        Valid operators are In, NotIn,
+                                                        Exists, DoesNotExist. Gt,
+                                                        and Lt.
+                                                      type: string
+                                                    values:
+                                                      description: An array of string
+                                                        values. If the operator is
+                                                        In or NotIn, the values array
+                                                        must be non-empty. If the
+                                                        operator is Exists or DoesNotExist,
+                                                        the values array must be empty.
+                                                        If the operator is Gt or Lt,
+                                                        the values array must have
+                                                        a single element, which will
+                                                        be interpreted as an integer.
+                                                        This array is replaced during
+                                                        a strategic merge patch.
+                                                      items:
+                                                        type: string
+                                                      type: array
+                                                  required:
+                                                  - key
+                                                  - operator
+                                                  type: object
+                                                type: array
+                                            type: object
+                                          type: array
+                                      required:
+                                      - nodeSelectorTerms
+                                      type: object
+                                  type: object
+                              type: object
+                            type: array
+                          columnar:
                             items:
                               properties:
                                 name:
@@ -1765,6 +1977,19 @@ spec:
                         format: int32
                         type: integer
                     type: object
+                  columnar:
+                    description: Columnar defines the replica status for CDC.
+                    properties:
+                      available:
+                        description: Available represents how many replicas are currently
+                          available.
+                        format: int32
+                        type: integer
+                      total:
+                        description: Total defines the total size of the replica.
+                        format: int32
+                        type: integer
+                    type: object
                   dn:
                     description: DN defines the replica status for DN.
                     properties:
@@ -1857,6 +2082,7 @@ spec:
                               AttendHtap:
                                 type: boolean
                               EnableCoroutine:
+                                default: true
                                 type: boolean
                               EnableJvmRemoteDebug:
                                 type: boolean
@@ -1881,6 +2107,17 @@ spec:
                                   - type: string
                                   x-kubernetes-int-or-string: true
                                 type: object
+                            type: object
+                        type: object
+                      columnar:
+                        description: Columnar config
+                        properties:
+                          envs:
+                            additionalProperties:
+                              anyOf:
+                              - type: integer
+                              - type: string
+                              x-kubernetes-int-or-string: true
                             type: object
                         type: object
                       dn:
@@ -2033,6 +2270,84 @@ spec:
                                     type: boolean
                                   image:
                                     description: Image for CN. Should be replaced
+                                      by default value if not present.
+                                    type: string
+                                  imagePullPolicy:
+                                    description: ImagePullPolicy describes a policy
+                                      for if/when to pull a container image (especially
+                                      for the engine container).
+                                    type: string
+                                  imagePullSecrets:
+                                    description: ImagePullSecrets represents the secrets
+                                      for pulling private images.
+                                    items:
+                                      description: LocalObjectReference contains enough
+                                        information to let you locate the referenced
+                                        object inside the same namespace.
+                                      properties:
+                                        name:
+                                          description: 'Name of the referent. More
+                                            info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                            TODO: Add other useful fields. apiVersion,
+                                            kind, uid?'
+                                          type: string
+                                      type: object
+                                    type: array
+                                  resources:
+                                    default:
+                                      limits:
+                                        cpu: 4
+                                        memory: 8Gi
+                                    description: Resources. Default is limits of 4
+                                      cpu and 8Gi memory.
+                                    properties:
+                                      limits:
+                                        additionalProperties:
+                                          anyOf:
+                                          - type: integer
+                                          - type: string
+                                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                          x-kubernetes-int-or-string: true
+                                        description: 'Limits describes the maximum
+                                          amount of compute resources allowed. More
+                                          info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                                        type: object
+                                      requests:
+                                        additionalProperties:
+                                          anyOf:
+                                          - type: integer
+                                          - type: string
+                                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                          x-kubernetes-int-or-string: true
+                                        description: 'Requests describes the minimum
+                                          amount of compute resources required. If
+                                          Requests is omitted for a container, it
+                                          defaults to Limits if that is explicitly
+                                          specified, otherwise to an implementation-defined
+                                          value. More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                                        type: object
+                                    type: object
+                                type: object
+                            type: object
+                          columnar:
+                            properties:
+                              replicas:
+                                default: 2
+                                format: int32
+                                minimum: 0
+                                type: integer
+                              template:
+                                default:
+                                  resources:
+                                    limits:
+                                      cpu: 4
+                                      memory: 8Gi
+                                properties:
+                                  hostNetwork:
+                                    description: HostNetwork mode.
+                                    type: boolean
+                                  image:
+                                    description: Image for Columnar. Should be replaced
                                       by default value if not present.
                                     type: string
                                   imagePullPolicy:
@@ -2447,6 +2762,139 @@ spec:
                                   type: object
                                 type: array
                               cn:
+                                items:
+                                  properties:
+                                    name:
+                                      type: string
+                                    replicas:
+                                      anyOf:
+                                      - type: integer
+                                      - type: string
+                                      x-kubernetes-int-or-string: true
+                                    selector:
+                                      properties:
+                                        reference:
+                                          type: string
+                                        selector:
+                                          description: A node selector represents
+                                            the union of the results of one or more
+                                            label queries over a set of nodes; that
+                                            is, it represents the OR of the selectors
+                                            represented by the node selector terms.
+                                          properties:
+                                            nodeSelectorTerms:
+                                              description: Required. A list of node
+                                                selector terms. The terms are ORed.
+                                              items:
+                                                description: A null or empty node
+                                                  selector term matches no objects.
+                                                  The requirements of them are ANDed.
+                                                  The TopologySelectorTerm type implements
+                                                  a subset of the NodeSelectorTerm.
+                                                properties:
+                                                  matchExpressions:
+                                                    description: A list of node selector
+                                                      requirements by node's labels.
+                                                    items:
+                                                      description: A node selector
+                                                        requirement is a selector
+                                                        that contains values, a key,
+                                                        and an operator that relates
+                                                        the key and values.
+                                                      properties:
+                                                        key:
+                                                          description: The label key
+                                                            that the selector applies
+                                                            to.
+                                                          type: string
+                                                        operator:
+                                                          description: Represents
+                                                            a key's relationship to
+                                                            a set of values. Valid
+                                                            operators are In, NotIn,
+                                                            Exists, DoesNotExist.
+                                                            Gt, and Lt.
+                                                          type: string
+                                                        values:
+                                                          description: An array of
+                                                            string values. If the
+                                                            operator is In or NotIn,
+                                                            the values array must
+                                                            be non-empty. If the operator
+                                                            is Exists or DoesNotExist,
+                                                            the values array must
+                                                            be empty. If the operator
+                                                            is Gt or Lt, the values
+                                                            array must have a single
+                                                            element, which will be
+                                                            interpreted as an integer.
+                                                            This array is replaced
+                                                            during a strategic merge
+                                                            patch.
+                                                          items:
+                                                            type: string
+                                                          type: array
+                                                      required:
+                                                      - key
+                                                      - operator
+                                                      type: object
+                                                    type: array
+                                                  matchFields:
+                                                    description: A list of node selector
+                                                      requirements by node's fields.
+                                                    items:
+                                                      description: A node selector
+                                                        requirement is a selector
+                                                        that contains values, a key,
+                                                        and an operator that relates
+                                                        the key and values.
+                                                      properties:
+                                                        key:
+                                                          description: The label key
+                                                            that the selector applies
+                                                            to.
+                                                          type: string
+                                                        operator:
+                                                          description: Represents
+                                                            a key's relationship to
+                                                            a set of values. Valid
+                                                            operators are In, NotIn,
+                                                            Exists, DoesNotExist.
+                                                            Gt, and Lt.
+                                                          type: string
+                                                        values:
+                                                          description: An array of
+                                                            string values. If the
+                                                            operator is In or NotIn,
+                                                            the values array must
+                                                            be non-empty. If the operator
+                                                            is Exists or DoesNotExist,
+                                                            the values array must
+                                                            be empty. If the operator
+                                                            is Gt or Lt, the values
+                                                            array must have a single
+                                                            element, which will be
+                                                            interpreted as an integer.
+                                                            This array is replaced
+                                                            during a strategic merge
+                                                            patch.
+                                                          items:
+                                                            type: string
+                                                          type: array
+                                                      required:
+                                                      - key
+                                                      - operator
+                                                      type: object
+                                                    type: array
+                                                type: object
+                                              type: array
+                                          required:
+                                          - nodeSelectorTerms
+                                          type: object
+                                      type: object
+                                  type: object
+                                type: array
+                              columnar:
                                 items:
                                   properties:
                                     name:
@@ -3293,6 +3741,10 @@ spec:
                         type: string
                       cn:
                         description: CN status, e.g. 1/2
+                        type: string
+                      columnar:
+                        description: Columnar status, e.g. 1/2 or - when Columnar
+                          nodes not requested.
                         type: string
                       dn:
                         description: DN status, e.g. 1/2

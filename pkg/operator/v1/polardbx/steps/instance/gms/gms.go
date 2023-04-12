@@ -248,7 +248,11 @@ func SyncDynamicConfigs(force bool) control.BindFunc {
 			parameter := rc.MustGetPolarDBXParameterTemplate(polardbx.Spec.ParameterTemplate.Name)
 			params := parameter.Spec.NodeType.CN.ParamList
 			for _, param := range params {
-				targetDynamicConfigs[param.Name] = param.DefaultValue
+				// dynamic config priority higher than parameter template
+				_, exist := targetDynamicConfigs[param.Name]
+				if !exist {
+					targetDynamicConfigs[param.Name] = param.DefaultValue
+				}
 			}
 		}
 

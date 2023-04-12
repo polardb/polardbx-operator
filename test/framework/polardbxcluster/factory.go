@@ -114,6 +114,17 @@ func TopologyNode(role string, replicas int, engine, image string, hostNetwork b
 				},
 			}
 		}
+	case polardbxmeta.RoleColumnar:
+		return func(polardbxcluster *polardbxv1.PolarDBXCluster) {
+			polardbxcluster.Spec.Topology.Nodes.Columnar = &polardbxv1polardbx.TopologyNodeColumnar{
+				Replicas: int32(replicas),
+				Template: polardbxv1polardbx.ColumnarTemplate{
+					Image:       image,
+					HostNetwork: hostNetwork,
+					Resources:   *resources.DeepCopy(),
+				},
+			}
+		}
 	case polardbxmeta.RoleGMS:
 		return func(polardbxcluster *polardbxv1.PolarDBXCluster) {
 			polardbxcluster.Spec.Topology.Nodes.GMS.Template = &polardbxv1polardbx.XStoreTemplate{
@@ -145,6 +156,22 @@ func EnableTLS(secretName string, selfSigned bool) FactoryOption {
 func ParameterTemplate(templateName string) FactoryOption {
 	return func(polardbxcluster *polardbxv1.PolarDBXCluster) {
 		polardbxcluster.Spec.ParameterTemplate.Name = templateName
+	}
+}
+
+func InitReadonly(cnReplicas int, name string, attendHtap bool) FactoryOption {
+	return func(polardbxcluster *polardbxv1.PolarDBXCluster) {
+		var extraParams = make(map[string]intstr.IntOrString)
+		if attendHtap {
+			extraParams["AttendHtap"] = intstr.FromString("true")
+		}
+		polardbxcluster.Spec.InitReadonly = []*polardbxv1polardbx.ReadonlyParam{
+			{
+				CnReplicas:  cnReplicas,
+				Name:        name,
+				ExtraParams: extraParams,
+			},
+		}
 	}
 }
 
