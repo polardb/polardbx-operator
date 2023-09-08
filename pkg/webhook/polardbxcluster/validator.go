@@ -617,7 +617,7 @@ func (v *PolarDBXClusterV1Validator) validate(ctx context.Context, polardbx *pol
 			errList = append(errList, field.Invalid(
 				field.NewPath("spec", "primaryCluster"),
 				spec.PrimaryCluster,
-				fmt.Sprintf(`primaryCluster cannot be empty for readonly pxc`),
+				`primaryCluster cannot be empty for readonly pxc`,
 			))
 		}
 	}

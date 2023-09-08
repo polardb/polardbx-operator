@@ -427,7 +427,7 @@ func (m *groupManager) ListSchemas() ([]string, error) {
 		return nil, err
 	}
 
-	rs, err := db.QueryContext(m.ctx, fmt.Sprintf("SHOW DATABASES"))
+	rs, err := db.QueryContext(m.ctx, "SHOW DATABASES")
 	if err != nil {
 		return nil, err
 	}
@@ -466,7 +466,7 @@ func (m *groupManager) ListAllGroups() (map[string][]Group, error) {
 	}
 	defer dbutil.DeferClose(conn)
 
-	rs, err := conn.QueryContext(m.ctx, fmt.Sprintf("SHOW DS"))
+	rs, err := conn.QueryContext(m.ctx, "SHOW DS")
 	if err != nil {
 		return nil, err
 	}
@@ -741,7 +741,7 @@ func (m *groupManager) getCnVersion() (string, error) {
 	}
 
 	ver := ""
-	rs, err := db.Query(fmt.Sprint("select version()"))
+	rs, err := db.Query("select version()")
 	if err != nil {
 		return "", err
 	}
@@ -765,7 +765,7 @@ func (m *groupManager) getDnVersion() (string, error) {
 	}
 
 	ver := ""
-	rs, err := db.Query(fmt.Sprint("select @@version"))
+	rs, err := db.Query("select @@version")
 	if err != nil {
 		return "", err
 	}
@@ -800,7 +800,7 @@ func (m *groupManager) GetBinlogOffset() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	rs, err := db.Query(fmt.Sprint("show master status"))
+	rs, err := db.Query("show master status")
 	if err != nil {
 		return "", err
 	}
@@ -899,7 +899,7 @@ func (m *groupManager) ShowSlaveStatus() (*SlaveStatus, error) {
 	}
 	defer dbutil.DeferClose(conn)
 
-	rs, err := conn.QueryContext(m.ctx, fmt.Sprintf("SHOW SLAVE STATUS"))
+	rs, err := conn.QueryContext(m.ctx, "SHOW SLAVE STATUS")
 	if err != nil {
 		return nil, err
 	}
@@ -929,7 +929,7 @@ func (m *groupManager) ShowClusterStatus() ([]*ClusterStatus, error) {
 	}
 	defer dbutil.DeferClose(conn)
 
-	rs, err := conn.QueryContext(m.ctx, fmt.Sprintf("SELECT * FROM INFORMATION_SCHEMA.ALISQL_CLUSTER_GLOBAL"))
+	rs, err := conn.QueryContext(m.ctx, "SELECT * FROM INFORMATION_SCHEMA.ALISQL_CLUSTER_GLOBAL")
 	if err != nil {
 		return nil, err
 	}

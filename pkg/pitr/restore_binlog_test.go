@@ -79,7 +79,6 @@ func TestOssAliyunTest(t *testing.T) {
 	if err == nil {
 		err = ft.Wait()
 	}
-	fmt.Sprintf("sd")
 }
 
 func TestTimeZone(t *testing.T) {
