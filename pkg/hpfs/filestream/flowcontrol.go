@@ -92,7 +92,7 @@ func (f *FlowControlManger) Stop() {
 
 func (f *FlowControlManger) LimitFlow(reader io.Reader, writer io.Writer, notifyWriter io.Writer) (int64, error) {
 	if !f.tryAcquire() {
-		return 0, errors.New(fmt.Sprintf("Throttled"))
+		return 0, errors.New("Throttled")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	tokensChan := make(chan int, 2)
