@@ -91,7 +91,7 @@ func (step *Step) Priority() int {
 func (step *Step) Description() string {
 	switch step.Type {
 	case StepTypeSnapshot:
-		return fmt.Sprintf("Snapshot")
+		return "Snapshot"
 	case StepTypeBumpGen:
 		return fmt.Sprintf(
 			"BumpGen(%s, from: %d, to: %d)",

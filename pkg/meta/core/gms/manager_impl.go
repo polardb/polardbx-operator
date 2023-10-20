@@ -1219,7 +1219,7 @@ func (meta *manager) ListCdcNodes() ([]CdcNodeInfo, error) {
 	}
 	defer dbutil.DeferClose(conn)
 
-	selectStmt := fmt.Sprintf("SELECT container_id, ip, daemon_port FROM binlog_node_info")
+	selectStmt := "SELECT container_id, ip, daemon_port FROM binlog_node_info"
 
 	rs, err := conn.QueryContext(meta.ctx, selectStmt)
 	if err != nil {
