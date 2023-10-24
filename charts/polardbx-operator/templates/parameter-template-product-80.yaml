@@ -1,7 +1,7 @@
 apiVersion: polardbx.aliyun.com/v1
 kind: PolarDBXParameterTemplate
 metadata:
-  name: product
+  name: product-80
 spec:
   nodeType:
     cn:
@@ -338,6 +338,13 @@ spec:
         name: binlog_rows_query_log_events
         optional: '[ON|OFF]'
         restart: false
+        unit: STRING
+      - defaultValue: 'ON'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: loose_binlog_rows_query_key_content
+        optional: '[ON|OFF]'
+        restart: true
         unit: STRING
       - defaultValue: '32768'
         divisibilityFactor: 4096
@@ -750,7 +757,7 @@ spec:
       - defaultValue: '0'
         divisibilityFactor: 1
         mode: readwrite
-        name: innodb_equal_gcn_visible
+        name: loose_innodb_equal_gcn_visible
         optional: .*
         restart: true
         unit: INT
@@ -1272,7 +1279,7 @@ spec:
         optional: '[ja_JP|pt_BR|en_US]'
         restart: false
         unit: STRING
-      - defaultValue: 'OFF'
+      - defaultValue: 'ON'
         divisibilityFactor: 0
         mode: readwrite
         name: local_infile
@@ -2639,7 +2646,7 @@ spec:
       - defaultValue: '1073741824'
         divisibilityFactor: 1
         mode: readwrite
-        name: temptable_max_ram
+        name: loose_temptable_max_ram
         optional: '[2097152-107374182400]'
         restart: false
         unit: INT

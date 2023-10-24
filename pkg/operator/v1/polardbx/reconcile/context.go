@@ -759,13 +759,17 @@ func (rc *Context) GetDN(i int) (*polardbxv1.XStore, error) {
 }
 
 func (rc *Context) GetLeaderOfDN(xstore *polardbxv1.XStore) (*corev1.Pod, error) {
-	var leaderPod corev1.Pod
 	leaderPodName := types.NamespacedName{Namespace: rc.Namespace(), Name: xstore.Status.LeaderPod}
-	err := rc.Client().Get(rc.Context(), leaderPodName, &leaderPod)
+	return rc.GetPodFromPodName(leaderPodName)
+}
+
+func (rc *Context) GetPodFromPodName(podName types.NamespacedName) (*corev1.Pod, error) {
+	var pod corev1.Pod
+	err := rc.Client().Get(rc.Context(), podName, &pod)
 	if err != nil {
 		return nil, err
 	}
-	return &leaderPod, nil
+	return &pod, nil
 }
 
 func (rc *Context) GetXstoreByPod(pod *corev1.Pod) (*polardbxv1.XStore, error) {
@@ -844,8 +848,8 @@ func (rc *Context) GetDeploymentMap(role string) (map[string]*appsv1.Deployment,
 }
 
 func (rc *Context) GetPods(role string) ([]corev1.Pod, error) {
-	if role != polardbxmeta.RoleCN && role != polardbxmeta.RoleCDC && role != polardbxmeta.RoleColumnar {
-		panic("required role to be cn, cdc or columnar, but found " + role)
+	if role != polardbxmeta.RoleCN && role != polardbxmeta.RoleCDC && role != polardbxmeta.RoleColumnar && role != polardbxmeta.RoleDN && role != polardbxmeta.RoleGMS {
+		panic("required role to be cn, cdc, dn or columnar, but found " + role)
 	}
 	pods := rc.podsByRole[role]
 	if pods == nil {
@@ -868,7 +872,9 @@ func (rc *Context) GetPods(role string) ([]corev1.Pod, error) {
 		if rc.podsByRole == nil {
 			rc.podsByRole = make(map[string][]corev1.Pod)
 		}
-
+		sort.Slice(podList.Items, func(i, j int) bool {
+			return podList.Items[i].ObjectMeta.CreationTimestamp.Before(&podList.Items[j].ObjectMeta.CreationTimestamp)
+		})
 		rc.podsByRole[role] = podList.Items
 	}
 
@@ -1112,15 +1118,11 @@ func (rc *Context) GetXstoreGroupManagerByPod(pod *corev1.Pod) (group.GroupManag
 			return mgr, nil
 		}
 	}
-
-	podService, err := rc.GetService(xstoreconvention.NewXstorePodServiceName(pod))
-	if err != nil {
-		return nil, err
-	}
-	host, port, err := k8shelper.GetClusterIpPortFromService(podService, convention.PortAccess)
-	if err != nil {
-		return nil, err
-	}
+	host := pod.Status.PodIP
+	port := k8shelper.MustGetPortFromContainer(
+		k8shelper.MustGetContainerFromPod(pod, convention.ContainerEngine),
+		convention.PortAccess,
+	).ContainerPort
 	xstore, err := rc.GetXstoreByPod(pod)
 	if err != nil {
 		return nil, err
@@ -1506,6 +1508,11 @@ func (rc *Context) GetPolarDBXTemplateName() (parameterTemplateName string) {
 	return polardbx.Spec.ParameterTemplate.Name
 }
 
+func (rc *Context) GetPolarDBXTemplateNameSpace() (parameterTemplateName string) {
+	polardbx := rc.MustGetPolarDBX()
+	return polardbx.Spec.ParameterTemplate.Namespace
+}
+
 func (rc *Context) SetPolarDBXParams(param map[string]map[string]polardbxv1.Params) {
 	rc.polardbxParamsRoleMap = param
 }
@@ -1542,9 +1549,12 @@ func (rc *Context) GetPolarDBXTemplateParams() (templateParams map[string]map[st
 	return rc.polardbxTemplateParams
 }
 
-func (rc *Context) GetPolarDBXParameterTemplate(name string) (*polardbxv1.PolarDBXParameterTemplate, error) {
+func (rc *Context) GetPolarDBXParameterTemplate(nameSpace, name string) (*polardbxv1.PolarDBXParameterTemplate, error) {
+	if nameSpace == "" {
+		nameSpace = rc.polardbxKey.Namespace
+	}
 	tmKey := types.NamespacedName{
-		Namespace: rc.polardbxKey.Namespace,
+		Namespace: nameSpace,
 		Name:      name,
 	}
 	if rc.polardbxParameterTemplate == nil {
@@ -1561,8 +1571,8 @@ func (rc *Context) GetPolarDBXParameterTemplate(name string) (*polardbxv1.PolarD
 	return rc.polardbxParameterTemplate, nil
 }
 
-func (rc *Context) MustGetPolarDBXParameterTemplate(name string) *polardbxv1.PolarDBXParameterTemplate {
-	polardbxParameterTemplate, err := rc.GetPolarDBXParameterTemplate(name)
+func (rc *Context) MustGetPolarDBXParameterTemplate(nameSpace, name string) *polardbxv1.PolarDBXParameterTemplate {
+	polardbxParameterTemplate, err := rc.GetPolarDBXParameterTemplate(nameSpace, name)
 	if err != nil {
 		panic(err)
 	}

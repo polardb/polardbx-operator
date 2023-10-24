@@ -40,7 +40,7 @@ func newRecoverDataJob(xstore *xstorev1.XStore, targetPod *corev1.Pod, secret st
 	}
 	podSpec.Containers[0].Name = "recoverjob"
 
-	podSpec.Containers[0].Command = command.NewCanonicalCommandBuilder().Recover().StartRecover("/restore/restore", targetPod.Name, secret).Build()
+	podSpec.Containers[0].Command = command.NewCanonicalCommandBuilder().Recover().StartRecover("/restore/restore", targetPod.Status.PodIP, secret).Build()
 	podSpec.Containers[0].Resources.Limits = nil
 	podSpec.Containers[0].Resources.Requests = nil
 	podSpec.Containers[0].Ports = nil

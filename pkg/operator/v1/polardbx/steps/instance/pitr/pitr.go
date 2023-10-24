@@ -70,7 +70,7 @@ var PreparePitrBinlogs = polardbxv1reconcile.NewStepBinder("PreparePitrBinlogs",
 				job := CreatePrepareBinlogJob(rc, taskConfig)
 				err = rc.SetControllerRefAndCreate(job)
 				if err != nil {
-					flow.RetryErr(err, "failed to job", "jobName", jobName)
+					return flow.RetryErr(err, "failed to job", "jobName", jobName)
 				}
 			} else {
 				return flow.Error(err, "failed to job", "jobName", jobName)

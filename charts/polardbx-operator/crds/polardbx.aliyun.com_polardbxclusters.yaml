@@ -222,6 +222,8 @@ spec:
                   used by cn/dn/gms.
                 properties:
                   name:
+                    type: string
+                  namespace:
                     description: parameter template
                     type: string
                 type: object
@@ -436,11 +438,99 @@ spec:
                     properties:
                       cdc:
                         properties:
+                          groups:
+                            items:
+                              properties:
+                                config:
+                                  properties:
+                                    envs:
+                                      additionalProperties:
+                                        anyOf:
+                                        - type: integer
+                                        - type: string
+                                        x-kubernetes-int-or-string: true
+                                      type: object
+                                  type: object
+                                name:
+                                  type: string
+                                replicas:
+                                  default: 2
+                                  format: int32
+                                  minimum: 0
+                                  type: integer
+                                template:
+                                  properties:
+                                    hostNetwork:
+                                      description: HostNetwork mode.
+                                      type: boolean
+                                    image:
+                                      description: Image for CDC. Should be replaced
+                                        by default value if not present.
+                                      type: string
+                                    imagePullPolicy:
+                                      description: ImagePullPolicy describes a policy
+                                        for if/when to pull a container image (especially
+                                        for the engine container).
+                                      type: string
+                                    imagePullSecrets:
+                                      description: ImagePullSecrets represents the
+                                        secrets for pulling private images.
+                                      items:
+                                        description: LocalObjectReference contains
+                                          enough information to let you locate the
+                                          referenced object inside the same namespace.
+                                        properties:
+                                          name:
+                                            description: 'Name of the referent. More
+                                              info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                              TODO: Add other useful fields. apiVersion,
+                                              kind, uid?'
+                                            type: string
+                                        type: object
+                                      type: array
+                                    resources:
+                                      default:
+                                        limits:
+                                          cpu: 4
+                                          memory: 8Gi
+                                      description: Resources. Default is limits of
+                                        4 cpu and 8Gi memory.
+                                      properties:
+                                        limits:
+                                          additionalProperties:
+                                            anyOf:
+                                            - type: integer
+                                            - type: string
+                                            pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                            x-kubernetes-int-or-string: true
+                                          description: 'Limits describes the maximum
+                                            amount of compute resources allowed. More
+                                            info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                                          type: object
+                                        requests:
+                                          additionalProperties:
+                                            anyOf:
+                                            - type: integer
+                                            - type: string
+                                            pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                            x-kubernetes-int-or-string: true
+                                          description: 'Requests describes the minimum
+                                            amount of compute resources required.
+                                            If Requests is omitted for a container,
+                                            it defaults to Limits if that is explicitly
+                                            specified, otherwise to an implementation-defined
+                                            value. More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                                          type: object
+                                      type: object
+                                  type: object
+                              type: object
+                            type: array
                           replicas:
+                            anyOf:
+                            - type: integer
+                            - type: string
                             default: 2
-                            format: int32
-                            minimum: 0
-                            type: integer
+                            x-kubernetes-int-or-string: true
                           template:
                             default:
                               resources:
@@ -511,7 +601,6 @@ spec:
                                 type: object
                             type: object
                           xReplicas:
-                            format: int32
                             minimum: 0
                             type: integer
                         type: object
@@ -896,6 +985,8 @@ spec:
                           cdc:
                             items:
                               properties:
+                                extraName:
+                                  type: string
                                 name:
                                   type: string
                                 replicas:
@@ -1016,6 +1107,8 @@ spec:
                           cn:
                             items:
                               properties:
+                                extraName:
+                                  type: string
                                 name:
                                   type: string
                                 replicas:
@@ -1136,6 +1229,8 @@ spec:
                           columnar:
                             items:
                               properties:
+                                extraName:
+                                  type: string
                                 name:
                                   type: string
                                 replicas:
@@ -1948,6 +2043,10 @@ spec:
               randHash:
                 description: Rand represents a random string value to avoid collision.
                 type: string
+              readonlyStorageInfoHash:
+                description: LatestSyncReadonlyTs represents the lastest time sync
+                  readonly storage info to metadb
+                type: string
               replicaStatus:
                 description: ReplicaStatus represents the replica status of the cluster.
                 properties:
@@ -2164,11 +2263,101 @@ spec:
                         properties:
                           cdc:
                             properties:
+                              groups:
+                                items:
+                                  properties:
+                                    config:
+                                      properties:
+                                        envs:
+                                          additionalProperties:
+                                            anyOf:
+                                            - type: integer
+                                            - type: string
+                                            x-kubernetes-int-or-string: true
+                                          type: object
+                                      type: object
+                                    name:
+                                      type: string
+                                    replicas:
+                                      default: 2
+                                      format: int32
+                                      minimum: 0
+                                      type: integer
+                                    template:
+                                      properties:
+                                        hostNetwork:
+                                          description: HostNetwork mode.
+                                          type: boolean
+                                        image:
+                                          description: Image for CDC. Should be replaced
+                                            by default value if not present.
+                                          type: string
+                                        imagePullPolicy:
+                                          description: ImagePullPolicy describes a
+                                            policy for if/when to pull a container
+                                            image (especially for the engine container).
+                                          type: string
+                                        imagePullSecrets:
+                                          description: ImagePullSecrets represents
+                                            the secrets for pulling private images.
+                                          items:
+                                            description: LocalObjectReference contains
+                                              enough information to let you locate
+                                              the referenced object inside the same
+                                              namespace.
+                                            properties:
+                                              name:
+                                                description: 'Name of the referent.
+                                                  More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                                  TODO: Add other useful fields. apiVersion,
+                                                  kind, uid?'
+                                                type: string
+                                            type: object
+                                          type: array
+                                        resources:
+                                          default:
+                                            limits:
+                                              cpu: 4
+                                              memory: 8Gi
+                                          description: Resources. Default is limits
+                                            of 4 cpu and 8Gi memory.
+                                          properties:
+                                            limits:
+                                              additionalProperties:
+                                                anyOf:
+                                                - type: integer
+                                                - type: string
+                                                pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                                x-kubernetes-int-or-string: true
+                                              description: 'Limits describes the maximum
+                                                amount of compute resources allowed.
+                                                More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                                              type: object
+                                            requests:
+                                              additionalProperties:
+                                                anyOf:
+                                                - type: integer
+                                                - type: string
+                                                pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                                x-kubernetes-int-or-string: true
+                                              description: 'Requests describes the
+                                                minimum amount of compute resources
+                                                required. If Requests is omitted for
+                                                a container, it defaults to Limits
+                                                if that is explicitly specified, otherwise
+                                                to an implementation-defined value.
+                                                More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                                              type: object
+                                          type: object
+                                      type: object
+                                  type: object
+                                type: array
                               replicas:
+                                anyOf:
+                                - type: integer
+                                - type: string
                                 default: 2
-                                format: int32
-                                minimum: 0
-                                type: integer
+                                x-kubernetes-int-or-string: true
                               template:
                                 default:
                                   resources:
@@ -2240,7 +2429,6 @@ spec:
                                     type: object
                                 type: object
                               xReplicas:
-                                format: int32
                                 minimum: 0
                                 type: integer
                             type: object
@@ -2631,6 +2819,8 @@ spec:
                               cdc:
                                 items:
                                   properties:
+                                    extraName:
+                                      type: string
                                     name:
                                       type: string
                                     replicas:
@@ -2764,6 +2954,8 @@ spec:
                               cn:
                                 items:
                                   properties:
+                                    extraName:
+                                      type: string
                                     name:
                                       type: string
                                     replicas:
@@ -2897,6 +3089,8 @@ spec:
                               columnar:
                                 items:
                                   properties:
+                                    extraName:
+                                      type: string
                                     name:
                                       type: string
                                     replicas:

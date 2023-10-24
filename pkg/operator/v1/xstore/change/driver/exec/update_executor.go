@@ -20,14 +20,19 @@ import (
 	polardbxv1xstore "github.com/alibaba/polardbx-operator/api/v1/xstore"
 	"github.com/alibaba/polardbx-operator/pkg/k8s/control"
 	k8shelper "github.com/alibaba/polardbx-operator/pkg/k8s/helper"
+	"github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/convention"
+	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/command"
 	xstoreconvention "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/convention"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/factory"
 	xstoremeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/meta"
 	xstorev1reconcile "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/reconcile"
+	xstoreinstance "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/steps/instance"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"strconv"
+	"strings"
+	"time"
 )
 
 type UpdateExec struct {
@@ -57,8 +62,47 @@ func (exec *UpdateExec) Execute(rc *xstorev1reconcile.Context, flow control.Flow
 			return flow.Pass()
 		}
 
+		//exec.baseExec.ec.Running
+
 		// Delete it first.
 		if pod.DeletionTimestamp.IsZero() {
+			//change leader first
+			leaderPod, err := rc.TryGetXStoreLeaderPod()
+			if err != nil || leaderPod == nil {
+				return flow.RetryErr(err, "failed to get leader pod")
+			}
+
+			leaderLocalInfo, err := xstoreinstance.ShowThis(rc, leaderPod, flow.Logger(), true)
+			if err != nil || !strings.EqualFold(leaderLocalInfo.Role, xstoremeta.RoleLeader) {
+				return flow.RetryAfter(time.Minute, "Failed to query local info on leader pod.", "pod", leaderPod.Name)
+			}
+
+			globalInfoItems, err := xstoreinstance.ShowGlobalInfo(rc, leaderPod, flow.Logger())
+			if err != nil {
+				return flow.RetryErr(err, "Failed to query global info on leader pod.", "pod", leaderPod.Name)
+			}
+			for _, item := range globalInfoItems {
+				commitIndex, err := strconv.ParseInt(leaderLocalInfo.CommitIndex, 10, 64)
+				if err != nil {
+					return flow.RetryErr(err, "failed to parse leaderLocalInfo.CommitIndex", "commitIndex", leaderLocalInfo.CommitIndex)
+				}
+				if commitIndex-item.AppliedIndex >= 1000 {
+					return flow.Retry("too large index lag, commitIndex - AppliedIndex >= 1000", "commitIndex", commitIndex, "appliedIndex", item.AppliedIndex, "addr", item.Addr)
+				}
+			}
+
+			if leaderPod.Name == pod.Name {
+				cmd := command.NewCanonicalCommandBuilder().Consensus().SetLeader(rc.GetMetaFollowerAddr()).Build()
+				err := rc.ExecuteCommandOn(leaderPod, convention.ContainerEngine, cmd, control.ExecOptions{
+					Logger:  flow.Logger(),
+					Timeout: 8 * time.Second,
+				})
+				if err != nil {
+					return flow.RetryErr(err, "failed to change leader")
+				}
+				return flow.Retry("retry until it is not leader", "podName", pod.Name)
+			}
+
 			if err := rc.Client().Delete(
 				rc.Context(),
 				pod,
@@ -89,7 +133,10 @@ func (exec *UpdateExec) Execute(rc *xstorev1reconcile.Context, flow control.Flow
 		}
 		pod.Labels[xstoremeta.LabelGeneration] = strconv.FormatInt(step.TargetGeneration, 10)
 		pod.Spec.NodeName = exec.ec.Volumes[pod.Name].Host
-
+		val, ok := rc.IsPodSvcMeta(pod.Name)
+		if (ok && !val) || !ok {
+			pod.Annotations[xstoremeta.AnnotationFlushLocal] = "true"
+		}
 		if err := rc.SetControllerRefAndCreate(pod); err != nil {
 			return flow.Error(err, "Failed to create pod", "pod", target)
 		}

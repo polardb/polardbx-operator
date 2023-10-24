@@ -18,6 +18,7 @@ package exec
 
 import (
 	"bytes"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -81,7 +82,15 @@ func (exec *CreateExec) Execute(rc *xstorev1reconcile.Context, flow control.Flow
 		}
 		pod.Labels[xstoremeta.LabelGeneration] = strconv.FormatInt(step.TargetGeneration, 10)
 		pod.Spec.NodeName = step.OriginHost
-
+		val, ok := rc.IsPodSvcMeta(pod.Name)
+		if !ok {
+			return flow.Error(fmt.Errorf("unkown pod local info"), "unkown pod local info", "podName", pod.Name)
+		}
+		if ok {
+			if !val {
+				pod.Annotations[xstoremeta.AnnotationFlushLocal] = "true"
+			}
+		}
 		if err := rc.SetControllerRefAndCreate(pod); err != nil {
 			return flow.Error(err, "Failed to create pod", "pod", target)
 		}

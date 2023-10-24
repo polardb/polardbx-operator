@@ -502,14 +502,11 @@ func (rc *BackupContext) NewSecretFromXStore(secret *corev1.Secret) (*corev1.Sec
 }
 
 func (rc *BackupContext) GetXstoreGroupManagerByPod(pod *corev1.Pod) (group.GroupManager, error) {
-	podService, err := rc.xStoreContext.GetXStoreServiceForPod(pod.Name)
-	if err != nil {
-		return nil, err
-	}
-	host, port, err := k8shelper.GetClusterIpPortFromService(podService, convention.PortAccess)
-	if err != nil {
-		return nil, err
-	}
+	host := pod.Status.PodIP
+	port := k8shelper.MustGetPortFromContainer(
+		k8shelper.MustGetContainerFromPod(pod, convention.ContainerEngine),
+		convention.PortAccess,
+	).ContainerPort
 	secret, err := rc.GetSecret(pod.Labels[xstoremeta.LabelName])
 	if err != nil {
 		return nil, err

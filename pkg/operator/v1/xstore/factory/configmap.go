@@ -162,12 +162,13 @@ func syncParameterToConfigMap(rc *reconcile.Context, xstore *polardbxv1.XStore, 
 	cmRole := xstore.Labels[polardbxmeta.LabelRole]
 
 	parameterTemplateName := rc.GetPolarDBXTemplateName()
+	parameterTemplateNameSpace := rc.GetPolarDBXTemplateNameSpace()
 
 	if parameterTemplateName == "" {
 		return overrideVal, nil
 	}
 
-	pt, err := rc.GetPolarDBXParameterTemplate(parameterTemplateName)
+	pt, err := rc.GetPolarDBXParameterTemplate(parameterTemplateNameSpace, parameterTemplateName)
 	if pt == nil {
 		return "", err
 	}

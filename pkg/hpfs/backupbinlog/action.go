@@ -180,14 +180,17 @@ func uploadBinlogFile(reader io.Reader, binlogFile *BinlogFile) error {
 	action := filestream.UploadOss
 	if binlogFile.SinkType == config.SinkTypeSftp {
 		action = filestream.UploadSsh
+	} else if binlogFile.SinkType == config.SinkTypeMinio {
+		action = filestream.UploadMinio
 	}
 	//upload binlogfile
 	binlogFileMetadata := filestream.ActionMetadata{
-		Action:        filestream.Action(action),
-		Filepath:      getBinlogFilepath(binlogFile),
-		RequestId:     uuid.New().String(),
-		Sink:          binlogFile.SinkName,
-		OssBufferSize: strconv.FormatInt(binlogFile.Size, 10),
+		Action:          filestream.Action(action),
+		Filepath:        getBinlogFilepath(binlogFile),
+		RequestId:       uuid.New().String(),
+		Sink:            binlogFile.SinkName,
+		OssBufferSize:   strconv.FormatInt(binlogFile.Size, 10),
+		MinioBufferSize: strconv.FormatInt(binlogFile.Size, 10),
 	}
 	uploadedLen, err := client.Upload(reader, binlogFileMetadata)
 	if err != nil {
@@ -205,14 +208,17 @@ func uploadBinlogFileMeta(binlogFile *BinlogFile) error {
 	action := filestream.UploadOss
 	if binlogFile.SinkType == config.SinkTypeSftp {
 		action = filestream.UploadSsh
+	} else if binlogFile.SinkType == config.SinkTypeMinio {
+		action = filestream.UploadMinio
 	}
 	binlogMetaJsonBytes, _ := json.Marshal(binlogFile)
 	binlogMetaFileMetadata := filestream.ActionMetadata{
-		Action:        filestream.Action(action),
-		Filepath:      getBinlogMetaFilepath(binlogFile),
-		RequestId:     uuid.New().String(),
-		Sink:          binlogFile.SinkName,
-		OssBufferSize: fmt.Sprintf("%d", len(binlogMetaJsonBytes)),
+		Action:          filestream.Action(action),
+		Filepath:        getBinlogMetaFilepath(binlogFile),
+		RequestId:       uuid.New().String(),
+		Sink:            binlogFile.SinkName,
+		OssBufferSize:   fmt.Sprintf("%d", len(binlogMetaJsonBytes)),
+		MinioBufferSize: fmt.Sprintf("%d", len(binlogMetaJsonBytes)),
 	}
 	reader := bytes.NewReader(binlogMetaJsonBytes)
 	uploadedLen, err := client.Upload(reader, binlogMetaFileMetadata)

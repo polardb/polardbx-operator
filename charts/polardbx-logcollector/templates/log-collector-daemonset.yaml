@@ -43,11 +43,17 @@ spec:
             - name: pod-path
               mountPath: /var/lib/kubelet/pods/
               readOnly: true
+            - name: dn-data
+              mountPath: /data/xstore/
+              readOnly: true
       terminationGracePeriodSeconds: 30
       volumes:
         - name: pod-path
           hostPath:
             path: /var/lib/kubelet/pods/
+        - name: dn-data
+          hostPath:
+            path: /data/xstore
         - name: filebeat-data-dir
           emptyDir: {}
         - name: filebeat-config-file

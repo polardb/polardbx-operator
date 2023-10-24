@@ -446,8 +446,9 @@ class Context(object):
         lines = res.readlines()
         if res.close() is None and len(lines) > 1:
             version = lines[1].strip().split()[-1]
-            version0 = int(version.split(".")[0])
-            if version0 > 1:
-                return "/tools/xstore/current/xtrabackup/8.0-2/xcluster_xtrabackup80/bin"
+            if version.split(".")[0].isdigit():
+                version0 = int(version.split(".")[0])
+                if version0 > 1:
+                    return "/tools/xstore/current/xtrabackup/8.0-2/xcluster_xtrabackup80/bin"
             return "/tools/xstore/current/xcluster_xtrabackup80/bin"
         raise Exception("failed to get xtrabackup home by `mysqld -V`")

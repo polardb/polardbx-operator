@@ -16,7 +16,7 @@ spec:
       app.kubernetes.io/component: tools-updater
   updateStrategy:
     rollingUpdate:
-      maxUnavailable: 100%
+      maxUnavailable: 1
   template:
     metadata:
       labels:

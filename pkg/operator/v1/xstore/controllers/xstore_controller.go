@@ -18,7 +18,9 @@ package controllers
 
 import (
 	"context"
+	"errors"
 	"github.com/alibaba/polardbx-operator/pkg/operator/hint"
+	polarxJson "github.com/alibaba/polardbx-operator/pkg/util/json"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -51,7 +53,12 @@ type XStoreReconciler struct {
 
 func (r *XStoreReconciler) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	log := r.Logger.WithValues("namespace", request.Namespace, "xstore", request.Name)
-
+	defer func() {
+		err := recover()
+		if err != nil {
+			log.Error(errors.New(polarxJson.Convert2JsonString(err)), "")
+		}
+	}()
 	if hint.IsNamespacePaused(request.Namespace) {
 		log.Info("Reconciling is paused, skip")
 		return reconcile.Result{}, nil

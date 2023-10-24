@@ -513,7 +513,7 @@ func (v *PolarDBXClusterV1Validator) validateReplicas(ctx context.Context, topol
 	// Skip if CDC nodes is nil.
 	if cdcNodes != nil {
 		errList = append(errList, v.validateReplicasOnStatelessComponent(ctx, cdcRules,
-			field.NewPath("spec", "topology", "rules", "cdc"), int(cdcNodes.Replicas+cdcNodes.XReplicas))...)
+			field.NewPath("spec", "topology", "rules", "cdc"), int(cdcNodes.Replicas.IntValue()+cdcNodes.XReplicas))...)
 	}
 
 	columnarRules := topology.Rules.Components.Columnar
@@ -678,6 +678,20 @@ func (v *PolarDBXClusterV1Validator) validate(ctx context.Context, polardbx *pol
 				string(polardbxv1polardbx.RecreateUpgradeStrategy),
 				string(polardbxv1polardbx.RollingUpgradeStrategy),
 			}))
+	}
+
+	if spec.Topology.Nodes.CDC != nil {
+		cdcGroups := spec.Topology.Nodes.CDC.Groups
+		if cdcGroups != nil {
+			uniqueMap := map[string]bool{}
+			for _, cdcGroup := range cdcGroups {
+				if _, ok := uniqueMap[cdcGroup.Name]; ok {
+					errList = append(errList, field.Duplicate(field.NewPath("spec.Topology.Nodes.CDC.Groups[].name"), cdcGroup.Name))
+					break
+				}
+				uniqueMap[cdcGroup.Name] = true
+			}
+		}
 	}
 
 	if len(errList) > 0 {

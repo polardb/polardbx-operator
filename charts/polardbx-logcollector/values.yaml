@@ -39,6 +39,9 @@ logstash:
   livenessProbe:
     initialDelaySeconds: 30
     periodSeconds: 30
+  # Image pull secrets of logstash pods.
+  # imagePullSecrets:
+  #   - name: xxxxx
 
 #configuration of filebeat deamonset
 filebeat:
@@ -48,7 +51,7 @@ filebeat:
     #the image name of the  filebeat
     name: filebeat
     #the image tag f the filebeat
-    version: 8.1.0
+    version: 8.9.0
   #the daemonset name of filebeat
   name: filebeat
   #the service account name of filebeat. the service account will be used to discover pods on the node.
@@ -57,13 +60,15 @@ filebeat:
   #the resource of configuration of filebeat
   resources:
     limits:
-      memory: "512Mi"
+      memory: "1Gi"
       cpu: "1"
     requests:
       memory: "512Mi"
       cpu: "1"
   #hostpath prefix of the cn pod's empty dir volumes
   hostEmplyDirPathPrefix: /var/lib/kubelet/pods
+  #hostpath prefix of the dn pod's data volumes
+  dnDataHostPathPrefix: /data/xstore
 
 #the name of polardbxlogcollector instance. 
 #command to get it : 

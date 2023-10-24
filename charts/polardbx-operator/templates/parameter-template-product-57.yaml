@@ -1,0 +1,2904 @@
+apiVersion: polardbx.aliyun.com/v1
+kind: PolarDBXParameterTemplate
+metadata:
+  name: product-57
+spec:
+  nodeType:
+    cn:
+      name: cnTemplate
+      paramList:
+      - defaultValue: 05:00
+        divisibilityFactor: 0
+        mode: readwrite
+        name: BACKGROUND_STATISTIC_COLLECTION_END_TIME
+        optional: '[00:00|01:00|02:00|03:00|04:00|05:00|06:00|07:00|08:00|09:00|10:00|11:00|12:00|13:00|14:00|15:00|16:00|17:00|18:00|19:00|20:00|21:00|22:00|23:00]'
+        restart: false
+        unit: STRING
+      - defaultValue: 02:00
+        divisibilityFactor: 0
+        mode: readwrite
+        name: BACKGROUND_STATISTIC_COLLECTION_START_TIME
+        optional: '[00:00|01:00|02:00|03:00|04:00|05:00|06:00|07:00|08:00|09:00|10:00|11:00|12:00|13:00|14:00|15:00|16:00|17:00|18:00|19:00|20:00|21:00|22:00|23:00]'
+        restart: false
+        unit: STRING
+      - defaultValue: '5000'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: CONN_POOL_BLOCK_TIMEOUT
+        optional: '[1000-60000]'
+        restart: false
+        unit: INT
+      - defaultValue: '30'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: CONN_POOL_IDLE_TIMEOUT
+        optional: '[1-60]'
+        restart: false
+        unit: INT
+      - defaultValue: '60'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: CONN_POOL_MAX_POOL_SIZE
+        optional: '[1-1600]'
+        restart: false
+        unit: INT
+      - defaultValue: '0'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: CONN_POOL_MAX_WAIT_THREAD_COUNT
+        optional: '[-1-8192]'
+        restart: false
+        unit: INT
+      - defaultValue: '20'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: CONN_POOL_MIN_POOL_SIZE
+        optional: '[0-60]'
+        restart: false
+        unit: INT
+      - defaultValue: '512'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: CONN_POOL_XPROTO_MAX_POOLED_SESSION_PER_INST
+        optional: '[1-8192]'
+        restart: false
+        unit: INT
+      - defaultValue: '0'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: CONN_POOL_XPROTO_STORAGE_DB_PORT
+        optional: '[-1-0]'
+        restart: false
+        unit: INT
+      - defaultValue: 'true'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: ENABLE_BACKGROUND_STATISTIC_COLLECTION
+        optional: '[true|false]'
+        restart: false
+        unit: STRING
+      - defaultValue: 'true'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: ENABLE_COMPLEX_DML_CROSS_DB
+        optional: '[true|false]'
+        restart: false
+        unit: STRING
+      - defaultValue: 'true'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: ENABLE_HLL
+        optional: '[true|false]'
+        restart: false
+        unit: STRING
+      - defaultValue: 'true'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: ENABLE_LOCAL_MODE
+        optional: '[true|false]'
+        restart: false
+        unit: STRING
+      - defaultValue: 'true'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: ENABLE_LOGICALVIEW_COST
+        optional: '[true|false]'
+        restart: false
+        unit: STRING
+      - defaultValue: 'false'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: ENABLE_RECYCLEBIN
+        optional: '[true|false]'
+        restart: false
+        unit: STRING
+      - defaultValue: 'true'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: ENABLE_SPM
+        optional: '[true|false]'
+        restart: false
+        unit: STRING
+      - defaultValue: 'OFF'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: ENABLE_SQL_FLASHBACK_EXACT_MATCH
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: 'true'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: ENABLE_STATEMENTS_SUMMARY
+        optional: '[true|false]'
+        restart: false
+        unit: STRING
+      - defaultValue: 'true'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: ENABLE_STATISTIC_FEEDBACK
+        optional: '[true|false]'
+        restart: false
+        unit: STRING
+      - defaultValue: 'true'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: FORBID_EXECUTE_DML_ALL
+        optional: '[true|false]'
+        restart: false
+        unit: STRING
+      - defaultValue: '-1'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: GENERAL_DYNAMIC_SPEED_LIMITATION
+        optional: '[-1-10000000]'
+        restart: false
+        unit: INT
+      - defaultValue: 'false'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: INFO_SCHEMA_QUERY_WITH_STAT
+        optional: '[true|false]'
+        restart: false
+        unit: STRING
+      - defaultValue: '2'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: IN_SUB_QUERY_THRESHOLD
+        optional: '[1-65535]'
+        restart: false
+        unit: INT
+      - defaultValue: SYSTEM
+        divisibilityFactor: 1
+        mode: readwrite
+        name: LOGICAL_DB_TIME_ZONE
+        optional: '[SYSTEM|±HH:mm]'
+        restart: false
+        unit: TZ
+      - defaultValue: '28800000'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: LOGIC_IDLE_TIMEOUT
+        optional: '[3600000-86400000]'
+        restart: false
+        unit: INT
+      - defaultValue: '16777216'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: MAX_ALLOWED_PACKET
+        optional: '[4194304-33554432]'
+        restart: false
+        unit: INT
+      - defaultValue: '0'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: PARALLELISM
+        optional: '[-1-8]'
+        restart: false
+        unit: INT
+      - defaultValue: '-1'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: PER_QUERY_MEMORY_LIMIT
+        optional: '[-1-9223372036854775807]'
+        restart: false
+        unit: INT
+      - defaultValue: 00:00-01:00
+        divisibilityFactor: 1
+        mode: readwrite
+        name: PURGE_TRANS_START_TIME
+        optional: 00:00~23:59
+        restart: false
+        unit: HOUR_RANGE
+      - defaultValue: '1000'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: SLOW_SQL_TIME
+        optional: '[1000-900000]'
+        restart: false
+        unit: INT
+      - defaultValue: '900000'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: SOCKET_TIMEOUT
+        optional: '[0-3600000]'
+        restart: false
+        unit: INT
+      - defaultValue: '1'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: STATEMENTS_SUMMARY_PERCENT
+        optional: '[0-100]'
+        restart: false
+        unit: INT
+      - defaultValue: REPEATABLE-READ
+        divisibilityFactor: 0
+        mode: readwrite
+        name: TRANSACTION_ISOLATION
+        optional: '[REPEATABLE-READ|READ-COMMITTED|READ-UNCOMMITTED|SERIALIZABLE]'
+        restart: false
+        unit: STRING
+      - defaultValue: '500'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: XPROTO_MAX_DN_CONCURRENT
+        optional: '[1-8192]'
+        restart: false
+        unit: INT
+      - defaultValue: '32'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: XPROTO_MAX_DN_WAIT_CONNECTION
+        optional: '[1-8192]'
+        restart: false
+        unit: INT
+      - defaultValue: 'false'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: ENABLE_COROUTINE
+        optional: '[true|false]'
+        restart: true
+        unit: STRING
+    dn:
+      name: dnTemplate
+      paramList:
+      - defaultValue: myisam,memory,archive
+        divisibilityFactor: 0
+        mode: readonly
+        name: disabled_storage_engines
+        optional: '[myisam,memory,archive|myisam,memory|myisam,archive]'
+        restart: false
+        unit: string
+      - defaultValue: 'OFF'
+        divisibilityFactor: 0
+        mode: readonly
+        name: innodb_use_native_aio
+        optional: '[OFF|ON]'
+        restart: false
+        unit: STRING
+      - defaultValue: SYSTEM
+        divisibilityFactor: 0
+        mode: readonly
+        name: log_timestamps
+        optional: '[SYSTEM|UTC]'
+        restart: false
+        unit: STRING
+      - defaultValue: '8'
+        divisibilityFactor: 1
+        mode: readonly
+        name: loose_innodb_adaptive_hash_index_parts
+        optional: '[1-512]'
+        restart: false
+        unit: INT
+      - defaultValue: 'ON'
+        divisibilityFactor: 0
+        mode: readonly
+        name: loose_performance_point_enabled
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: 'ON'
+        divisibilityFactor: 0
+        mode: readonly
+        name: loose_rds_check_core_file_enabled
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: '20'
+        divisibilityFactor: 1
+        mode: readonly
+        name: loose_rds_kill_connections
+        optional: '[0-18446744073709551615]'
+        restart: false
+        unit: int
+      - defaultValue: aurora_proxy
+        divisibilityFactor: 0
+        mode: readonly
+        name: loose_rds_proxy_user_list
+        optional: .*
+        restart: false
+        unit: STRING
+      - defaultValue: 'OFF'
+        divisibilityFactor: 0
+        mode: readonly
+        name: loose_show_ipk_info
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: '''aliyun_root,aurora,replicator'''
+        divisibilityFactor: 0
+        mode: readonly
+        name: maintain_user_list
+        optional: '''aliyun_root,aurora,replicator'''
+        restart: false
+        unit: STRING
+      - defaultValue: FORCE
+        divisibilityFactor: 0
+        mode: readonly
+        name: myisam_recover_options
+        optional: '[OFF|DEFAULT|BACKUP|FORCE|QUICK|BACKUP,FORCE]'
+        restart: false
+        unit: STRING
+      - defaultValue: '512'
+        divisibilityFactor: 1
+        mode: readonly
+        name: rds_reserved_connections
+        optional: '[0-512]'
+        restart: false
+        unit: INT
+      - defaultValue: 'ON'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: autocommit
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: 'ON'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: automatic_sp_privileges
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: '1'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: auto_increment_increment
+        optional: '[1-65535]'
+        restart: false
+        unit: INT
+      - defaultValue: '1'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: auto_increment_offset
+        optional: '[1-65535]'
+        restart: false
+        unit: INT
+      - defaultValue: 'OFF'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: avoid_temporal_upgrade
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: '2097152'
+        divisibilityFactor: 4096
+        mode: readwrite
+        name: binlog_cache_size
+        optional: '[4096-16777216]'
+        restart: false
+        unit: INT
+      - defaultValue: 'OFF'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: binlog_order_commits
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: 'ON'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: binlog_rows_query_log_events
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: full
+        divisibilityFactor: 0
+        mode: readwrite
+        name: binlog_row_image
+        optional: '[full|minimal]'
+        restart: false
+        unit: STRING
+      - defaultValue: '32768'
+        divisibilityFactor: 4096
+        mode: readwrite
+        name: binlog_stmt_cache_size
+        optional: '[4096-16777216]'
+        restart: false
+        unit: INT
+      - defaultValue: '"aes-128-ecb"'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: block_encryption_mode
+        optional: '["aes-128-ecb"|"aes-192-ecb"|"aes-256-ecb"|"aes-128-cbc"|"aes-192-cbc"|"aes-256-cbc"]'
+        restart: false
+        unit: STRING
+      - defaultValue: '4194304'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: bulk_insert_buffer_size
+        optional: '[0-4294967295]'
+        restart: false
+        unit: INT
+      - defaultValue: binary
+        divisibilityFactor: 0
+        mode: readwrite
+        name: character_set_filesystem
+        optional: '[utf8|latin1|gbk|binary]'
+        restart: false
+        unit: STRING
+      - defaultValue: '1'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: concurrent_insert
+        optional: '[0|1|2]'
+        restart: false
+        unit: STRING
+      - defaultValue: '10'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: connect_timeout
+        optional: '[1-3600]'
+        restart: false
+        unit: INT
+      - defaultValue: '0'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: default_week_format
+        optional: '[0-7]'
+        restart: false
+        unit: INT
+      - defaultValue: '100'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: delayed_insert_limit
+        optional: '[1-4294967295]'
+        restart: false
+        unit: INT
+      - defaultValue: '300'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: delayed_insert_timeout
+        optional: '[1-3600]'
+        restart: false
+        unit: INT
+      - defaultValue: '1000'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: delayed_queue_size
+        optional: '[1-4294967295]'
+        restart: false
+        unit: INT
+      - defaultValue: 'ON'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: delay_key_write
+        optional: '[ON|OFF|ALL]'
+        restart: false
+        unit: STRING
+      - defaultValue: '4'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: div_precision_increment
+        optional: '[0-30]'
+        restart: false
+        unit: INT
+      - defaultValue: 'OFF'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: end_markers_in_json
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: '200'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: eq_range_index_dive_limit
+        optional: '[0-4294967295]'
+        restart: false
+        unit: INT
+      - defaultValue: 'OFF'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: event_scheduler
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: 'OFF'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: explicit_defaults_for_timestamp
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: '0'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: flush_time
+        optional: '[0-31536000]'
+        restart: false
+        unit: INT
+      - defaultValue: '1024'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: group_concat_max_len
+        optional: '[4-1844674407370954752]'
+        restart: false
+        unit: INT
+      - defaultValue: '644'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: host_cache_size
+        optional: '[0-65535]'
+        restart: false
+        unit: INT
+      - defaultValue: ''''''
+        divisibilityFactor: 0
+        mode: readwrite
+        name: init_connect
+        optional: '[''''|''set names utf8mb4''|''set names utf8''|''set names utf8mb4
+          collate utf8mb4_general_ci'']'
+        restart: false
+        unit: STRING
+      - defaultValue: 'ON'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: innodb_adaptive_flushing
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: '10'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_adaptive_flushing_lwm
+        optional: '[0-70]'
+        restart: false
+        unit: INT
+      - defaultValue: 'OFF'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: innodb_adaptive_hash_index
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: '150000'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_adaptive_max_sleep_delay
+        optional: '[1-1000000]'
+        restart: false
+        unit: INT
+      - defaultValue: '64'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_autoextend_increment
+        optional: '[1-1000]'
+        restart: false
+        unit: INT
+      - defaultValue: 'ON'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: innodb_buffer_pool_dump_at_shutdown
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: '25'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_buffer_pool_dump_pct
+        optional: '[1-100]'
+        restart: false
+        unit: INT
+      - defaultValue: all
+        divisibilityFactor: 0
+        mode: readwrite
+        name: innodb_change_buffering
+        optional: '[none|inserts|deletes|changes|purges|all]'
+        restart: false
+        unit: STRING
+      - defaultValue: '25'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_change_buffer_max_size
+        optional: '[0-50]'
+        restart: false
+        unit: INT
+      - defaultValue: crc32
+        divisibilityFactor: 0
+        mode: readwrite
+        name: innodb_checksum_algorithm
+        optional: '[innodb|crc32|none|strict_innodb|strict_crc32|strict_none]'
+        restart: false
+        unit: STRING
+      - defaultValue: 'OFF'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: innodb_cmp_per_index_enabled
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: '5'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_compression_failure_threshold_pct
+        optional: '[0-100]'
+        restart: false
+        unit: INT
+      - defaultValue: '6'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_compression_level
+        optional: '[0-9]'
+        restart: false
+        unit: INT
+      - defaultValue: '50'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_compression_pad_pct_max
+        optional: '[0-70]'
+        restart: false
+        unit: INT
+      - defaultValue: '5000'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_concurrency_tickets
+        optional: '[1-4294967295]'
+        restart: false
+        unit: INT
+      - defaultValue: 'ON'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: innodb_deadlock_detect
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: 'ON'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: innodb_disable_sort_file_cache
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: '1'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: innodb_flush_log_at_trx_commit
+        optional: '[0|1|2]'
+        restart: false
+        unit: STRING
+      - defaultValue: '1'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: innodb_flush_neighbors
+        optional: '[0|1|2]'
+        restart: false
+        unit: STRING
+      - defaultValue: 'ON'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: innodb_flush_sync
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: 'OFF'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: innodb_ft_enable_diag_print
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: 'ON'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: innodb_ft_enable_stopword
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: '2000'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_ft_num_word_optimize
+        optional: '[0-10000]'
+        restart: false
+        unit: INT
+      - defaultValue: '2000000000'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_ft_result_cache_limit
+        optional: '[1000000-4294967295]'
+        restart: false
+        unit: INT
+      - defaultValue: ''
+        divisibilityFactor: 0
+        mode: readwrite
+        name: innodb_ft_server_stopword_table
+        optional: .*
+        restart: false
+        unit: STRING
+      - defaultValue: '20000'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_io_capacity
+        optional: '[0-18446744073709551615]'
+        restart: false
+        unit: INT
+      - defaultValue: '40000'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_io_capacity_max
+        optional: '[0-18446744073709551615]'
+        restart: false
+        unit: INT
+      - defaultValue: 'ON'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: innodb_large_prefix
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: '50'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_lock_wait_timeout
+        optional: '[1-1073741824]'
+        restart: false
+        unit: INT
+      - defaultValue: 'ON'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: innodb_log_checksums
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: '8192'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_lru_scan_depth
+        optional: '[100-18446744073709551615]'
+        restart: false
+        unit: INT
+      - defaultValue: '75'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_max_dirty_pages_pct
+        optional: '[0-99]'
+        restart: false
+        unit: INT
+      - defaultValue: '0'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_max_dirty_pages_pct_lwm
+        optional: '[0-99]'
+        restart: false
+        unit: INT
+      - defaultValue: '0'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_max_purge_lag
+        optional: '[0-4294967295]'
+        restart: false
+        unit: INT
+      - defaultValue: '0'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_max_purge_lag_delay
+        optional: '[0-10000000]'
+        restart: false
+        unit: INT
+      - defaultValue: '1073741824'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_max_undo_log_size
+        optional: '[10485760-18446744073709551615]'
+        restart: false
+        unit: INT
+      - defaultValue: ''
+        divisibilityFactor: 0
+        mode: readwrite
+        name: innodb_monitor_disable
+        optional: all
+        restart: false
+        unit: STRING
+      - defaultValue: ''
+        divisibilityFactor: 0
+        mode: readwrite
+        name: innodb_monitor_enable
+        optional: all
+        restart: false
+        unit: STRING
+      - defaultValue: '37'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_old_blocks_pct
+        optional: '[5-95]'
+        restart: false
+        unit: INT
+      - defaultValue: '1000'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_old_blocks_time
+        optional: '[0-1024]'
+        restart: false
+        unit: INT
+      - defaultValue: '134217728'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_online_alter_log_max_size
+        optional: '[134217728-2147483647]'
+        restart: false
+        unit: INT
+      - defaultValue: 'OFF'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: innodb_optimize_fulltext_only
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: 'ON'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: innodb_print_all_deadlocks
+        optional: '[OFF|ON]'
+        restart: false
+        unit: STRING
+      - defaultValue: '128'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_purge_rseg_truncate_frequency
+        optional: '[1-128]'
+        restart: false
+        unit: INT
+      - defaultValue: 'OFF'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: innodb_random_read_ahead
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: '56'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_read_ahead_threshold
+        optional: '[0-1024]'
+        restart: false
+        unit: INT
+      - defaultValue: '128'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_rollback_segments
+        optional: '[1-128]'
+        restart: false
+        unit: INT
+      - defaultValue: '6'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_spin_wait_delay
+        optional: '[0-4294967295]'
+        restart: false
+        unit: INT
+      - defaultValue: 'ON'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: innodb_stats_auto_recalc
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: nulls_equal
+        divisibilityFactor: 0
+        mode: readwrite
+        name: innodb_stats_method
+        optional: '[nulls_equal|nulls_unequal|nulls_ignored]'
+        restart: false
+        unit: STRING
+      - defaultValue: 'OFF'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: innodb_stats_on_metadata
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: 'ON'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: innodb_stats_persistent
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: '20'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_stats_persistent_sample_pages
+        optional: '[0-4294967295]'
+        restart: false
+        unit: INT
+      - defaultValue: '8'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_stats_sample_pages
+        optional: '[1-4294967296]'
+        restart: false
+        unit: INT
+      - defaultValue: '8'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_stats_transient_sample_pages
+        optional: '[1-4294967295]'
+        restart: false
+        unit: INT
+      - defaultValue: 'OFF'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: innodb_status_output
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: 'OFF'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: innodb_status_output_locks
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: 'ON'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: innodb_strict_mode
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: '30'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_sync_spin_loops
+        optional: '[0-4294967295]'
+        restart: false
+        unit: INT
+      - defaultValue: 'ON'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: innodb_table_locks
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: '0'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_thread_concurrency
+        optional: '[0-1000]'
+        restart: false
+        unit: INT
+      - defaultValue: '10000'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_thread_sleep_delay
+        optional: '[0-1000000]'
+        restart: false
+        unit: INT
+      - defaultValue: 'OFF'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: innodb_undo_log_truncate
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: '7200'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: interactive_timeout
+        optional: '[10-86400]'
+        restart: false
+        unit: INT
+      - defaultValue: '{LEAST(DBInstanceClassMemory/1048576*128, 262144)}'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: join_buffer_size
+        optional: '[128-4294967295]'
+        restart: false
+        unit: INT
+      - defaultValue: '300'
+        divisibilityFactor: 100
+        mode: readwrite
+        name: key_cache_age_threshold
+        optional: '[100-4294967295]'
+        restart: false
+        unit: INT
+      - defaultValue: '1024'
+        divisibilityFactor: 512
+        mode: readwrite
+        name: key_cache_block_size
+        optional: '[512-16384]'
+        restart: false
+        unit: B
+      - defaultValue: '100'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: key_cache_division_limit
+        optional: '[1-100]'
+        restart: false
+        unit: INT
+      - defaultValue: en_US
+        divisibilityFactor: 0
+        mode: readwrite
+        name: lc_time_names
+        optional: '[ja_JP|pt_BR|en_US]'
+        restart: false
+        unit: STRING
+      - defaultValue: '1800'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: lock_wait_timeout
+        optional: '[1-1073741824]'
+        restart: false
+        unit: INT
+      - defaultValue: '0'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: log_bin_use_v1_row_events
+        optional: '[0|1]'
+        restart: false
+        unit: STRING
+      - defaultValue: 'ON'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: log_bin_trust_function_creators
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: 'OFF'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: log_queries_not_using_indexes
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: 'ON'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: log_slow_admin_statements
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: 'ON'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: log_slow_slave_statements
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: '0'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: log_throttle_queries_not_using_indexes
+        optional: '[0-4294967295]'
+        restart: false
+        unit: INT
+      - defaultValue: '1'
+        divisibilityFactor: 6
+        mode: readwrite
+        name: long_query_time
+        optional: '[0.1-31536000]'
+        restart: false
+        unit: DOUBLE
+      - defaultValue: 'OFF'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: loose_hotspot
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: 'OFF'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: loose_hotspot_for_autocommit
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: 'OFF'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: loose_hotspot_lock_type
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: '1'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_implicit_primary_key
+        optional: '[0-1]'
+        restart: false
+        unit: INT
+      - defaultValue: 'ON'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: loose_innodb_data_file_purge
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: '100'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_innodb_data_file_purge_interval
+        optional: '[0-10000]'
+        restart: false
+        unit: INT
+      - defaultValue: '128'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_innodb_data_file_purge_max_size
+        optional: '[16-1073741824]'
+        restart: false
+        unit: INT
+      - defaultValue: 'ON'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: loose_innodb_log_compressed_pages
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: '0'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_max_execution_time
+        optional: '[0-4294967295]'
+        restart: false
+        unit: INT
+      - defaultValue: 'OFF'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: loose_opt_rds_audit_log_enabled
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: index_merge=on,index_merge_union=on,index_merge_sort_union=on,index_merge_intersection=on,engine_condition_pushdown=on,index_condition_pushdown=on,mrr=on,mrr_cost_based=on,block_nested_loop=on,batched_key_access=off,materialization=on,semijoin=on,loosescan=on,firstmatch=on,subquery_materialization_cost_based=on,use_index_extensions=on
+        divisibilityFactor: 0
+        mode: readwrite
+        name: loose_optimizer_switch
+        optional: .*
+        restart: false
+        unit: STRING
+      - defaultValue: enabled=off,one_line=off
+        divisibilityFactor: 0
+        mode: readwrite
+        name: loose_optimizer_trace
+        optional: .*
+        restart: false
+        unit: STRING
+      - defaultValue: greedy_search=on,range_optimizer=on,dynamic_range=on,repeated_subselect=on
+        divisibilityFactor: 0
+        mode: readwrite
+        name: loose_optimizer_trace_features
+        optional: .*
+        restart: false
+        unit: STRING
+      - defaultValue: '16777216'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_rds_audit_log_buffer_size
+        optional: '[16777216-104857600]'
+        restart: false
+        unit: INT
+      - defaultValue: 'ON'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: loose_rds_audit_log_cached_method
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: 'OFF'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: loose_rds_audit_log_reserve_all
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: MYSQL_V1
+        divisibilityFactor: 0
+        mode: readwrite
+        name: loose_rds_audit_log_version
+        optional: '[MYSQL_V1|MYSQL_V3]'
+        restart: false
+        unit: STRING
+      - defaultValue: '2048'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_rds_audit_max_sql_size
+        optional: '[0-32768]'
+        restart: false
+        unit: INT
+      - defaultValue: '100000'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_rds_audit_row_limit
+        optional: '[0-100000000]'
+        restart: false
+        unit: INT
+      - defaultValue: 'ON'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: loose_rds_force_memory_to_innodb
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: 'ON'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: loose_rds_force_myisam_to_innodb
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: 'ON'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: loose_rds_set_connection_id_enabled
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: ''
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_rds_user_with_kill_option
+        optional: .*
+        restart: false
+        unit: STRING
+      - defaultValue: 'OFF'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: loose_rpl_semi_sync_master_enabled
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: '1000'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_rpl_semi_sync_master_timeout
+        optional: '[0-18446744073709551615]'
+        restart: false
+        unit: INT
+      - defaultValue: '1'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_rpl_semi_sync_master_trace_level
+        optional: '[1|16|32|64]'
+        restart: false
+        unit: STRING
+      - defaultValue: 'OFF'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: loose_rpl_semi_sync_master_wait_no_slave
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: AFTER_SYNC
+        divisibilityFactor: 0
+        mode: readwrite
+        name: loose_rpl_semi_sync_master_wait_point
+        optional: '[AFTER_SYNC|AFTER_COMMIT]'
+        restart: false
+        unit: STRING
+      - defaultValue: 'ON'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_rpl_semi_sync_slave_enabled
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: '1'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_rpl_semi_sync_slave_trace_level
+        optional: '[1|16|32|64]'
+        restart: false
+        unit: STRING
+      - defaultValue: '"*"'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: loose_session_track_system_variables
+        optional: .*
+        restart: false
+        unit: STRING
+      - defaultValue: 'OFF'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: loose_session_track_transaction_info
+        optional: '[STATE|CHARACTERISTICS|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: '8'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_slave_parallel_workers
+        optional: '[0-1024]'
+        restart: false
+        unit: INT
+      - defaultValue: '32'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_thread_pool_size
+        optional: '[1-64]'
+        restart: false
+        unit: INT
+      - defaultValue: '0'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: low_priority_updates
+        optional: '[0|1]'
+        restart: false
+        unit: STRING
+      - defaultValue: TABLE
+        divisibilityFactor: 0
+        mode: readwrite
+        name: master_info_repository
+        optional: '[TABLE|FILE]'
+        restart: false
+        unit: STRING
+      - defaultValue: 'OFF'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: master_verify_checksum
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: '1073741824'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: max_allowed_packet
+        optional: '[16384-1073741824]'
+        restart: false
+        unit: INT
+      - defaultValue: '18446744073709551615'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: max_binlog_cache_size
+        optional: '[4096-18446744073709547520]'
+        restart: false
+        unit: INT
+      - defaultValue: '18446744073709551615'
+        divisibilityFactor: 4096
+        mode: readwrite
+        name: max_binlog_stmt_cache_size
+        optional: '[4096-18446744073709547520]'
+        restart: false
+        unit: INT
+      - defaultValue: '100'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: max_connect_errors
+        optional: '[0-4294967295]'
+        restart: false
+        unit: INT
+      - defaultValue: '64'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: max_error_count
+        optional: '[0-65535]'
+        restart: false
+        unit: INT
+      - defaultValue: '0'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: max_execution_time
+        optional: '[0-4294967295]'
+        restart: false
+        unit: INT
+      - defaultValue: '67108864'
+        divisibilityFactor: 1024
+        mode: readwrite
+        name: max_heap_table_size
+        optional: '[16384-1844674407370954752]'
+        restart: false
+        unit: INT
+      - defaultValue: '18446744073709551615'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: max_join_size
+        optional: '[1-18446744073709551615]'
+        restart: false
+        unit: INT
+      - defaultValue: '1024'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: max_length_for_sort_data
+        optional: '[0-838860]'
+        restart: false
+        unit: INT
+      - defaultValue: '65536'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: max_points_in_geometry
+        optional: '[3-1048576]'
+        restart: false
+        unit: INT
+      - defaultValue: '16382'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: max_prepared_stmt_count
+        optional: '[0-1048576]'
+        restart: false
+        unit: INT
+      - defaultValue: '18446744073709551615'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: max_seeks_for_key
+        optional: '[1-18446744073709551615]'
+        restart: false
+        unit: INT
+      - defaultValue: '1024'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: max_sort_length
+        optional: '[4-8388608]'
+        restart: false
+        unit: INT
+      - defaultValue: '0'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: max_sp_recursion_depth
+        optional: '[0-255]'
+        restart: false
+        unit: INT
+      - defaultValue: '102400'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: max_write_lock_count
+        optional: '[1-102400]'
+        restart: false
+        unit: INT
+      - defaultValue: '0'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: min_examined_row_limit
+        optional: '[0-4294967295]'
+        restart: false
+        unit: INT
+      - defaultValue: '262144'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: myisam_sort_buffer_size
+        optional: '[262144-16777216]'
+        restart: false
+        unit: INT
+      - defaultValue: 'OFF'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: mysql_native_password_proxy_users
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: '16384'
+        divisibilityFactor: 1024
+        mode: readwrite
+        name: net_buffer_length
+        optional: '[1024-1048576]'
+        restart: false
+        unit: INT
+      - defaultValue: '30'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: net_read_timeout
+        optional: '[1-18446744073709551615]'
+        restart: false
+        unit: INT
+      - defaultValue: '10'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: net_retry_count
+        optional: '[1-4294967295]'
+        restart: false
+        unit: INT
+      - defaultValue: '60'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: net_write_timeout
+        optional: '[1-18446744073709551615]'
+        restart: false
+        unit: INT
+      - defaultValue: '0'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: old_passwords
+        optional: '[0|2]'
+        restart: false
+        unit: STRING
+      - defaultValue: '1'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: optimizer_prune_level
+        optional: '[0|1]'
+        restart: false
+        unit: STRING
+      - defaultValue: '62'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: optimizer_search_depth
+        optional: '[0-62]'
+        restart: false
+        unit: INT
+      - defaultValue: '1'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: optimizer_trace_limit
+        optional: '[0-4294967295]'
+        restart: false
+        unit: INT
+      - defaultValue: '16384'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: optimizer_trace_max_mem_size
+        optional: '[0-4294967295]'
+        restart: false
+        unit: INT
+      - defaultValue: '-1'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: optimizer_trace_offset
+        optional: '[-2147483648-2147483647]'
+        restart: false
+        unit: INT
+      - defaultValue: '32768'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: preload_buffer_size
+        optional: '[1024-1073741824]'
+        restart: false
+        unit: INT
+      - defaultValue: '8192'
+        divisibilityFactor: 1024
+        mode: readwrite
+        name: query_alloc_block_size
+        optional: '[1024-16384]'
+        restart: false
+        unit: INT
+      - defaultValue: '1048576'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: query_cache_limit
+        optional: '[1-1048576]'
+        restart: false
+        unit: INT
+      - defaultValue: '1024'
+        divisibilityFactor: 512
+        mode: readwrite
+        name: query_cache_min_res_unit
+        optional: '[512-18446744073709551608]'
+        restart: false
+        unit: INT
+      - defaultValue: '0'
+        divisibilityFactor: 1024
+        mode: readwrite
+        name: query_cache_size
+        optional: '[0-10485760000]'
+        restart: false
+        unit: INT
+      - defaultValue: 'OFF'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: query_cache_wlock_invalidate
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: '8192'
+        divisibilityFactor: 1024
+        mode: readwrite
+        name: query_prealloc_size
+        optional: '[8192-1048576]'
+        restart: false
+        unit: INT
+      - defaultValue: '4096'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: range_alloc_block_size
+        optional: '[4096-18446744073709551615]'
+        restart: false
+        unit: INT
+      - defaultValue: '8388608'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: range_optimizer_max_mem_size
+        optional: '[0-18446744073709551615]'
+        restart: false
+        unit: INT
+      - defaultValue: '{LEAST(DBInstanceClassMemory/1048576*128, 262144)}'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: read_buffer_size
+        optional: '[8200-2147479552]'
+        restart: false
+        unit: INT
+      - defaultValue: TABLE
+        divisibilityFactor: 0
+        mode: readwrite
+        name: relay_log_info_repository
+        optional: '[TABLE|FILE]'
+        restart: false
+        unit: STRING
+      - defaultValue: AFTER_SYNC
+        divisibilityFactor: 0
+        mode: readwrite
+        name: rpl_semi_sync_master_wait_point
+        optional: '[AFTER_SYNC|AFTER_COMMIT]'
+        restart: false
+        unit: STRING
+      - defaultValue: 'OFF'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: session_track_gtids
+        optional: '[OFF|OWN_GTID|ALL_GTIDS]'
+        restart: false
+        unit: STRING
+      - defaultValue: 'ON'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: session_track_schema
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: 'ON'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: session_track_state_change
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: 'OFF'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: sha256_password_proxy_users
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: 'OFF'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: show_compatibility_56
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: 'OFF'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: show_old_temporals
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: strict
+        divisibilityFactor: 0
+        mode: readwrite
+        name: slave_exec_mode
+        optional: '[smart|strict]'
+        restart: false
+        unit: STRING
+      - defaultValue: '60'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: slave_net_timeout
+        optional: '[15-300]'
+        restart: false
+        unit: INT
+      - defaultValue: '2'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: slow_launch_time
+        optional: '[1-1024]'
+        restart: false
+        unit: INT
+      - defaultValue: 'ON'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: slow_query_log
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: '868352'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: sort_buffer_size
+        optional: '[32768-4294967295]'
+        restart: false
+        unit: INT
+      - defaultValue: ''
+        divisibilityFactor: 0
+        mode: readwrite
+        name: sql_mode
+        optional: (\s*|REAL_AS_FLOAT|PIPES_AS_CONCAT|ANSI_QUOTES|IGNORE_SPACE|ONLY_FULL_GROUP_BY|NO_UNSIGNED_SUBTRACTION|NO_DIR_IN_CREATE|POSTGRESQL|ORACLE|MSSQL|DB2|MAXDB|NO_KEY_OPTIONS|NO_TABLE_OPTIONS|NO_FIELD_OPTIONS|MYSQL323|MYSQL40|ANSI|NO_AUTO_VALUE_ON_ZERO|NO_BACKSLASH_ESCAPES|STRICT_TRANS_TABLES|STRICT_ALL_TABLES|NO_ZERO_IN_DATE|NO_ZERO_DATE|ALLOW_INVALID_DATES|ERROR_FOR_DIVISION_BY_ZERO|TRADITIONAL|HIGH_NOT_PRECEDENCE|NO_ENGINE_SUBSTITUTION|PAD_CHAR_TO_FULL_LENGTH|NO_AUTO_CREATE_USER)(,NO_AUTO_CREATE_USER|,REAL_AS_FLOAT|,PIPES_AS_CONCAT|,ANSI_QUOTES|,IGNORE_SPACE|,ONLY_FULL_GROUP_BY|,NO_UNSIGNED_SUBTRACTION|,NO_DIR_IN_CREATE|,POSTGRESQL|,ORACLE|,MSSQL|,DB2|,MAXDB|,NO_KEY_OPTIONS|,NO_TABLE_OPTIONS|,NO_FIELD_OPTIONS|,MYSQL323|,MYSQL40|,ANSI|,NO_AUTO_VALUE_ON_ZERO|,NO_BACKSLASH_ESCAPES|,STRICT_TRANS_TABLES|,STRICT_ALL_TABLES|,NO_ZERO_IN_DATE|,NO_ZERO_DATE|,ALLOW_INVALID_DATES|,ERROR_FOR_DIVISION_BY_ZERO|,TRADITIONAL|,HIGH_NOT_PRECEDENCE|,NO_ENGINE_SUBSTITUTION|,PAD_CHAR_TO_FULL_LENGTH)*
+        restart: false
+        unit: STRING
+      - defaultValue: '256'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: stored_program_cache
+        optional: '[16-524288]'
+        restart: false
+        unit: INT
+      - defaultValue: '{LEAST(DBInstanceClassMemory/1073741824*1024, 20000)}'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: table_definition_cache
+        optional: '[400-524288]'
+        restart: false
+        unit: INT
+      - defaultValue: '{LEAST(DBInstanceClassMemory/1073741824*1024, 20000)}'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: table_open_cache
+        optional: '[1-524288]'
+        restart: false
+        unit: INT
+      - defaultValue: '256'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: thread_cache_size
+        optional: '[0-16384]'
+        restart: false
+        unit: INT
+      - defaultValue: '2097152'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: tmp_table_size
+        optional: '[262144-134217728]'
+        restart: false
+        unit: INT
+      - defaultValue: '8192'
+        divisibilityFactor: 1024
+        mode: readwrite
+        name: transaction_alloc_block_size
+        optional: '[1024-131072]'
+        restart: false
+        unit: INT
+      - defaultValue: REPEATABLE-READ
+        divisibilityFactor: 0
+        mode: readwrite
+        name: transaction_isolation
+        optional: '[READ-UNCOMMITTED|READ-COMMITTED|REPEATABLE-READ|SERIALIZABLE]'
+        restart: false
+        unit: STRING
+      - defaultValue: '4096'
+        divisibilityFactor: 1024
+        mode: readwrite
+        name: transaction_prealloc_size
+        optional: '[1024-131072]'
+        restart: false
+        unit: INT
+      - defaultValue: 'YES'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: updatable_views_with_limit
+        optional: '[YES|NO]'
+        restart: false
+        unit: STRING
+      - defaultValue: '86400'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: wait_timeout
+        optional: '[1-31536000]'
+        restart: false
+        unit: INT
+      - defaultValue: WRITESET
+        divisibilityFactor: 1
+        mode: readwrite
+        name: binlog_transaction_dependency_tracking
+        optional: '[WRITESET|WRITESET_SESSION|COMMIT_ORDER]'
+        restart: false
+        unit: STRING
+      - defaultValue: 'ON'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: local_infile
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: '2'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: log_error_verbosity
+        optional: '[1-3]'
+        restart: false
+        unit: INT
+      - defaultValue: '10'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_innodb_index_pct_free
+        optional: '[5-60]'
+        restart: false
+        unit: INT
+      - defaultValue: INNODB
+        divisibilityFactor: 0
+        mode: readwrite
+        name: loose_internal_tmp_disk_storage_engine
+        optional: '[INNODB|MYISAM]'
+        restart: false
+        unit: STRING
+      - defaultValue: '2'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_performance_point_iostat_interval
+        optional: '[0-60]'
+        restart: false
+        unit: INT
+      - defaultValue: 'ON'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: loose_performance_point_lock_rwlock_enabled
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: '32'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_thread_pool_oversubscribe
+        optional: '[10-64]'
+        restart: false
+        unit: INT
+      - defaultValue: '10000'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: sync_master_info
+        optional: '[0-18446744073709551615]'
+        restart: false
+        unit: INT
+      - defaultValue: '10000'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: sync_relay_log_info
+        optional: '[0-18446744073709551615]'
+        restart: false
+        unit: INT
+      - defaultValue: XXHASH64
+        divisibilityFactor: 1
+        mode: readwrite
+        name: transaction_write_set_extraction
+        optional: '[OFF|MURMUR32|XXHASH64]'
+        restart: false
+        unit: STRING
+      - defaultValue: '3000'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: back_log
+        optional: '[0-65535]'
+        restart: true
+        unit: INT
+      - defaultValue: CRC32
+        divisibilityFactor: 0
+        mode: readwrite
+        name: binlog_checksum
+        optional: '[CRC32|NONE]'
+        restart: true
+        unit: STRING
+      - defaultValue: utf8
+        divisibilityFactor: 0
+        mode: readwrite
+        name: character_set_server
+        optional: '[utf8|latin1|gbk|gb18030|utf8mb4]'
+        restart: true
+        unit: STRING
+      - defaultValue: InnoDB
+        divisibilityFactor: 0
+        mode: readwrite
+        name: default_storage_engine
+        optional: '[InnoDB|innodb]'
+        restart: true
+        unit: STRING
+      - defaultValue: '+8:00'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: default_time_zone
+        optional: '[SYSTEM|-12:00|-11:00|-10:00|-9:00|-8:00|-7:00|-6:00|-5:00|-4:00|-3:00|-2:00|-1:00|\+0:00|\+1:00|\+2:00|\+3:00|\+4:00|\+5:00|\+5:30|\+5:45|\+6:00|\+6:30|\+7:00|\+8:00|\+9:00|\+10:00|\+11:00|\+12:00|\+13:00]'
+        restart: true
+        unit: STRING
+      - defaultValue: 'ON'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: disconnect_on_expired_password
+        optional: '[ON|OFF]'
+        restart: true
+        unit: STRING
+      - defaultValue: '84'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: ft_max_word_len
+        optional: '[10-4294967295]'
+        restart: true
+        unit: INT
+      - defaultValue: '4'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: ft_min_word_len
+        optional: '[1-3600]'
+        restart: true
+        unit: INT
+      - defaultValue: '20'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: ft_query_expansion_limit
+        optional: '[0-1000]'
+        restart: true
+        unit: INT
+      - defaultValue: '2'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: innodb_autoinc_lock_mode
+        optional: '[0|1|2]'
+        restart: true
+        unit: STRING
+      - defaultValue: '8'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_buffer_pool_instances
+        optional: '[1-64]'
+        restart: true
+        unit: INT
+      - defaultValue: 'ON'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: innodb_buffer_pool_load_at_startup
+        optional: '[ON|OFF]'
+        restart: true
+        unit: STRING
+      - defaultValue: '0'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_commit_concurrency
+        optional: '[0-1000]'
+        restart: true
+        unit: INT
+      - defaultValue: O_DIRECT
+        divisibilityFactor: 0
+        mode: readwrite
+        name: innodb_flush_method
+        optional: '[fsync|O_DSYNC|littlesync|nosync|O_DIRECT|O_DIRECT_NO_FSYNC]'
+        restart: true
+        unit: STRING
+      - defaultValue: '8000000'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_ft_cache_size
+        optional: '[1600000-80000000]'
+        restart: true
+        unit: INT
+      - defaultValue: '84'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_ft_max_token_size
+        optional: '[10-84]'
+        restart: true
+        unit: INT
+      - defaultValue: '3'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_ft_min_token_size
+        optional: '[0-16]'
+        restart: true
+        unit: INT
+      - defaultValue: '2'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_ft_sort_pll_degree
+        optional: '[1-16]'
+        restart: true
+        unit: INT
+      - defaultValue: '640000000'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_ft_total_cache_size
+        optional: '[32000000-1600000000]'
+        restart: true
+        unit: INT
+      - defaultValue: '8589934592'
+        divisibilityFactor: 1024
+        mode: readwrite
+        name: innodb_log_file_size
+        optional: '[4194304-107374182400]'
+        restart: true
+        unit: INT
+      - defaultValue: '{LEAST(DBInstanceClassMemory/1073741824*1024, 20000)}'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_open_files
+        optional: '[10-2147483647]'
+        restart: true
+        unit: INT
+      - defaultValue: '4'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_page_cleaners
+        optional: '[1-64]'
+        restart: true
+        unit: INT
+      - defaultValue: '300'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_purge_batch_size
+        optional: '[1-5000]'
+        restart: true
+        unit: INT
+      - defaultValue: '4'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_purge_threads
+        optional: '[1-32]'
+        restart: true
+        unit: INT
+      - defaultValue: '4'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_read_io_threads
+        optional: '[1-64]'
+        restart: true
+        unit: INT
+      - defaultValue: 'OFF'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: innodb_rollback_on_timeout
+        optional: '[OFF|ON]'
+        restart: true
+        unit: STRING
+      - defaultValue: '1048576'
+        divisibilityFactor: 512
+        mode: readwrite
+        name: innodb_sort_buffer_size
+        optional: '[65536-67108864]'
+        restart: true
+        unit: INT
+      - defaultValue: '1'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_sync_array_size
+        optional: '[1-64]'
+        restart: true
+        unit: INT
+      - defaultValue: '4'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_write_io_threads
+        optional: '[1-64]'
+        restart: true
+        unit: INT
+      - defaultValue: AES_256_CBC
+        divisibilityFactor: 0
+        mode: readwrite
+        name: loose_innodb_encrypt_algorithm
+        optional: '[AES_256_CBC|SM4]'
+        restart: true
+        unit: STRING
+      - defaultValue: 'ON'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: loose_innodb_numa_interleave
+        optional: '[ON|OFF]'
+        restart: true
+        unit: STRING
+      - defaultValue: 'ON'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: loose_innodb_support_instant_add_column
+        optional: '[ON|OFF]'
+        restart: false
+        unit: STRING
+      - defaultValue: '1'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: lower_case_table_names
+        optional: '[0|1]'
+        restart: true
+        unit: STRING
+      - defaultValue: '1024'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: metadata_locks_cache_size
+        optional: '[1-1048576]'
+        restart: true
+        unit: INT
+      - defaultValue: '2'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: ngram_token_size
+        optional: '[0-20]'
+        restart: true
+        unit: int
+      - defaultValue: '65535'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: open_files_limit
+        optional: '[1-2147483647]'
+        restart: true
+        unit: INT
+      - defaultValue: '{LEAST(DBInstanceClassMemory/8589934592, 1)}'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: performance_schema
+        optional: '[0-1]'
+        restart: true
+        unit: INT
+      - defaultValue: '0'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: query_cache_type
+        optional: '[0|1|2]'
+        restart: true
+        unit: STRING
+      - defaultValue: 'OFF'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: relay_log_recovery
+        optional: '[ON|OFF]'
+        restart: true
+        unit: STRING
+      - defaultValue: LOGICAL_CLOCK
+        divisibilityFactor: 0
+        mode: readwrite
+        name: slave_parallel_type
+        optional: '[DATABASE|LOGICAL_CLOCK]'
+        restart: true
+        unit: STRING
+      - defaultValue: '16'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: table_open_cache_instances
+        optional: '[1-64]'
+        restart: true
+        unit: INT
+      - defaultValue: '262144'
+        divisibilityFactor: 1024
+        mode: readwrite
+        name: thread_stack
+        optional: '[131072-2147483647]'
+        restart: true
+        unit: INT
+      - defaultValue: TLSv1,TLSv1.1,TLSv1.2
+        divisibilityFactor: 0
+        mode: readwrite
+        name: tls_version
+        optional: '[TLSv1,TLSv1.1,TLSv1...'
+        restart: true
+        unit: STRING
+      - defaultValue: 'OFF'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: general_log
+        optional: 'OFF'
+        restart: true
+        unit: STRING
+      - defaultValue: '33554432'
+        divisibilityFactor: 1048576
+        mode: readwrite
+        name: innodb_buffer_pool_chunk_size
+        optional: '[1048576-9223372036854775807]'
+        restart: true
+        unit: INT
+      - defaultValue: ibtmp1:12M:autoextend
+        divisibilityFactor: 0
+        mode: readwrite
+        name: innodb_temp_data_file_path
+        optional: .*
+        restart: true
+        unit: STRING
+      - defaultValue: '0'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_undo_tablespaces
+        optional: '[0-126]'
+        restart: true
+        unit: INT
+      - defaultValue: '10000'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_performance_point_iostat_volume_size
+        optional: '[0-100000]'
+        restart: true
+        unit: INT
+      - defaultValue: '10000'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_performance_schema_accounts_size
+        optional: '[-1-1048576]'
+        restart: true
+        unit: INT
+      - defaultValue: 'ON'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: loose_performance_schema_consumer_events_stages_current
+        optional: '[OFF|ON]'
+        restart: false
+        unit: STRING
+      - defaultValue: 'ON'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: loose_performance_schema_consumer_events_stages_history
+        optional: '[OFF|ON]'
+        restart: false
+        unit: STRING
+      - defaultValue: 'ON'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: loose_performance_schema_consumer_events_stages_history_long
+        optional: '[OFF|ON]'
+        restart: false
+        unit: STRING
+      - defaultValue: '10000'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_performance_schema_digests_size
+        optional: '[-1-1048576]'
+        restart: true
+        unit: INT
+      - defaultValue: '0'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_performance_schema_events_stages_history_long_size
+        optional: '[-1-1048576]'
+        restart: true
+        unit: INT
+      - defaultValue: '0'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_performance_schema_events_stages_history_size
+        optional: '[-1-1024]'
+        restart: true
+        unit: INT
+      - defaultValue: '0'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_performance_schema_events_statements_history_long_size
+        optional: '[-1-1048576]'
+        restart: true
+        unit: INT
+      - defaultValue: '0'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_performance_schema_events_statements_history_size
+        optional: '[-1-1024]'
+        restart: true
+        unit: INT
+      - defaultValue: '0'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_performance_schema_events_transactions_history_long_size
+        optional: '[-1-1048576]'
+        restart: true
+        unit: INT
+      - defaultValue: '0'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_performance_schema_events_transactions_history_size
+        optional: '[-1-1024]'
+        restart: true
+        unit: INT
+      - defaultValue: '0'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_performance_schema_events_waits_history_long_size
+        optional: '[-1-1048576]'
+        restart: true
+        unit: INT
+      - defaultValue: '0'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_performance_schema_events_waits_history_size
+        optional: '[-1-1024]'
+        restart: true
+        unit: INT
+      - defaultValue: '10000'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_performance_schema_hosts_size
+        optional: '[-1-1048576]'
+        restart: true
+        unit: INT
+      - defaultValue: '''%%%%=OFF'''
+        divisibilityFactor: 0
+        mode: readwrite
+        name: performance_schema_instrument
+        optional: .*
+        restart: true
+        unit: STRING
+      - defaultValue: '''wait/lock/metadata/sql/mdl=ON'''
+        divisibilityFactor: 0
+        mode: readwrite
+        name: loose_performance_schema_instrument
+        optional: .*
+        restart: true
+        unit: STRING
+      - defaultValue: '''memory/%%%%=COUNTED'''
+        divisibilityFactor: 0
+        mode: readwrite
+        name: loose_performance_schema_instrument
+        optional: .*
+        restart: true
+        unit: STRING
+      - defaultValue: '0'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_performance_schema_max_cond_classes
+        optional: '[0-256]'
+        restart: true
+        unit: INT
+      - defaultValue: '10000'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_performance_schema_max_cond_instances
+        optional: '[-1-1048576]'
+        restart: true
+        unit: INT
+      - defaultValue: '0'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_performance_schema_max_digest_length
+        optional: '[0-1048576]'
+        restart: true
+        unit: INT
+      - defaultValue: '0'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_performance_schema_max_file_classes
+        optional: '[0-256]'
+        restart: true
+        unit: INT
+      - defaultValue: '0'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_performance_schema_max_file_handles
+        optional: '[-1-32768]'
+        restart: true
+        unit: INT
+      - defaultValue: '1000'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_performance_schema_max_file_instances
+        optional: '[-1-1048576]'
+        restart: true
+        unit: INT
+      - defaultValue: '10000'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_performance_schema_max_index_stat
+        optional: '[-1-1048576]'
+        restart: true
+        unit: INT
+      - defaultValue: '0'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_performance_schema_max_memory_classes
+        optional: '[0-1024]'
+        restart: true
+        unit: INT
+      - defaultValue: '10000'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_performance_schema_max_metadata_locks
+        optional: '[-1-1048576]'
+        restart: true
+        unit: INT
+      - defaultValue: '0'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_performance_schema_max_mutex_classes
+        optional: '[0-256]'
+        restart: true
+        unit: INT
+      - defaultValue: '10000'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_performance_schema_max_mutex_instances
+        optional: '[-1-104857600]'
+        restart: true
+        unit: INT
+      - defaultValue: '1000'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_performance_schema_max_prepared_statements_instances
+        optional: '[-1-4194304]'
+        restart: true
+        unit: INT
+      - defaultValue: '10000'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_performance_schema_max_program_instances
+        optional: '[-1-1048576]'
+        restart: true
+        unit: INT
+      - defaultValue: '0'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_performance_schema_max_rwlock_classes
+        optional: '[0-256]'
+        restart: true
+        unit: INT
+      - defaultValue: '10000'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_performance_schema_max_rwlock_instances
+        optional: '[-1-104857600]'
+        restart: true
+        unit: INT
+      - defaultValue: '0'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_performance_schema_max_socket_classes
+        optional: '[0-256]'
+        restart: true
+        unit: INT
+      - defaultValue: '1000'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_performance_schema_max_socket_instances
+        optional: '[-1-1048576]'
+        restart: true
+        unit: INT
+      - defaultValue: '0'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_performance_schema_max_sql_text_length
+        optional: '[0-1048576]'
+        restart: true
+        unit: INT
+      - defaultValue: '0'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_performance_schema_max_stage_classes
+        optional: '[0-256]'
+        restart: true
+        unit: INT
+      - defaultValue: '0'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_performance_schema_max_statement_classes
+        optional: '[0-256]'
+        restart: true
+        unit: INT
+      - defaultValue: '1'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_performance_schema_max_statement_stack
+        optional: '[0-256]'
+        restart: true
+        unit: INT
+      - defaultValue: '10000'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_performance_schema_max_table_handles
+        optional: '[-1-1048576]'
+        restart: true
+        unit: INT
+      - defaultValue: '1000'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_performance_schema_max_table_instances
+        optional: '[-1-1048576]'
+        restart: true
+        unit: INT
+      - defaultValue: '10000'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_performance_schema_max_table_lock_stat
+        optional: '[-1-1048576]'
+        restart: true
+        unit: INT
+      - defaultValue: '0'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_performance_schema_max_thread_classes
+        optional: '[0-256]'
+        restart: true
+        unit: INT
+      - defaultValue: '10000'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_performance_schema_max_thread_instances
+        optional: '[-1-1048576]'
+        restart: true
+        unit: INT
+      - defaultValue: '0'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_performance_schema_session_connect_attrs_size
+        optional: '[-1-1048576]'
+        restart: true
+        unit: INT
+      - defaultValue: '10000'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_performance_schema_setup_actors_size
+        optional: '[-1-1048576]'
+        restart: true
+        unit: INT
+      - defaultValue: '10000'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_performance_schema_setup_objects_size
+        optional: '[-1-1048576]'
+        restart: true
+        unit: INT
+      - defaultValue: '10000'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_performance_schema_users_size
+        optional: '[-1-1048576]'
+        restart: true
+        unit: INT
+      - defaultValue: ''
+        divisibilityFactor: 0
+        mode: readwrite
+        name: slave_type_conversions
+        optional: '[s*|ALL_LOSSY|ALL_NON_LOSSY|ALL_SIGNED|ALL_UNSIGNED]'
+        restart: true
+        unit: STRING
+      - defaultValue: 'ON'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: binlog_rows_query_key_content
+        optional: '[ON|OFF]'
+        restart: true
+        unit: STRING
+      - defaultValue: '4'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: consensus_io_thread_cnt
+        optional: .*
+        restart: true
+        unit: INT
+      - defaultValue: '100000'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: consensus_new_follower_threshold
+        optional: .*
+        restart: true
+        unit: INT
+      - defaultValue: 'ON'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: consensus_replicate_with_cache_log
+        optional: .*
+        restart: true
+        unit: STRING
+      - defaultValue: '4'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: consensus_worker_thread_cnt
+        optional: .*
+        restart: true
+        unit: INT
+      - defaultValue: 'OFF'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: enable_appliedindex_checker
+        optional: .*
+        restart: true
+        unit: STRING
+      - defaultValue: 'OFF'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: enforce_gtid_consistency
+        optional: .*
+        restart: true
+        unit: STRING
+      - defaultValue: '0'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: expire_logs_days
+        optional: .*
+        restart: true
+        unit: INT
+      - defaultValue: 'OFF'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: gtid_mode
+        optional: .*
+        restart: true
+        unit: STRING
+      - defaultValue: '8388608'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: innodb_log_buffer_size
+        optional: .*
+        restart: true
+        unit: INT
+      - defaultValue: '0'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: io_state_delay_threshold
+        optional: .*
+        restart: true
+        unit: INT
+      - defaultValue: '120'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: io_state_retry_times
+        optional: .*
+        restart: true
+        unit: INT
+      - defaultValue: '16777216'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: key_buffer_size
+        optional: .*
+        restart: true
+        unit: INT
+      - defaultValue: '0'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: kill_idle_transaction
+        optional: .*
+        restart: true
+        unit: INT
+      - defaultValue: 'OFF'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: loose_async_commit
+        optional: .*
+        restart: true
+        unit: STRING
+      - defaultValue: '1'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_boost_pk_access
+        optional: .*
+        restart: true
+        unit: INT
+      - defaultValue: 'OFF'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: loose_cluster-learner-node
+        optional: .*
+        restart: true
+        unit: STRING
+      - defaultValue: 'OFF'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: loose_cluster-log-type-node
+        optional: .*
+        restart: true
+        unit: STRING
+      - defaultValue: 'ON'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: loose_cluster-mts-recover-use-index
+        optional: .*
+        restart: true
+        unit: STRING
+      - defaultValue: '1'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_commit_lock_done_count
+        optional: .*
+        restart: true
+        unit: INT
+      - defaultValue: '10000'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_consensus_election_timeout
+        optional: .*
+        restart: true
+        unit: INT
+      - defaultValue: '1'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_consensus_heartbeat_thread_cnt
+        optional: .*
+        restart: true
+        unit: INT
+      - defaultValue: 'ON'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: loose_consensus_large_trx
+        optional: .*
+        restart: true
+        unit: STRING
+      - defaultValue: '10000'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_consensus_max_delay_index
+        optional: .*
+        restart: true
+        unit: INT
+      - defaultValue: '5000'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_consensus_min_delay_index
+        optional: .*
+        restart: true
+        unit: INT
+      - defaultValue: 'ON'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: loose_consensus_optimistic_heartbeat
+        optional: .*
+        restart: true
+        unit: STRING
+      - defaultValue: '1'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_enable_gts
+        optional: '[0|1]'
+        restart: true
+        unit: STRING
+      - defaultValue: '0'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_expire_logs_days
+        optional: .*
+        restart: true
+        unit: INT
+      - defaultValue: '2000'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_gts_lease
+        optional: '[0-2147483647]'
+        restart: true
+        unit: INT
+      - defaultValue: PERSIST
+        divisibilityFactor: 0
+        mode: readwrite
+        name: loose_innodb_csn_mode
+        optional: .*
+        restart: true
+        unit: STRING
+      - defaultValue: '5000'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_innodb_prepare_wait_timeout
+        optional: '[0-2147483647]'
+        restart: true
+        unit: INT
+      - defaultValue: '1800000'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_innodb_purge_history
+        optional: '[0-2147483647]'
+        restart: true
+        unit: INT
+      - defaultValue: '1'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_io_state
+        optional: .*
+        restart: true
+        unit: INT
+      - defaultValue: '1'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_log_slave_updates
+        optional: .*
+        restart: true
+        unit: INT
+      - defaultValue: wait/lock/metadata/sql/mdl=ON
+        divisibilityFactor: 0
+        mode: readwrite
+        name: loose_performance-schema-instrument
+        optional: .*
+        restart: true
+        unit: STRING
+      - defaultValue: '16777216'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_polarx_max_allowed_packet
+        optional: '[0-2147483647]'
+        restart: true
+        unit: INT
+      - defaultValue: 'ON'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: loose_relay_log_purge
+        optional: .*
+        restart: true
+        unit: STRING
+      - defaultValue: '0'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_relay_log_recovery
+        optional: .*
+        restart: true
+        unit: INT
+      - defaultValue: 'OFF'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: loose_replicate-same-server-id
+        optional: .*
+        restart: true
+        unit: STRING
+      - defaultValue: '3000'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: loose_replica_read_timeout
+        optional: '[0-2147483647]'
+        restart: true
+        unit: INT
+      - defaultValue: 'OFF'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: loose_rotate_log_table
+        optional: .*
+        restart: true
+        unit: STRING
+      - defaultValue: 'OFF'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: loose_skip_slave_start
+        optional: .*
+        restart: true
+        unit: STRING
+      - defaultValue: TABLE
+        divisibilityFactor: 0
+        mode: readwrite
+        name: loose_slave_pr_mode
+        optional: .*
+        restart: true
+        unit: STRING
+      - defaultValue: one-thread-per-connection
+        divisibilityFactor: 0
+        mode: readwrite
+        name: loose_thread_handling
+        optional: .*
+        restart: true
+        unit: STRING
+      - defaultValue: '442368'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: read_rnd_buffer_size
+        optional: .*
+        restart: true
+        unit: INT
+      - defaultValue: 'ON'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: relay_log_purge
+        optional: .*
+        restart: true
+        unit: STRING
+      - defaultValue: 'OFF'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: replicate-same-server-id
+        optional: .*
+        restart: true
+        unit: STRING
+      - defaultValue: 'OFF'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: skip_slave_start
+        optional: .*
+        restart: true
+        unit: STRING
+      - defaultValue: '1073741824'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: slave_pending_jobs_size_max
+        optional: .*
+        restart: true
+        unit: INT
+      - defaultValue: 'ON'
+        divisibilityFactor: 0
+        mode: readwrite
+        name: slave_sql_verify_checksum
+        optional: .*
+        restart: true
+        unit: STRING
+      - defaultValue: '1'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: sync_binlog
+        optional: .*
+        restart: true
+        unit: INT
+      - defaultValue: '1'
+        divisibilityFactor: 1
+        mode: readwrite
+        name: sync_relay_log
+        optional: .*
+        restart: true
+        unit: INT
+      - defaultValue: one-thread-per-connection
+        divisibilityFactor: 0
+        mode: readwrite
+        name: thread_handling
+        optional: .*
+        restart: true
+        unit: STRING

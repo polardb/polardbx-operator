@@ -13,6 +13,8 @@ func GetClientActionBySinkType(sinkType string) Action {
 		return DownloadOss
 	case config.SinkTypeSftp:
 		return DownloadSsh
+	case config.SinkTypeMinio:
+		return DownloadMinio
 	}
 	return InvalidAction
 }

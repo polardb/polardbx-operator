@@ -18,6 +18,7 @@ package polardbxcluster
 
 import (
 	"context"
+	"github.com/alibaba/polardbx-operator/api/v1/common"
 	"k8s.io/apimachinery/pkg/util/rand"
 
 	corev1 "k8s.io/api/core/v1"
@@ -47,6 +48,12 @@ func (d *PolarDBXClusterV1Defaulter) Default(ctx context.Context, obj runtime.Ob
 	}
 	if polardbx.Spec.ProtocolVersion.String() == "8" {
 		polardbx.Spec.ProtocolVersion = intstr.FromString("8.0")
+	}
+	if polardbx.Annotations == nil {
+		polardbx.Annotations = map[string]string{}
+	}
+	if _, ok := polardbx.Annotations[common.AnnotationOperatorCreateVersion]; !ok {
+		polardbx.Annotations[common.AnnotationOperatorCreateVersion] = d.configLoader().OperatorVersion
 	}
 
 	if polardbx.Spec.Config.CN.Static != nil {
@@ -78,6 +85,13 @@ func (d *PolarDBXClusterV1Defaulter) Default(ctx context.Context, obj runtime.Ob
 	}
 	if nodes.DN.Template.Engine == "" {
 		nodes.DN.Template.Engine = d.configLoader().StorageEngine
+	}
+	if nodes.CDC != nil {
+		for _, group := range nodes.CDC.Groups {
+			if group.Template == nil {
+				group.Template = &polardbx.Spec.Topology.Nodes.CDC.Template
+			}
+		}
 	}
 
 	// Readonly cluster initialization list

@@ -14,7 +14,10 @@ images:
   polardbxJob: polardbx-job
 
 # Default image tag. Use app version if not specified or 'latest' if useLatestImage is true.
-imageTag: v1.4.1
+imageTag: v1.5.0-beta
+
+# version will be written to pxc and xstore annotation 
+version: v1.5.0-beta
 
 # Uses the latest images for operator components.
 useLatestImage: false
@@ -99,6 +102,13 @@ hostPathFileService:
   fsBufferSize: 2097152 # 2MB
   sinks:
     - name: default
+      type: s3
+      minioEndpoint: xxx
+      minioAccessKey: xxx
+      minioSecretKey: xxxxx
+      minioBucket: xxx
+      useSSL: false
+    - name: default
       type: oss
       endpoint: xxx
       accessKey: xxx
@@ -111,9 +121,9 @@ hostPathFileService:
       user: admin
       password: xxxx
       rootPath: /xxx
-  
-  
-  
+
+
+
   resources:
     requests:
       cpu: 100m

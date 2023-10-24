@@ -202,6 +202,9 @@ func Do() {
 	defer db.Close()
 	fmt.Println("Connected to metadb!")
 
+	deleteStmt := fmt.Sprintf(`DELETE FROM  server_info where extras = '%s' and inst_id = '%s' limit 1`, env.PodId, env.InstanceID)
+	fmt.Println("try clean dirty server info record sql = " + deleteStmt)
+
 	fmt.Printf("Try self-registration, register %s:%d to metadb...\n", env.LocalIP, env.ServerPort)
 	stmt := fmt.Sprintf(`REPLACE INTO server_info 
 		(inst_id, inst_type, ip, port, htap_port, mgr_port, mpp_port, status, cpu_core, mem_size, extras) 
@@ -217,6 +220,11 @@ func Do() {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		fmt.Println("Error when begin transaction: " + err.Error())
+		os.Exit(-1)
+	}
+
+	if _, err := tx.ExecContext(ctx, deleteStmt); err != nil {
+		fmt.Println("Error when clean dirty server info record")
 		os.Exit(-1)
 	}
 

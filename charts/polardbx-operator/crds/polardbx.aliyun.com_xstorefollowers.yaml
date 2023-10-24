@@ -82,10 +82,6 @@ spec:
                 description: CurrentJobTask represents the task name of the current
                   job
                 type: string
-              electionWeight:
-                description: ElectionWeight represents the election weight of target
-                  pod
-                type: integer
               flowFlags:
                 description: FlowFlags represent flow flags
                 items:

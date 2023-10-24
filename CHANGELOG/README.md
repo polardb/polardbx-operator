@@ -1,5 +1,22 @@
 # Changelog
 
+## 2023-10-24
+
+Release v1.5.0-beta
+
++ Enhancement & New Features
+  + Support PolarDB-X Standard(XStore) dashboard
+  + Remove *Cluster IP*  dependency on the paxos communication improving some performance
+  + Support cross-cluster point-in-time recovery(PITR)
+  + Support collecting DN logs including sql, error, slow logs
+  + Support uploading and downloading backupset by Simple Storage Service (S3)
++ Bug Fix
+  + Fix failing to delete the cluster when its gms is not available
+  + Fix failing to delele rebuild job when the *fromPod* does not exist
+  + Fix disk util alert issue. [#21](https://github.com/polardb/polardbx-operator/issues/21)
+  + Fix helm template issue when set tolerations. [#25](https://github.com/polardb/polardbx-operator/issues/25)
+  + Fix failing to create backup when *serviceName* of PolarDBXCluster differs from its *name*
+
 ## 2023-04-12
 
 Release v1.4.1

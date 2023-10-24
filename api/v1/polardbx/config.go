@@ -24,7 +24,8 @@ import (
 type CNStaticConfig struct {
 	AttendHtap bool `json:"AttendHtap,omitempty"`
 	// +kubebuilder:default=true
-	EnableCoroutine      bool                          `json:"EnableCoroutine,omitempty"`
+	// +optional
+	EnableCoroutine      bool                          `json:"EnableCoroutine"`
 	EnableReplicaRead    bool                          `json:"EnableReplicaRead,omitempty"`
 	EnableJvmRemoteDebug bool                          `json:"EnableJvmRemoteDebug,omitempty"`
 	ServerProperties     map[string]intstr.IntOrString `json:"ServerProperties,omitempty"`

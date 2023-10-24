@@ -18,14 +18,16 @@ package instance
 
 import (
 	"fmt"
-	"k8s.io/apimachinery/pkg/types"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/alibaba/polardbx-operator/pkg/meta/core/gms/security"
+	"k8s.io/apimachinery/pkg/types"
+	ctrl "sigs.k8s.io/controller-runtime"
 
 	xstoremeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/meta"
 
@@ -699,6 +701,57 @@ var CreateOrReconcileColumnars = polardbxv1reconcile.NewStepBinder("CreateOrReco
 	},
 )
 
+var SyncReadonlyDnStorageInfo = polardbxv1reconcile.NewStepBinder("SyncReadonlyDnStorageInfo",
+	func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+		polardbx := rc.MustGetPolarDBX()
+		if !polardbx.Spec.Readonly {
+			return flow.Pass()
+		}
+		// check lastest create time of dn readonly pod
+		dnPods, err := rc.GetPods(polardbxmeta.RoleDN)
+		if err != nil {
+			return flow.RetryErr(err, "failed to get dn pods")
+		}
+		expectedStorageNodes := make([]gms.StorageNodeInfo, 0, len(dnPods))
+		for _, pod := range dnPods {
+			if pod.DeletionTimestamp.IsZero() && pod.Status.PodIP != "" {
+				accessPort := k8shelper.MustGetPortFromContainer(
+					k8shelper.MustGetContainerFromPod(&pod, convention.ContainerEngine),
+					convention.PortAccess,
+				).ContainerPort
+				polarxPort := k8shelper.MustGetPortFromContainer(
+					k8shelper.MustGetContainerFromPod(&pod, convention.ContainerEngine),
+					"polarx",
+				).ContainerPort
+				expectedStorageNodes = append(expectedStorageNodes, gms.StorageNodeInfo{
+					ClusterId:     pod.Labels[polardbxmeta.LabelName],
+					Id:            pod.Labels[xstoremeta.LabelName],
+					IsVip:         gms.IsNotVip,
+					Host:          pod.Status.PodIP,
+					Port:          accessPort,
+					XProtocolPort: polarxPort,
+				})
+			}
+		}
+		hash, err := security.HashObj(expectedStorageNodes)
+		if err != nil {
+			return flow.RetryErr(err, "failed to hash expectedStorageNodes")
+		}
+		if polardbx.Status.ReadonlyStorageInfoHash != hash {
+			gmsManager, err := rc.GetPolarDBXGMSManager()
+			if err != nil {
+				return flow.RetryErr(err, "failed to get gms manager")
+			}
+			err = gmsManager.UpdateRoStorageNodes(expectedStorageNodes...)
+			if err != nil {
+				return flow.RetryErr(err, "failed to update ro storage nodes")
+			}
+			polardbx.Status.ReadonlyStorageInfoHash = hash
+		}
+		return flow.Continue("SyncReadonlyDnStorageInfo success")
+	},
+)
+
 func isXStoreReady(xstore *polardbxv1.XStore) bool {
 	return xstore.Status.ObservedGeneration == xstore.Generation &&
 		xstore.Status.Phase == polardbxv1xstore.PhaseRunning
@@ -875,7 +928,13 @@ var WaitUntilCDCPodsStable = polardbxv1reconcile.NewStepBinder("WaitUntilCDCPods
 		cdcTemplate := polardbx.Status.SpecSnapshot.Topology.Nodes.CDC
 		cdcReplicas := 0
 		if cdcTemplate != nil {
-			cdcReplicas = int(cdcTemplate.Replicas + cdcTemplate.XReplicas)
+			cdcReplicas = int(cdcTemplate.Replicas.IntValue() + cdcTemplate.XReplicas)
+		}
+		cdcNodes := polardbx.Spec.Topology.Nodes.CDC
+		if cdcNodes != nil {
+			for _, group := range cdcNodes.Groups {
+				cdcReplicas = cdcReplicas + int(group.Replicas)
+			}
 		}
 		if len(unFinalizedPodsSize) == cdcReplicas {
 			return flow.Pass()
@@ -952,8 +1011,56 @@ var TrySyncCnLabelToPodsDirectly = polardbxv1reconcile.NewStepBinder("TrySyncCnL
 				if err := rc.Client().Update(rc.Context(), &pod); err != nil {
 					return flow.RetryErr(err, "Failed to Update pod for polardbx/enableAuditLog")
 				}
+				changedCount++
 			}
 		}
 		return flow.Continue(" CN Deployment labels are synced", "count", changedCount)
+	},
+)
+
+// add or set label 'enableAuditLog' to all dn pods according to pxc's spec.config.dn
+var TrySyncDnLabelToPodsDirectly = polardbxv1reconcile.NewStepBinder("TrySyncDnLabelToPodsDirectly",
+	func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+		changedCount := 0
+		dnPods, err := rc.GetPods(polardbxmeta.RoleDN)
+		if err != nil {
+			return flow.Error(err, "Failed to Get Dn Pods")
+		}
+		for _, pod := range dnPods {
+			if pod.Labels[polardbxmeta.LabelAuditLog] != strconv.FormatBool(rc.MustGetPolarDBX().Spec.Config.DN.EnableAuditLog) {
+				pod.SetLabels(k8shelper.PatchLabels(pod.Labels, map[string]string{
+					polardbxmeta.LabelAuditLog: strconv.FormatBool(rc.MustGetPolarDBX().Spec.Config.DN.EnableAuditLog),
+				}))
+				if err := rc.Client().Update(rc.Context(), &pod); err != nil {
+					return flow.RetryErr(err, "Failed to Update pod for polardbx/enableAuditLog")
+				}
+				changedCount++
+			}
+		}
+		return flow.Continue(" DN labels are synced", "count", changedCount)
+	},
+)
+
+// GMS actually use DN's config, so this function adds/sets label 'enableAuditLog' to all gms pods according to pxc's spec.config.dn .
+// This step is not merged into TrySyncDnLabelToPodsDirectly to make the logic clear.
+var TrySyncGMSLabelToPodsDirectly = polardbxv1reconcile.NewStepBinder("TrySyncGMSLabelToPodsDirectly",
+	func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+		changedCount := 0
+		gmsPods, err := rc.GetPods(polardbxmeta.RoleGMS)
+		if err != nil {
+			return flow.Error(err, "Failed to Get GMS Pods")
+		}
+		for _, pod := range gmsPods {
+			if pod.Labels[polardbxmeta.LabelAuditLog] != strconv.FormatBool(rc.MustGetPolarDBX().Spec.Config.DN.EnableAuditLog) {
+				pod.SetLabels(k8shelper.PatchLabels(pod.Labels, map[string]string{
+					polardbxmeta.LabelAuditLog: strconv.FormatBool(rc.MustGetPolarDBX().Spec.Config.DN.EnableAuditLog),
+				}))
+				if err := rc.Client().Update(rc.Context(), &pod); err != nil {
+					return flow.RetryErr(err, "Failed to Update pod for polardbx/enableAuditLog")
+				}
+				changedCount++
+			}
+		}
+		return flow.Continue(" GMS labels are synced", "count", changedCount)
 	},
 )

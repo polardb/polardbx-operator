@@ -904,6 +904,20 @@ func (meta *manager) EnableStorageNodes(storageNodes ...StorageNodeInfo) error {
 	return meta.ExecuteStatementsAndNotify(stmt, notifyStmt)
 }
 
+func (meta *manager) UpdateRoStorageNodes(storageNodes ...StorageNodeInfo) error {
+	if len(storageNodes) == 0 {
+		return nil
+	}
+	stmts := make([]string, 0)
+	for _, storageNode := range storageNodes {
+		stmts = append(stmts, meta.newUpdateRoStorageInfoStmt(storageNode))
+	}
+	stmts = append(stmts, meta.newNotifyStmt(fmt.Sprintf(clStorageInfoDataIdFormat, meta.getClusterID())))
+
+	// Execute the statement
+	return meta.ExecuteStatementsAndNotify(stmts...)
+}
+
 func (s *StorageNodeInfo) toSelectCriteria() string {
 	return fmt.Sprintf("(storage_inst_id = '%s')", s.Id)
 }
@@ -1161,6 +1175,14 @@ func (schema *userPrivSchema) toInsertValue() string {
 
 func (meta *manager) newNotifyStmt(dataId string) string {
 	return fmt.Sprintf(`UPDATE config_listener SET op_version = op_version + 1 WHERE data_id = '%s'`, dataId)
+}
+
+func (meta *manager) newUpdateRoStorageInfoStmt(record StorageNodeInfo) string {
+	return fmt.Sprintf(` 
+        update storage_info 
+                    set ip = '%s', port = %d, xport = %d, gmt_modified = now() 
+        where 
+              storage_inst_id = '%s' and inst_id = '%s' and inst_kind = 1 and is_vip = 0`, record.Host, record.Port, record.XProtocolPort, record.Id, record.ClusterId)
 }
 
 func (meta *manager) CreateDBAccount(user, passwd string, grantOptions ...*GrantOption) error {
