@@ -541,7 +541,7 @@ func (e *Expectation) ExpectCDCDeploymentsOk() {
 	e.ExpectOwnerReferenceCorrect(common.GetObjectList(deployments)...)
 
 	cdcNode := e.obj.Spec.Topology.Nodes.CDC
-	if cdcNode == nil || cdcNode.Replicas == 0 {
+	if cdcNode == nil || cdcNode.Replicas.IntValue() == 0 {
 		gomega.Expect(deployments).To(gomega.BeEmpty(), "cdc not defined or replicas is 0, should be empty")
 		return
 	}
@@ -550,7 +550,7 @@ func (e *Expectation) ExpectCDCDeploymentsOk() {
 
 	nodeSelectors := e.obj.Spec.Topology.Rules.Selectors
 	cdcRules := e.obj.Spec.Topology.Rules.Components.CDC
-	replicas := cdcNode.Replicas
+	replicas := cdcNode.Replicas.IntValue()
 	template := cdcNode.Template
 
 	e.expectDeploymentsMatchesRulesAndReplicas(deployments, nodeSelectors, cdcRules, int(replicas), "cdc")
@@ -882,13 +882,14 @@ func (e *Expectation) ExpectServiceMonitorsOK() {
 	gomega.Expect(items).NotTo(gomega.BeEmpty(), "no ServiceMonitor found")
 	monitorsByRole := common.MapObjectsFromObjectListByLabel(items, "polardbx/role")
 
-	gomega.Expect(monitorsByRole).To(gomega.HaveLen(4), "must be 4 servicemonitors for all role")
+	gomega.Expect(monitorsByRole).To(gomega.HaveLen(5), "must be 5 servicemonitors for all role")
 
-	framework.ExpectHaveKeys(monitorsByRole, "cn", "dn", "gms", "cdc")
+	framework.ExpectHaveKeys(monitorsByRole, "cn", "dn", "gms", "cdc", "columnar")
 	gomega.Expect(monitorsByRole["cn"]).To(gomega.HaveLen(1), "must be 1 cn servicemonitor")
 	gomega.Expect(monitorsByRole["cdc"]).To(gomega.HaveLen(1), "must be 1 cdc servicemonitor")
 	gomega.Expect(monitorsByRole["dn"]).To(gomega.HaveLen(1), "must be 1 dn servicemonitor")
 	gomega.Expect(monitorsByRole["gms"]).To(gomega.HaveLen(1), "must be 1 gms servicemonitor")
+	gomega.Expect(monitorsByRole["columnar"]).To(gomega.HaveLen(1), "must be 1 columnar servicemonitor")
 
 	monitorInterval := fmt.Sprintf("%.0fs", monitor.Spec.MonitorInterval.Seconds())
 	scrapeTimeout := fmt.Sprintf("%.0fs", monitor.Spec.ScrapeTimeout.Seconds())

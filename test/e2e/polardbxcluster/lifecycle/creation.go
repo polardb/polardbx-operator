@@ -18,6 +18,10 @@ package lifecycle
 
 import (
 	polardbxv1 "github.com/alibaba/polardbx-operator/api/v1"
+	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/convention"
+	"github.com/onsi/gomega"
+	v1 "k8s.io/api/apps/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"time"
 
 	polardbxv1polardbx "github.com/alibaba/polardbx-operator/api/v1/polardbx"
@@ -286,4 +290,56 @@ var _ = ginkgo.Describe("[PolarDBXCluster] [Lifecycle:Create]", func() {
 		pxcframework.NewExpectation(f, obj).ExpectAllOk(true)
 		pxcframework.NewExpectation(f, readonlyObj).ExpectAllOk(true)
 	})
+
+	ginkgo.It("cdc group pxc should be created as expected", func() {
+		resources := corev1.ResourceRequirements{
+			Limits: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("2"),
+				corev1.ResourceMemory: resource.MustParse("2Gi"),
+			},
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("100m"),
+				corev1.ResourceMemory: resource.MustParse("100Mi"),
+			},
+		}
+		obj := pxcframework.NewPolarDBXCluster(
+			"e2e-test-create-cdc-group-1",
+			f.Namespace,
+			pxcframework.ProtocolVersion(5),
+			pxcframework.TopologyNode("cn", 1, "", "", false, resources),
+			pxcframework.TopologyNode("dn", 1, "", "", false, resources),
+			pxcframework.TopologyNode("cdc", 1, "", "", false, resources),
+		)
+		cdcGroup := pxcframework.CdcGroup("cdcgroup1", 1, "testenvk", "testenvv")
+		obj.Spec.Topology.Nodes.CDC.Groups = []*polardbxv1polardbx.CdcGroup{
+			&cdcGroup,
+		}
+		// Always run clean up to make sure objects are cleaned.
+		defer DeletePolarDBXClusterAndWaitUntilItDisappear(f, obj, 1*time.Minute)
+
+		// Do create and verify.
+		CreatePolarDBXClusterAndWaitUntilRunningOrFail(f, obj, 10*time.Minute)
+
+		var depoyList v1.DeploymentList
+		framework.ExpectNoError(f.Client.List(f.Ctx, &depoyList, client.MatchingLabels{
+			"polardbx/name":  "e2e-test-create-cdc-group-1",
+			"polardbx/group": "cdcgroup1",
+		}), obj)
+		gomega.Expect(len(depoyList.Items)).Should(gomega.BeEquivalentTo(1))
+		deploy := depoyList.Items[0]
+		var hasTargetEnv bool
+		for _, container := range deploy.Spec.Template.Spec.Containers {
+			if container.Name == convention.ContainerEngine {
+				for _, envKv := range container.Env {
+					if envKv.Name == "testenvk" && envKv.Value == "testenvv" {
+						hasTargetEnv = true
+						break
+					}
+				}
+				break
+			}
+		}
+		gomega.Expect(hasTargetEnv).Should(gomega.BeEquivalentTo(true))
+	})
+
 })

@@ -18,7 +18,9 @@ package controllers
 
 import (
 	"context"
+	"errors"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/steps/instance/pitr"
+	polarxJson "github.com/alibaba/polardbx-operator/pkg/util/json"
 	"time"
 
 	"github.com/alibaba/polardbx-operator/pkg/operator/hint"
@@ -64,7 +66,12 @@ type PolarDBXReconciler struct {
 
 func (r *PolarDBXReconciler) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	log := r.Logger.WithValues("namespace", request.Namespace, "polardbxcluster", request.Name)
-
+	defer func() {
+		err := recover()
+		if err != nil {
+			log.Error(errors.New(polarxJson.Convert2JsonString(err)), "")
+		}
+	}()
 	if hint.IsNamespacePaused(request.Namespace) {
 		log.Info("Reconciling is paused, skip")
 		return reconcile.Result{}, nil
@@ -257,9 +264,16 @@ func (r *PolarDBXReconciler) newReconcileTask(rc *polardbxreconcile.Context, pol
 		//sync cn label to pod without rebuild pod
 		instancesteps.TrySyncCnLabelToPodsDirectly(task)
 
+		//sync dn label to pod without rebuild pod
+		instancesteps.TrySyncDnLabelToPodsDirectly(task)
+
+		//sync gms label to pod without rebuild pod
+		instancesteps.TrySyncGMSLabelToPodsDirectly(task)
+
 		// Update snapshot and observed generation.
 		commonsteps.UpdateSnapshotAndObservedGeneration(task)
 		instancesteps.SyncDnReplicasAndCheckControllerRef(task)
+		instancesteps.SyncReadonlyDnStorageInfo(task)
 	case polardbxv1polardbx.PhaseUpgrading:
 		// Update storage size and configs.
 		control.Block(

@@ -219,7 +219,7 @@ class GalaxyEngine(EngineCommon):
             'loose_rds_audit_log_buffer_size': dynamic_config["loose_rds_audit_log_buffer_size"],
             'max_connections': dynamic_config["max_connections"],
             'max_user_connections': dynamic_config["max_user_connections"],
-            'mysqlx_max_connections': dynamic_config["mysqlx_max_connections"],
+            'loose_mysqlx_max_connections': dynamic_config["mysqlx_max_connections"],
             'loose_galaxy_max_connections': dynamic_config["loose_galaxy_max_connections"],
             'default_time_zone': '+08:00',
             'loose_new_rpc': self.new_rpc_enabled,
@@ -252,9 +252,16 @@ class GalaxyEngine(EngineCommon):
         return True
 
     def _reset_cluster_info(self, learner, local=False):
+        cluster_info = self._get_cluster_info(learner=learner, local=local)
+        pod_info = self.context.pod_info()
+        if pod_info.annotation(convention.ANNOTATION_FLUSH_LOCAL) == "true":
+            if learner:
+                cluster_info = '%s:%s' % (self.context.env().get("POD_IP"), self.context.env().get("PORT_PAXOS"))
+            if local:
+                cluster_info = '%s:%s@1' % (self.context.env().get("POD_IP"), self.context.env().get("PORT_PAXOS"))
         args = {
             'cluster-force-change-meta': 'ON',
-            'loose-cluster-info': self._get_cluster_info(learner=learner, local=local),
+            'loose-cluster-info': cluster_info,
             'user': 'mysql',
         }
         if learner:

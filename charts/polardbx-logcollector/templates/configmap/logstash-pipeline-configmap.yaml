@@ -8,59 +8,164 @@ data:
     }
 
     filter {
+      if [fields][log_type] in ["cn_sql_log","cn_slow_log"] {
+        polardbx {
+        }
+        date{
+          match => ["timestamp", "UNIX_MS","ISO8601"]
+          timezone => "{{ .Values.logstash.timezone.name }}"
+        }
 
-        if [fields][log_type] in ["cn_sql_log","cn_slow_log"] {
+        mutate{
+          remove_field => ["event", "timestamp","[message][begin_time]","[message][timestamp]"]
+          add_field => { "[@metadata][target_index]" => "%{[fields][log_type]}-%{+YYYY.MM.dd}" }
+        }
 
-            polardbx {
-            }
-            date{
-              match => ["timestamp", "UNIX_MS","ISO8601"]
-              timezone => "{{ .Values.logstash.timezone.name }}"
-            }
+      } else if [fields][log_type] == "cn_tddl_log" {
+        grok{
+          match =>  { "message" => "%{TIMESTAMP_ISO8601:timestamp} \[%{DATA:thread}\] %{LOGLEVEL:loglevel} %{DATA:logger} - %{JAVALOGMESSAGE:messagetmp}" }
+        }
+        date{
+          match => ["timestamp","ISO8601"]
+          timezone => "{{ .Values.logstash.timezone.name }}"
+        }
+        mutate{
+            remove_field => ["event","timestamp"]
+            rename => {"messagetmp" => "message"}
+            add_field => { "[@metadata][target_index]" => "%{[fields][log_type]}-%{+YYYY.MM.dd}" }
+        }
+        
+      } else if [fields][log_type] == "dn_audit_log" {
+        ruby {
+          code => '
+            fields = ["version", "thread_id", "host_or_ip", "user", "db", "start_utime", "transaction_utime", "error_code", "time_cost_us", "send_rows", "updated_rows", "examined_rows", "memory_used", "memory_used_by_query", "logical_read", "physical_sync_read", "physical_async_read", "temp_user_table_size", "temp_sort_table_size", "temp_sort_file_size", "sql_command", "is_super", "lock_wait_time_us", "log_message"]
+            parts = event.get("message").split("\t",24)
+            parts[-1] = parts[-1].chomp("\u0001")
+            fields.each_with_index do |field, index|
+              event.set(field, parts[index])
+            end
+            event.set("timestamp_ms", event.get("start_utime").to_i / 1000 )
+          '
+        }
+        mutate {
+          convert => {
+            "thread_id" => "integer"
+            "start_utime" => "integer"
+            "transaction_utime" => "integer"
+            "error_code" => "integer"
+            "time_cost_us" => "integer"
+            "send_rows" => "integer"
+            "updated_rows" => "integer"
+            "examined_rows" => "integer"
+            "memory_used" => "integer"
+            "memory_used_by_query" => "integer"
+            "logical_read" => "integer"
+            "physical_sync_read" => "integer"
+            "physical_async_read" => "integer"
+            "temp_user_table_size" => "integer"
+            "temp_sort_table_size" => "integer"
+            "temp_sort_file_size" => "integer"
+            "sql_command" => "integer"
+            "is_super" => "integer"
+            "lock_wait_time_us" => "integer"
+          }
+        }
+        date {
+          match => ["timestamp_ms", "UNIX_MS"]
+          timezone => "Asia/Shanghai"
+          target => "@timestamp"
+        }
+        if "_mutate_error" not in [tags] and "_rubyexception" not in [tags] and "_dateparsefailure" not in [tags] {
+          mutate {
+            remove_field => ["message","timestamp_ms"]
+          }
+        }
+        mutate{
+          remove_field => ["event"]
+          add_field => { "[@metadata][target_index]" => "%{[fields][log_type]}-%{+YYYY.MM.dd}" }
+        }
 
-            mutate{
-              remove_field => ["event", "timestamp","[message][begin_time]","[message][timestamp]"]
-              add_field => { "[@metadata][target_index]" => "%{[fields][log_type]}-%{+YYYY.MM.dd}" }
-            }
+      } else if [fields][log_type] == "dn_slow_log" {
+        csv {
+          columns => ["start_time","user_host", "query_time_us", "lock_time_us", "rows_sent", "rows_examined", "db", "last_insert_id", "insert_id", "server_id", "sql_text", "thread_id"]
+          convert => {
+            "rows_sent" => "integer"
+            "rows_examined" => "integer"
+            "last_insert_id" => "integer"
+            "insert_id" => "integer"
+            "server_id" => "integer"
+            "thread_id" => "integer"
+          }
+        }
+        date {
+          match => ["start_time", "yyyy-MM-dd HH:mm:ss.SSSSSS", "ISO8601"]
+          timezone => "{{ .Values.logstash.timezone.name }}"
+          target => "@timestamp"
+        }
+        ruby{
+          code => "
+            require 'time'; 
+            def time_to_us(str)
+                h, m, s_us = str.split(':')
+                s, us = s_us.split('.')
+                us_all = (h.to_i * 3600 + m.to_i * 60 + s.to_i) * 1000000 + us.to_i
+            end
+            event.set('query_time_us', time_to_us(event.get('query_time_us')))
+            event.set('lock_time_us', time_to_us(event.get('lock_time_us')))
+          "
+        }
+        if "_dateparsefailure" not in [tags] and "_rubyexception" not in [tags] {
+          mutate { remove_field => ["message"]}
+        }
+        mutate {
+          remove_field => ["event"]
+          add_field => {
+            "[@metadata][target_index]" => "%{[fields][log_type]}-%{+YYYY.MM.dd}"
+          }
+        }
 
-         } else if [fields][log_type] == "cn_tddl_log" {
+      } else if [fields][log_type] == "dn_error_log" {
+        grok{
+          match => {
+            "message" => "\[?%{TIMESTAMP_ISO8601:timestamp}\]?(?: %{NUMBER:thread:int})?(?: \[%{WORD:label}\])(?: \[%{NOTSPACE:error_code}\])?(?: \[%{WORD:subsystem}\])?%{GREEDYDATA:log_msg}"
+          }
+        }
+        date {
+          match => ["timestamp","yyyy-MM-dd HH:mm:ss.SSSSSS","ISO8601"]
+          timezone => "{{ .Values.logstash.timezone.name }}"
+          target => "@timestamp"
+        }
+        if "_dateparsefailure" not in [tags] and "_grokparsefailure" not in [tags] {
+          mutate { remove_field => ["message","timestamp"]}
+        }
+        mutate{
+          remove_field => ["event"]
+          add_field => {
+            "[@metadata][target_index]" => "%{[fields][log_type]}-%{+YYYY.MM.dd}"
+          }
+        }
 
-            grok{
-              match =>  { "message" => "%{TIMESTAMP_ISO8601:timestamp} \[%{DATA:thread}\] %{LOGLEVEL:loglevel} %{DATA:logger} - %{JAVALOGMESSAGE:messagetmp}" }
-            }
-
-            date{
-              match => ["timestamp","ISO8601"]
-              timezone => "{{ .Values.logstash.timezone.name }}"
-            }
-
-            mutate{
-                remove_field => ["event","timestamp"]
-                rename => {"messagetmp" => "message"}
-                add_field => { "[@metadata][target_index]" => "%{[fields][log_type]}-%{+YYYY.MM.dd}" }
-            }
-
-         } else {
-
-            mutate{
-                 add_field => { "[@metadata][target_index]" => "other_log-%{+YYYY.MM.dd}" }
-            }
-
-         }
+      } else {
+        mutate{
+          add_field => { "[@metadata][target_index]" => "other_log-%{+YYYY.MM.dd}" }
+        }
+      }
 
     }
 
     output {
-      #elasticsearch {
-      #  hosts => ["https://quickstart-es-http:9200"]
-      #  api_key => "I31aPIABxEEMom1PBQ7s:8sX1NA1sQP23k9rj7pHwWg"
-      #  ssl => true
-      #  cacert => "/usr/share/logstash/config/certs/ca.crt"
-      #  index => "%{[@metadata][target_index]}"
-      #  }
-       stdout {
+      # elasticsearch {
+      #   hosts => ["https://quickstart-es-http.default:9200"]
+      #   user => elastic
+      #   password => "22SAj4Vt48N1vh15lPQX29rw"
+      #   ssl => true
+      #   cacert => "/usr/share/logstash/config/certs/ca.crt"
+      #   index => "%{[@metadata][target_index]}"
+      # }
+      stdout {
         codec => rubydebug
       }
+      # sink { }
     }
 kind: ConfigMap
 metadata:

@@ -34,6 +34,7 @@ type DefaulterConfig struct {
 	StorageEngine   string `json:"storage_engine,omitempty"`
 	ServiceType     string `json:"service_type,omitempty"`
 	UpgradeStrategy string `json:"upgrade_strategy,omitempty"`
+	OperatorVersion string `json:"operator_version,omitempty"`
 }
 
 type ValidatorConfig struct {

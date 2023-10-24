@@ -17,6 +17,7 @@ limitations under the License.
 package model
 
 import (
+	k8shelper "github.com/alibaba/polardbx-operator/pkg/k8s/helper"
 	_map "github.com/alibaba/polardbx-operator/pkg/util/map"
 	"strings"
 
@@ -57,11 +58,13 @@ type PaxosNodeStatus struct {
 	Host       string `json:"host,omitempty"`
 	Volume     string `json:"volume,omitempty"`
 	XStoreRole string `json:"xStoreRole,omitempty"`
+	Ready      bool   `json:"status,omitempty"`
 }
 
 func (s *PaxosNodeStatus) FromPod(pod *corev1.Pod) error {
 	s.Pod = pod.Name
 	s.Role = strings.ToLower(pod.Labels[xstoremeta.LabelRole])
+	s.Ready = k8shelper.IsPodReady(pod)
 	var err error
 	s.Generation, err = convention.GetGenerationLabelValue(pod)
 	if err != nil {

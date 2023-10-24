@@ -37,6 +37,7 @@ type NodeSelectorReference struct {
 
 type StatelessTopologyRuleItem struct {
 	Name         string                 `json:"name,omitempty"`
+	ExtraName    string                 `json:"extraName,omitempty"`
 	Replicas     *intstr.IntOrString    `json:"replicas,omitempty"`
 	NodeSelector *NodeSelectorReference `json:"selector,omitempty"`
 }
@@ -210,17 +211,31 @@ type TopologyNodeCN struct {
 
 type TopologyNodeCDC struct {
 	// +kubebuilder:default=2
+
+	Replicas intstr.IntOrString `json:"replicas,omitempty"`
+
 	// +kubebuilder:validation:Minimum=0
 
-	Replicas int32 `json:"replicas,omitempty"`
-
-	// +kubebuilder:validation:Minimum=0
-
-	XReplicas int32 `json:"xReplicas,omitempty"`
+	XReplicas int `json:"xReplicas,omitempty"`
 
 	// +kubebuilder:default={resources: {limits: {cpu: 4, memory: "8Gi"}}}
 
 	Template CDCTemplate `json:"template,omitempty"`
+
+	Groups []*CdcGroup `json:"groups,omitempty"`
+}
+
+type CdcGroup struct {
+	Name string `json:"name,omitempty"`
+
+	// +kubebuilder:default=2
+	// +kubebuilder:validation:Minimum=0
+
+	Replicas int32 `json:"replicas,omitempty"`
+
+	Template *CDCTemplate `json:"template,omitempty"`
+
+	Config CDCConfig `json:"config,omitempty"`
 }
 
 type TopologyNodeColumnar struct {

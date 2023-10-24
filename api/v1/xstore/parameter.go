@@ -19,6 +19,8 @@ package xstore
 type ParameterTemplate struct {
 	// Parameter template
 	// +optional
+	Namespace string `json:"namespace,omitempty"`
+	// +optional
 	Name string `json:"name,omitempty"`
 }
 

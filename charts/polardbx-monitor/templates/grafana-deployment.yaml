@@ -117,6 +117,9 @@ spec:
         - mountPath: /grafana-dashboard-definitions/1/polardbx-overview
           name: grafana-dashboard-polardbx-overview
           readOnly: false
+        - mountPath: /grafana-dashboard-definitions/1/xstore-overview
+          name: grafana-dashboard-xstore-overview
+          readOnly: false
       {{- with .Values.monitors.grafana.nodeSelector }}
       nodeSelector:
       {{ toYaml . | nindent 8 }}
@@ -211,4 +214,7 @@ spec:
       - configMap:
           name: grafana-dashboard-polardbx-overview
         name: grafana-dashboard-polardbx-overview
+      - configMap:
+          name: grafana-dashboard-xstore-overview
+        name: grafana-dashboard-xstore-overview
 

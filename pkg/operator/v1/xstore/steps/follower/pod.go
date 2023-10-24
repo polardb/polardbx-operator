@@ -32,6 +32,7 @@ import (
 	"github.com/alibaba/polardbx-operator/pkg/util/json"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"strconv"
@@ -208,7 +209,10 @@ var EnableFromPodPurgeLog = NewStepBinder("EnableFromPodPurgeLog", func(rc *xsto
 	xstoreContext := rc.XStoreContext()
 	fromPod, err := xstoreContext.GetXStorePod(rc.MustGetXStoreFollower().Spec.FromPodName)
 	if err != nil {
-		return flow.RetryErr(err, "DisableFromPodPurgeLog Failed")
+		if apierrors.IsNotFound(err) {
+			return flow.Pass()
+		}
+		return flow.RetryErr(err, "EnableFromPodPurgeLog Failed")
 	}
 	annotation := fromPod.Annotations
 	delete(annotation, xstoremeta.AnnotationRebuildFromPod)
@@ -292,51 +296,6 @@ var LoadLeaderLogPosition = NewStepBinder("LoadLeaderLogPosition", func(rc *xsto
 	}
 	rc.SetCommitIndex(commitIndex)
 	return flow.Continue("LoadLeaderLogPosition Success.")
-})
-
-var ClearAndMarkElectionWeight = NewStepBinder("ClearAndMarkElectionWeight", func(rc *xstorev1reconcile.FollowerContext, flow control.Flow) (reconcile.Result, error) {
-	xstoreContext := rc.XStoreContext()
-	xStoreFollower := rc.MustGetXStoreFollower()
-	if xStoreFollower.Spec.Role == xstorev1.FollowerRoleLearner {
-		return flow.Pass()
-	}
-	targetPodName := xStoreFollower.Spec.TargetPodName
-	leaderPod, err := getLeaderPod(xstoreContext, flow.Logger())
-	if err != nil {
-		return flow.RetryErr(err, "")
-	}
-	oldWeights, err := xstoreinstance.SetPodElectionWeight(xstoreContext, leaderPod, flow.Logger(), 0, []string{targetPodName})
-	if err != nil {
-		flow.Logger().Error(err, "ClearAndMarkElectionWeight skip")
-		return flow.Continue("ClearAndMarkElectionWeight Skip.")
-	}
-	xStoreFollower.Status.ElectionWeight = oldWeights[0]
-	rc.MarkChanged()
-	return flow.Continue("ClearAndMarkElectionWeight Success.")
-})
-
-var RecoverElectionWeight = NewStepBinder("RecoverElectionWeight", func(rc *xstorev1reconcile.FollowerContext, flow control.Flow) (reconcile.Result, error) {
-	xstoreContext := rc.XStoreContext()
-	xStoreFollower := rc.MustGetXStoreFollower()
-	if xStoreFollower.Status.ElectionWeight == 0 {
-		//Election weight has not been changed
-		return flow.Pass()
-	}
-	if xStoreFollower.Spec.Role == xstorev1.FollowerRoleLearner {
-		return flow.Pass()
-	}
-	targetPodName := xStoreFollower.Spec.TargetPodName
-	leaderPod, err := getLeaderPod(xstoreContext, flow.Logger())
-	if err != nil {
-		return flow.RetryErr(err, "")
-	}
-	_, err = xstoreinstance.SetPodElectionWeight(xstoreContext, leaderPod, flow.Logger(), xStoreFollower.Status.ElectionWeight, []string{targetPodName})
-	if err != nil {
-		return flow.RetryErr(err, "")
-	}
-	xStoreFollower.Status.ElectionWeight = 0
-	rc.MarkChanged()
-	return flow.Continue("RecoverElectionWeight Success.")
 })
 
 func getLeaderPod(xStoreContext *xstorev1reconcile.Context, logger logr.Logger) (*corev1.Pod, error) {

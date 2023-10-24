@@ -89,3 +89,21 @@ func TestTimeZone(t *testing.T) {
 	fmt.Println(time.Time{}.Unix())
 	fmt.Println(err)
 }
+
+func TestMinioAliyunTest(t *testing.T) {
+	config.ConfigFilepath = "/Users/wkf/hpfs/config.yaml"
+	config.InitConfig()
+	_, params, auth, fileServiceName, _ := hpfs.GetFileServiceParam("default", "s3")
+	fileService, _ := remote.GetFileService(fileServiceName)
+	resultFiles := make([]string, 0)
+	resultFilesPtr := &resultFiles
+	ctx := context.WithValue(context.Background(), common.AffectedFiles, resultFilesPtr)
+	//xstoreBinlogDir := config.GetXStorePodBinlogStorageDirectory("default", "", request.GetPxcUid(), request.GetXStoreName(), request.GetXStoreUid(), request.GetPodName())
+	params["deadline"] = strconv.FormatInt(time.Now().Unix(), 10)
+	ft, err := fileService.ListAllFiles(ctx, "busuhhhh", auth, params)
+	if err == nil {
+		err = ft.Wait()
+	}
+	fmt.Printf("resultFiles:%v\n", resultFiles)
+	fmt.Sprintf("sd")
+}

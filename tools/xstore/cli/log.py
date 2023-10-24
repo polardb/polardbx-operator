@@ -64,7 +64,7 @@ def purge_binary_logs(left):
     :param left:
     :return:
     """
-    if can_purge_logs():
+    if not can_purge_logs():
         print('purge log is disabled now. please refer rebuild task')
         return
     with global_mgr.new_connection() as conn:

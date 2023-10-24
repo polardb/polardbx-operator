@@ -200,7 +200,10 @@ class LegacyConsensusManager(AbstractConsensusManager):
         self.check_current_role(ConsensusRole.LEADER)
 
         with self._conn.cursor() as cur:
-            cur.execute('drop consensus_learner "%s"' % target_addr)
+            if target_addr.isdigit():
+                cur.execute('drop consensus_learner %s' % target_addr)
+            else:
+                cur.execute('drop consensus_learner "%s"' % target_addr)
 
     def add_follower(self, target_addr: str) -> ConsensusNode:
         self.check_current_role(ConsensusRole.LEADER)
@@ -229,7 +232,10 @@ class LegacyConsensusManager(AbstractConsensusManager):
         self.check_current_role(ConsensusRole.LEADER)
 
         with self._conn.cursor() as cur:
-            cur.execute('change consensus_follower "%s" to consensus_learner' % addr)
+            if addr.isdigit():
+                cur.execute('change consensus_follower %s to consensus_learner' % addr)
+            else:
+                cur.execute('change consensus_follower "%s" to consensus_learner' % addr)
 
         return self.get_consensus_node(addr)
 
@@ -477,7 +483,10 @@ class ConsensusManager(AbstractConsensusManager):
         self.check_current_role(ConsensusRole.LEADER)
 
         with self._conn.cursor() as cur:
-            cur.execute('call dbms_consensus.drop_learner("%s")' % target_addr)
+            if target_addr.isdigit():
+                cur.execute('call dbms_consensus.drop_learner(%s)' % target_addr)
+            else:
+                cur.execute('call dbms_consensus.drop_learner("%s")' % target_addr)
 
     def add_follower(self, target_addr: str) -> ConsensusNode:
         node = self.add_learner(target_addr)
@@ -510,7 +519,10 @@ class ConsensusManager(AbstractConsensusManager):
         self.check_current_role(ConsensusRole.LEADER)
 
         with self._conn.cursor() as cur:
-            cur.execute('call dbms_consensus.downgrade_follower("%s")' % addr)
+            if addr.isdigit():
+                cur.execute('call dbms_consensus.downgrade_follower(%s)' % addr)
+            else:
+                cur.execute('call dbms_consensus.downgrade_follower("%s")' % addr)
 
         return self.get_consensus_node(addr)
 
@@ -602,7 +614,6 @@ class ConsensusManager(AbstractConsensusManager):
                 cur.execute('call dbms_consensus.purge_log(%d)' % to_purge_logs[-1].start_log_index)
             else:
                 cur.execute('call dbms_consensus.local_purge_log(%d)' % to_purge_logs[-1].start_log_index)
-
 
     def show_slave_status(self) -> SlaveStatus:
         with self._conn.cursor() as cur:

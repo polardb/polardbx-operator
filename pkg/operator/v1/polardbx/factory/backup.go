@@ -165,11 +165,14 @@ func (f *objectFactory) NewDummyPolarDBXBackup(metadata *MetadataBackup) (*polar
 			StorageProvider: *polardbx.Spec.Restore.StorageProvider,
 		},
 		Status: polardbxv1.PolarDBXBackupStatus{
-			Phase:               polardbxv1.BackupDummy,
-			BackupRootPath:      polardbx.Spec.Restore.From.BackupSetPath,
-			ClusterSpecSnapshot: metadata.PolarDBXClusterMetadata.Spec,
-			XStores:             metadata.GetXstoreNameList(),
-			Backups:             make(map[string]string),
+			Phase:                      polardbxv1.BackupDummy,
+			BackupRootPath:             polardbx.Spec.Restore.From.BackupSetPath,
+			ClusterSpecSnapshot:        metadata.PolarDBXClusterMetadata.Spec,
+			XStores:                    metadata.GetXstoreNameList(),
+			Backups:                    make(map[string]string),
+			LatestRecoverableTimestamp: metadata.LatestRecoverableTimestamp,
+			StartTime:                  metadata.StartTime,
+			EndTime:                    metadata.EndTime,
 		},
 	}
 	return polardbxBackup, nil
@@ -192,6 +195,12 @@ func (f *objectFactory) NewDummyXstoreBackup(xstoreName string, polardbxBackup *
 			),
 			Namespace:   polardbxBackup.Namespace,
 			Annotations: f.newDummyAnnotation(),
+			Labels: map[string]string{
+				meta.LabelName:            polardbxBackup.Spec.Cluster.Name,
+				meta.LabelTopBackup:       polardbxBackup.Name,
+				meta.LabelBackupXStore:    xstoreName,
+				meta.LabelBackupXStoreUID: string(xstoreMetadata.UID),
+			},
 		},
 		Spec: polardbxv1.XStoreBackupSpec{
 			XStore: polardbxv1.XStoreReference{

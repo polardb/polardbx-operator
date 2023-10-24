@@ -19,6 +19,7 @@ package planner
 import (
 	"errors"
 	"fmt"
+	k8shelper "github.com/alibaba/polardbx-operator/pkg/k8s/helper"
 	"strconv"
 	"strings"
 
@@ -151,6 +152,7 @@ func (p *Planner) buildRunningNodes() (map[string]model.PaxosNodeStatus, error) 
 			Host:       pod.Spec.NodeName,
 			Volume:     podVolume(pod),
 			XStoreRole: pod.Labels[xstoremeta.LabelRole],
+			Ready:      k8shelper.IsPodReady(pod),
 		}
 	}
 
@@ -247,6 +249,7 @@ func (p *Planner) build() (plan.Plan, error) {
 	pl := plan.NewPlan(p.runningNodes)
 
 	var leaderStep *plan.Step
+	readyPodSteps := make([]plan.Step, 0)
 	// TODO(fix) volumes
 	// Create, update or replace expected nodes.
 	for _, expectNode := range p.expectedNodes {
@@ -282,21 +285,7 @@ func (p *Planner) build() (plan.Plan, error) {
 				stepType = plan.StepTypeReplace
 			}
 
-			if runningNode.XStoreRole == xstoremeta.RoleLeader && leaderStep == nil {
-				leaderStep = &plan.Step{
-					Type:             stepType,
-					OriginGeneration: runningNode.Generation,
-					OriginHost:       runningNode.Host,
-					TargetGeneration: expectNode.Generation,
-					Target:           expectNode.Pod,
-					TargetRole:       expectNode.Role,
-					NodeSet:          expectNode.Set,
-					Index:            expectNode.Index,
-				}
-				continue
-			}
-
-			pl.AppendStep(plan.Step{
+			step := plan.Step{
 				Type:             stepType,
 				OriginGeneration: runningNode.Generation,
 				OriginHost:       runningNode.Host,
@@ -305,9 +294,26 @@ func (p *Planner) build() (plan.Plan, error) {
 				TargetRole:       expectNode.Role,
 				NodeSet:          expectNode.Set,
 				Index:            expectNode.Index,
-			})
+			}
+
+			if runningNode.XStoreRole == xstoremeta.RoleLeader && leaderStep == nil {
+				leaderStep = &step
+				continue
+			}
+
+			if runningNode.Ready {
+				readyPodSteps = append(readyPodSteps, step)
+				continue
+			}
+
+			pl.AppendStep(step)
 		}
 	}
+
+	for _, readPodStep := range readyPodSteps {
+		pl.AppendStep(readPodStep)
+	}
+
 	if leaderStep != nil {
 		pl.AppendStep(*leaderStep)
 	}

@@ -1,0 +1,531 @@
+package remote
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"github.com/alibaba/polardbx-operator/pkg/hpfs/common"
+	polarxIo "github.com/alibaba/polardbx-operator/pkg/util/io"
+	polarxPath "github.com/alibaba/polardbx-operator/pkg/util/path"
+	"github.com/eapache/queue"
+	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
+	"github.com/minio/minio-go/v7/pkg/tags"
+	"io"
+	"strconv"
+	"sync/atomic"
+	"time"
+)
+
+const (
+	MinioLimitedReaderSize = 1 << 20 * 600 //600MB
+	MinioMaxPartSize       = (1 << 30) * 5 //5GB
+)
+
+func init() {
+	MustRegisterFileService("s3", &minioFs{})
+}
+
+type minioFs struct{}
+
+type minioContext struct {
+	ctx context.Context
+
+	accessKey     string
+	secretKey     string
+	endpoint      string
+	useSSL        bool
+	bucket        string
+	retentionTime time.Duration
+	writeLen      bool
+	bufferSize    int64
+	useTmpFile    bool
+	deadline      int64
+}
+
+func newMinioContext(ctx context.Context, auth, params map[string]string) (*minioContext, error) {
+	var writeLen bool
+	if val, ok := params["write_len"]; ok {
+		toWriteLenVal, err := strconv.ParseBool(val)
+		if err != nil {
+			return nil, err
+		}
+		writeLen = toWriteLenVal
+	}
+	var useSSL bool = false
+	if val, ok := auth["useSSL"]; ok {
+		touseSSLVal, err := strconv.ParseBool(val)
+		if err != nil {
+			return nil, err
+		}
+		useSSL = touseSSLVal
+	}
+	var bufferSize int64 = 1 << 20 * 50 //50MB
+	if val, ok := params["buffer_size"]; ok {
+		toBufferSize, err := strconv.ParseInt(val, 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		bufferSize = toBufferSize
+	}
+	var useTmpFile bool = true
+	if val, ok := params["use_tmp_file"]; ok {
+		toUseTmpFile, err := strconv.ParseBool(val)
+		if err != nil {
+			return nil, err
+		}
+		useTmpFile = toUseTmpFile
+	}
+	var deadline int64 = 0
+	if val, ok := params["deadline"]; ok {
+		parsedDeadline, err := strconv.ParseInt(val, 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		deadline = parsedDeadline
+	}
+
+	minioCtx := &minioContext{
+		ctx:        ctx,
+		endpoint:   auth["endpoint"],
+		accessKey:  auth["access_key"],
+		secretKey:  auth["secret_key"],
+		bucket:     params["bucket"],
+		useSSL:     useSSL,
+		writeLen:   writeLen,
+		bufferSize: bufferSize,
+		useTmpFile: useTmpFile,
+		deadline:   deadline,
+	}
+
+	if t, ok := params["retention-time"]; ok {
+		d, err := time.ParseDuration(t)
+		if err != nil {
+			return nil, fmt.Errorf("format error for retention-time: %w", err)
+		}
+		minioCtx.retentionTime = d
+	} else {
+		minioCtx.retentionTime = 0
+	}
+
+	return minioCtx, nil
+}
+
+func (m *minioFs) newClient(minioCtx *minioContext) (*minio.Client, error) {
+	return minio.New(minioCtx.endpoint, &minio.Options{
+		Creds:  credentials.NewStaticV4(minioCtx.accessKey, minioCtx.secretKey, ""),
+		Secure: minioCtx.useSSL,
+	})
+}
+
+func (m *minioFs) newCore(minioCtx *minioContext) (*minio.Core, error) {
+	return minio.NewCore(minioCtx.endpoint, &minio.Options{
+		Creds:  credentials.NewStaticV4(minioCtx.accessKey, minioCtx.secretKey, ""),
+		Secure: minioCtx.useSSL,
+	})
+}
+
+func (m minioFs) DeleteFile(ctx context.Context, path string, auth, params map[string]string) error {
+	minioCtx, err := newMinioContext(ctx, auth, params)
+	if err != nil {
+		return err
+	}
+	client, err := m.newCore(minioCtx)
+	if err != nil {
+		return fmt.Errorf("failed to create minio client: %w", err)
+	}
+	return client.RemoveObject(ctx, minioCtx.bucket, path, minio.RemoveObjectOptions{})
+}
+
+func (m minioFs) DeleteExpiredFile(ctx context.Context, path string, auth, params map[string]string) (FileTask, error) {
+	minioCtx, err := newMinioContext(ctx, auth, params)
+	if err != nil {
+		return nil, err
+	}
+	client, err := m.newCore(minioCtx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create minio client: %w", err)
+	}
+	ft := newFileTask(ctx)
+	go func() {
+		err := m.ListMinioFileWithDeadline(client, minioCtx, path, true, func(objs []string) error {
+			for _, obj := range objs {
+				if val, ok := ctx.Value(common.AffectedFiles).(*[]string); ok {
+					*val = append(*val, obj)
+				}
+			}
+			return nil
+		})
+		ft.complete(err)
+	}()
+	return ft, nil
+
+}
+
+func (m *minioFs) UploadFile(ctx context.Context, reader io.Reader, path string, auth, params map[string]string) (FileTask, error) {
+	minioCtx, err := newMinioContext(ctx, auth, params)
+	var limitReaderSize int64 = MinioLimitedReaderSize
+	val, ok := params["limit_reader_size"]
+	if ok && val != "" {
+		parsedVal, err := strconv.ParseInt(val, 10, 64)
+		if err != nil {
+			panic(err)
+		}
+		limitReaderSize = parsedVal
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	client, err := m.newCore(minioCtx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create minio client: %w", err)
+	}
+
+	ft := newFileTask(ctx)
+	go func() {
+		opts := minio.PutObjectOptions{}
+		// Expires at specified time.
+		if minioCtx.retentionTime > 0 {
+			opts = minio.PutObjectOptions{RetainUntilDate: time.Now().Add(minioCtx.retentionTime)}
+		}
+		if err != nil {
+			ft.complete(err)
+			return
+		}
+		var partIndex int = 1
+		uploadID, err := client.NewMultipartUpload(ctx, minioCtx.bucket, path, opts)
+		if err != nil {
+			ft.complete(err)
+			return
+		}
+		defer func() {
+			client.AbortMultipartUpload(ctx, minioCtx.bucket, path, uploadID)
+		}()
+		pipeReader, pipeWriter := io.Pipe()
+		defer pipeReader.Close()
+		var actualSize int64
+		go func() {
+			defer pipeWriter.Close()
+			buff := make([]byte, minioCtx.bufferSize)
+			written, err := io.CopyBuffer(pipeWriter, reader, buff)
+			if written > 0 {
+				if written%limitReaderSize != 0 {
+					toFillBytes := limitReaderSize - (written % limitReaderSize)
+					buff = make([]byte, minioCtx.bufferSize)
+					for {
+						if toFillBytes == 0 {
+							break
+						}
+						if toFillBytes > minioCtx.bufferSize {
+							pipeWriter.Write(buff)
+							toFillBytes -= minioCtx.bufferSize
+						} else {
+							pipeWriter.Write(buff[:toFillBytes])
+							toFillBytes -= toFillBytes
+						}
+					}
+				}
+				atomic.StoreInt64(&actualSize, written)
+			}
+			if err != nil {
+				ft.complete(err)
+				return
+			}
+		}()
+		var uploadedLen int64
+		partsInfo := make(map[int]minio.ObjectPart)
+		emptyBytes := make([]byte, 0)
+		for {
+			_, err := pipeReader.Read(emptyBytes)
+			if err != nil {
+				break
+			}
+			limitedReader := io.LimitReader(pipeReader, limitReaderSize)
+
+			uploadPart, err := client.PutObjectPart(ctx, minioCtx.bucket, path, uploadID, partIndex, limitedReader, limitReaderSize, "", "", nil)
+			partsInfo[partIndex] = uploadPart
+			partIndex++
+			uploadedLen += limitReaderSize
+			if err != nil {
+				break
+			}
+		}
+		if len(partsInfo) > 0 {
+			completeParts := make([]minio.CompletePart, 0)
+			for i := 1; i < partIndex; i++ {
+				part := partsInfo[i]
+				completeParts = append(completeParts, minio.CompletePart{
+					ETag:       part.ETag,
+					PartNumber: part.PartNumber,
+				})
+			}
+			_, err = client.CompleteMultipartUpload(ctx, minioCtx.bucket, path, uploadID, completeParts)
+			if err != nil {
+				ft.complete(err)
+				return
+			}
+			totalSize := atomic.LoadInt64(&actualSize)
+			SetMinioTags(client, ctx, minioCtx, path, actualSize)
+			ft.complete(nil)
+
+			var copyPosition int64
+			pageNumber := 1
+			copiedParts := make([]minio.CompletePart, 0)
+			if totalSize%limitReaderSize != 0 {
+				uploadID, err := client.NewMultipartUpload(ctx, minioCtx.bucket, path, opts)
+				if err != nil {
+					return
+				}
+				metadata := make(map[string]string)
+				for {
+					partSize := totalSize - copyPosition
+					if partSize >= MinioMaxPartSize {
+						partSize = MinioMaxPartSize
+					}
+					copiedUploadPart, err := client.CopyObjectPart(ctx, minioCtx.bucket, path, minioCtx.bucket, path, uploadID,
+						pageNumber, copyPosition, partSize, metadata)
+					if err != nil {
+						return
+					}
+					pageNumber++
+					copiedParts = append(copiedParts, copiedUploadPart)
+					copyPosition += partSize
+					if copyPosition == totalSize {
+						_, err = client.CompleteMultipartUpload(ctx, minioCtx.bucket, path, uploadID, copiedParts)
+						if err != nil {
+							return
+						}
+						SetMinioTags(client, ctx, minioCtx, path, actualSize)
+						break
+					}
+				}
+			}
+		} else {
+			ft.complete(nil)
+		}
+	}()
+	return ft, nil
+}
+
+func SetMinioTags(client *minio.Core, ctx context.Context, minioCtx *minioContext, objectName string, actualSize int64) {
+	tagMap := make(map[string]string)
+	tagMap["uploader"] = "hpfs"
+	tagMap["size"] = strconv.FormatInt(actualSize, 10)
+	tagging, _ := tags.NewTags(tagMap, true)
+	client.PutObjectTagging(ctx, minioCtx.bucket, objectName, tagging, minio.PutObjectTaggingOptions{})
+}
+
+func GetMinioActualSizeFromTags(ctx context.Context, client *minio.Client, minioCtx *minioContext, objKey string) int64 {
+	hpfsUpload := false
+	var size int64 = -1
+	tagResult, err := client.GetObjectTagging(ctx, minioCtx.bucket, objKey, minio.GetObjectTaggingOptions{})
+	if err != nil {
+		return size
+	}
+	if tagResult.ToMap() != nil && len(tagResult.ToMap()) > 2 {
+		sizeStr := ""
+		for key, value := range tagResult.ToMap() {
+			if key == "uploader" && value == "hpfs" {
+				hpfsUpload = true
+			}
+			if key == "size" {
+				sizeStr = value
+			}
+		}
+		if hpfsUpload && sizeStr != "" {
+			size, err = strconv.ParseInt(sizeStr, 10, 64)
+			if err != nil {
+				size = -1
+			}
+		}
+	}
+	if !hpfsUpload {
+		size = -1
+	}
+	return size
+}
+
+func (m *minioFs) DownloadFile(ctx context.Context, writer io.Writer, path string, auth, params map[string]string) (FileTask, error) {
+	minioCtx, err := newMinioContext(ctx, auth, params)
+	if err != nil {
+		return nil, err
+	}
+	client, err := m.newClient(minioCtx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create minio client: %w", err)
+	}
+	ft := newFileTask(ctx)
+	go func() {
+		var bytesCount int64
+		if minioCtx.writeLen {
+			r, err := client.StatObject(ctx, minioCtx.bucket, path, minio.StatObjectOptions{})
+			if err != nil {
+				ft.complete(fmt.Errorf("failed to get object meta: %w", err))
+				return
+			}
+			bytesCount = r.Size
+			actualSize := GetMinioActualSizeFromTags(ctx, client, minioCtx, path)
+			if actualSize != -1 {
+				bytesCount = actualSize
+			}
+			polarxIo.WriteUint64(writer, uint64(bytesCount))
+		}
+		r, err := client.GetObject(ctx, minioCtx.bucket, path, minio.GetObjectOptions{})
+		if err != nil {
+			ft.complete(fmt.Errorf("failed to get object: %w", err))
+			return
+		}
+		if minioCtx.writeLen {
+			_, err = io.CopyN(writer, r, bytesCount)
+		} else {
+			_, err = io.Copy(writer, r)
+		}
+		if err != nil {
+			ft.complete(fmt.Errorf("failed to copy content: %w", err))
+			return
+		}
+		ft.complete(nil)
+
+	}()
+
+	return ft, nil
+}
+
+func (m *minioFs) ListFiles(ctx context.Context, writer io.Writer, path string, auth, params map[string]string) (FileTask, error) {
+	minioCtx, err := newMinioContext(ctx, auth, params)
+	if err != nil {
+		return nil, err
+	}
+	client, err := m.newCore(minioCtx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create minio client: %w", err)
+	}
+
+	ft := newFileTask(ctx)
+	go func() {
+		entryNames := make([]string, 0)
+		marker := ""
+		prefix := path
+		delimiter := "/"
+
+		for {
+			lsRes, err := client.ListObjects(minioCtx.bucket, prefix, marker, delimiter, 1000)
+			if err != nil {
+				ft.complete(fmt.Errorf("failed to list oss objects in path %s: %w", path, err))
+				return
+			}
+			for _, object := range lsRes.Contents { // file
+				entryNames = append(entryNames, polarxPath.GetBaseNameFromPath(object.Key))
+			}
+			for _, dir := range lsRes.CommonPrefixes { // subdirectory
+				entryNames = append(entryNames, polarxPath.GetBaseNameFromPath(dir.Prefix))
+			}
+			if lsRes.IsTruncated {
+				marker = lsRes.NextMarker
+			} else {
+				break
+			}
+
+		}
+		// parse entry slice and send response
+		encodedEntryNames, err := json.Marshal(entryNames)
+		if err != nil {
+			ft.complete(fmt.Errorf("failed to encode entry name slice,: %w", err))
+			return
+		}
+		if minioCtx.writeLen {
+			bytesCount := int64(len(encodedEntryNames))
+			err := polarxIo.WriteUint64(writer, uint64(bytesCount))
+			if err != nil {
+				ft.complete(fmt.Errorf("failed to send content bytes count: %w", err))
+				return
+			}
+			_, err = io.CopyN(writer, bytes.NewReader(encodedEntryNames), bytesCount)
+		} else {
+			_, err = io.Copy(writer, bytes.NewReader(encodedEntryNames))
+		}
+		if err != nil {
+			ft.complete(fmt.Errorf("failed to copy content: %w", err))
+			return
+		}
+		ft.complete(nil)
+	}()
+	return ft, nil
+}
+
+func (m *minioFs) ListAllFiles(ctx context.Context, path string, auth, params map[string]string) (FileTask, error) {
+	minioCtx, err := newMinioContext(ctx, auth, params)
+	if err != nil {
+		return nil, err
+	}
+	client, err := m.newCore(minioCtx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create minio client: %w", err)
+	}
+	ft := newFileTask(ctx)
+	go func() {
+		err := m.ListMinioFileWithDeadline(client, minioCtx, path, false, func(objs []string) error {
+			for _, obj := range objs {
+				if val, ok := ctx.Value(common.AffectedFiles).(*[]string); ok {
+					*val = append(*val, obj)
+				}
+			}
+			return nil
+		})
+		ft.complete(err)
+	}()
+	return ft, nil
+
+}
+
+func (m *minioFs) ListMinioFileWithDeadline(client *minio.Core, minioCtx *minioContext, path string, isDelete bool, callback func([]string) error) error {
+	marker := ""
+	delimiter := "/"
+	fileQueue := queue.New()
+	path = path + "/"
+	fileQueue.Add([]string{path, marker})
+	for fileQueue.Length() != 0 {
+		element := fileQueue.Remove().([]string)
+		lsRes, err := client.ListObjects(minioCtx.bucket, element[0], marker, delimiter, 1000)
+		if err != nil {
+			return err
+		}
+		if lsRes.IsTruncated {
+			fileQueue.Add([]string{element[0], lsRes.NextMarker})
+		}
+		for _, commonPrefix := range lsRes.CommonPrefixes {
+			fileQueue.Add([]string{commonPrefix.Prefix, ""})
+		}
+		if isDelete {
+			objectsCh := make(chan minio.ObjectInfo)
+			go func() {
+				defer close(objectsCh)
+				for _, obj := range lsRes.Contents {
+					if obj.LastModified.Unix() < time.Now().Unix() {
+						objectsCh <- obj
+					}
+				}
+			}()
+			for rErr := range client.RemoveObjects(context.Background(), minioCtx.bucket, objectsCh, minio.RemoveObjectsOptions{GovernanceBypass: true}) {
+				fmt.Println("Error detected during deletion: ", rErr)
+			}
+		}
+		objs := make([]string, 0)
+
+		for _, obj := range lsRes.Contents {
+			if obj.LastModified.Unix() < minioCtx.deadline {
+				// delete it
+				objs = append(objs, obj.Key)
+			}
+		}
+		if len(objs) > 0 {
+			err := callback(objs)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}

@@ -103,7 +103,7 @@ func GetLeaderPod(rc *xstorev1reconcile.Context, logger logr.Logger, force bool)
 	if leaderPod == nil && force {
 		var maxAppliedIndex int64 = -1
 		for _, pod := range pods {
-			if pod.Labels[xstoremeta.LabelNodeSet] == "log" {
+			if xstoremeta.IsPodRoleVoter(&pod) {
 				continue
 			}
 			localInfo, err := ShowThis(rc, &pod, logger, true)

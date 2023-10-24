@@ -42,6 +42,7 @@ var (
 	stream           string
 	sink             string
 	ossBufferSize    string
+	minioBufferSize  string
 )
 
 var activeHosts map[string]discovery.HostInfo
@@ -57,6 +58,7 @@ func init() {
 	flag.StringVar(&retentionTime, "meta.retentionTime", "", "Field RetentionTime of metadata")
 	flag.StringVar(&sink, "meta.sink", "", "Sink name of metadata")
 	flag.StringVar(&ossBufferSize, "meta.ossBufferSize", "", "oss buffer size of metadata")
+	flag.StringVar(&minioBufferSize, "meta.minioBufferSize", "", "minio buffer size of metadata")
 	flag.StringVar(&destNodeName, "destNodeName", "", "The name of the destination node name")
 	flag.StringVar(&hostInfoFilePath, "hostInfoFilePath", "/tools/xstore/hdfs-nodes.json", "The file path of the host info file")
 	flag.StringVar(&stream, "stream", "", "The file stream type such as tar, default: empty string")
@@ -112,15 +114,16 @@ func getHostInfo() map[string]discovery.HostInfo {
 func main() {
 	client := NewFileClient(host, port, nil)
 	metadata := ActionMetadata{
-		Action:        Action(action),
-		InstanceId:    instanceId,
-		Filename:      filename,
-		RedirectAddr:  redirectAddr,
-		Filepath:      filepath,
-		Stream:        stream,
-		RequestId:     uuid.New().String(),
-		Sink:          sink,
-		OssBufferSize: ossBufferSize,
+		Action:          Action(action),
+		InstanceId:      instanceId,
+		Filename:        filename,
+		RedirectAddr:    redirectAddr,
+		Filepath:        filepath,
+		Stream:          stream,
+		RequestId:       uuid.New().String(),
+		Sink:            sink,
+		OssBufferSize:   ossBufferSize,
+		MinioBufferSize: minioBufferSize,
 	}
 	if strings.HasPrefix(strings.ToLower(action), "upload") {
 		len, err := client.Upload(os.Stdin, metadata)

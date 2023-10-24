@@ -203,7 +203,7 @@ spec:
             summary: PolarDB-X-Node Disk Usage is Too High
             description: Instance {{`{{ $labels.instance }}`}} mountpoint {{`{{ $labels.mountpoint }}`}} Disk Usage is too high, over 90% for 5m.
           expr: |
-            sum((node_filesystem_size_bytes{fstype=~"ext.*|xfs|nfs",mountpoint !~".*pod.*", mountpoint != "/boot"} - node_filesystem_free_bytes{fstype=~"ext.*|xfs|nfs",mountpoint !~".*pod.*", mountpoint != "/boot"}) * 100 /(node_filesystem_avail_bytes{fstype=~"ext.*|xfs|nfs", mountpoint !~".*pod.*", mountpoint != "/boot"} + (node_filesystem_size_bytes{fstype=~"ext.*|xfs|nfs",mountpoint !~".*pod.*", mountpoint != "/boot"}-node_filesystem_free_bytes{fstype=~"ext.*|xfs|nfs",mountpoint !~".*pod.*", mountpoint != "/boot"}))) by (instance, mountpoint) * 100 >= 90
+            sum((node_filesystem_size_bytes{fstype=~"ext.*|xfs|nfs",mountpoint !~".*pod.*", mountpoint != "/boot"} - node_filesystem_free_bytes{fstype=~"ext.*|xfs|nfs",mountpoint !~".*pod.*", mountpoint != "/boot"}) /(node_filesystem_avail_bytes{fstype=~"ext.*|xfs|nfs", mountpoint !~".*pod.*", mountpoint != "/boot"} + (node_filesystem_size_bytes{fstype=~"ext.*|xfs|nfs",mountpoint !~".*pod.*", mountpoint != "/boot"}-node_filesystem_free_bytes{fstype=~"ext.*|xfs|nfs",mountpoint !~".*pod.*", mountpoint != "/boot"}))) by (instance, mountpoint) * 100 >= 90
           for: 5m
           labels:
             severity: critical
@@ -212,7 +212,7 @@ spec:
             summary: PolarDB-X-Node Disk Usage is High
             description: Instance {{`{{ $labels.instance }}`}} mountpoint {{`{{ $labels.mountpoint }}`}} Disk Usage is high, over 80% for 5m.
           expr: |
-            sum((node_filesystem_size_bytes{fstype=~"ext.*|xfs|nfs",mountpoint !~".*pod.*", mountpoint != "/boot"} - node_filesystem_free_bytes{fstype=~"ext.*|xfs|nfs",mountpoint !~".*pod.*", mountpoint != "/boot"}) * 100 /(node_filesystem_avail_bytes{fstype=~"ext.*|xfs|nfs", mountpoint !~".*pod.*", mountpoint != "/boot"} + (node_filesystem_size_bytes{fstype=~"ext.*|xfs|nfs",mountpoint !~".*pod.*", mountpoint != "/boot"}-node_filesystem_free_bytes{fstype=~"ext.*|xfs|nfs",mountpoint !~".*pod.*", mountpoint != "/boot"}))) by (instance, mountpoint) * 100 >= 80
+            sum((node_filesystem_size_bytes{fstype=~"ext.*|xfs|nfs",mountpoint !~".*pod.*", mountpoint != "/boot"} - node_filesystem_free_bytes{fstype=~"ext.*|xfs|nfs",mountpoint !~".*pod.*", mountpoint != "/boot"}) /(node_filesystem_avail_bytes{fstype=~"ext.*|xfs|nfs", mountpoint !~".*pod.*", mountpoint != "/boot"} + (node_filesystem_size_bytes{fstype=~"ext.*|xfs|nfs",mountpoint !~".*pod.*", mountpoint != "/boot"}-node_filesystem_free_bytes{fstype=~"ext.*|xfs|nfs",mountpoint !~".*pod.*", mountpoint != "/boot"}))) by (instance, mountpoint) * 100 >= 80
           for: 5m
           labels:
             severity: warning

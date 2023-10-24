@@ -23,7 +23,6 @@ from core.log import LogFactory
 from core.backup_restore.storage.filestream_client import BackupStorage, FileStreamClient
 from core.backup_restore.utils import check_run_process
 
-
 CONN_TIMEOUT = 30
 INTERNAL_MARK = '/* rds internal mark */ '
 RESTORE_TEMP_DIR = "/data/mysql/restore"
@@ -58,7 +57,7 @@ def start(restore_context, target_pod, password):
 
     recover_cmd = [context.bb_home, 'recover',
                    '-f', local_cp_path,
-                   '-h', target_pod + "-service",  # TODO(dengli): more elegant way
+                   '-h', target_pod,  # TODO(dengli): more elegant way
                    '-P', str(context.port_access()),
                    '-u', 'admin',
                    '-p', password]

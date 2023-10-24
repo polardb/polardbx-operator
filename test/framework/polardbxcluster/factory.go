@@ -75,6 +75,20 @@ func EncodeKeySecret(name, key string) FactoryOption {
 	}
 }
 
+func CdcGroup(name string, replicas int, envKvs ...string) polardbxv1polardbx.CdcGroup {
+	envs := map[string]intstr.IntOrString{}
+	for i := 0; i < len(envKvs); i += 2 {
+		envs[envKvs[i]] = intstr.FromString(envKvs[i+1])
+	}
+	return polardbxv1polardbx.CdcGroup{
+		Name:     name,
+		Replicas: int32(replicas),
+		Config: polardbxv1polardbx.CDCConfig{
+			Envs: envs,
+		},
+	}
+}
+
 func TopologyNode(role string, replicas int, engine, image string, hostNetwork bool, resources corev1.ResourceRequirements) FactoryOption {
 	switch role {
 	case polardbxmeta.RoleCN:
@@ -106,7 +120,7 @@ func TopologyNode(role string, replicas int, engine, image string, hostNetwork b
 	case polardbxmeta.RoleCDC:
 		return func(polardbxcluster *polardbxv1.PolarDBXCluster) {
 			polardbxcluster.Spec.Topology.Nodes.CDC = &polardbxv1polardbx.TopologyNodeCDC{
-				Replicas: int32(replicas),
+				Replicas: intstr.FromInt(replicas),
 				Template: polardbxv1polardbx.CDCTemplate{
 					Image:       image,
 					HostNetwork: hostNetwork,

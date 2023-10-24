@@ -97,7 +97,6 @@ func (r *XStoreFollowerReconciler) newReconcileTask(rc *xstorev1reconcile.Follow
 		followersteps.TryCreateTmpPodIfRemote(task)
 		followersteps.TryWaitForTmpPodScheduledIfRemote(task)
 		followersteps.CheckIfTargetPodNotLeader(task)
-		followersteps.ClearAndMarkElectionWeight(task)
 		followersteps.UpdatePhaseTemplate(xstore.FollowerPhaseCheck)(task)
 	case xstore.FollowerPhaseCheck:
 		control.When(!followersteps.IsNotLogger(xstoreFollower), followersteps.UpdatePhaseTemplate(xstore.FollowerPhaseBeforeRestore))(task)
@@ -138,7 +137,6 @@ func (r *XStoreFollowerReconciler) newReconcileTask(rc *xstorev1reconcile.Follow
 		followersteps.TryDeleteTmpPodIfRemote(task)
 		followersteps.WaitForTargetPodReady(task)
 		followersteps.EnableFromPodPurgeLog(task)
-		followersteps.RecoverElectionWeight(task)
 		followersteps.TryCleanHostPathVolumeIfRemote(task)
 		followersteps.UpdatePhaseTemplate(xstore.FollowerPhaseSuccess)(task)
 	case xstore.FollowerPhaseLoggerRebuild:
@@ -152,11 +150,10 @@ func (r *XStoreFollowerReconciler) newReconcileTask(rc *xstorev1reconcile.Follow
 		followersteps.TryExchangeTargetPod(task)
 		followersteps.TryDeleteTmpPodIfRemote(task)
 		followersteps.WaitForTargetPodReady(task)
-		followersteps.RecoverElectionWeight(task)
 		followersteps.TryCleanHostPathVolumeIfRemote(task)
 		followersteps.UpdatePhaseTemplate(xstore.FollowerPhaseSuccess)(task)
 	case xstore.FollowerPhaseDeleting:
-		followersteps.RecoverElectionWeight(task)
+		followersteps.EnableFromPodPurgeLog(task)
 		followersteps.TryCleanHostPathVolumeIfRemote(task)
 		followersteps.RemoveFinalizer(task)
 	case xstore.FollowerPhaseSuccess:

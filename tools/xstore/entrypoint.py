@@ -22,6 +22,7 @@ import click
 import jsons
 
 from core import Context, Manager
+from audit_controller import AuditController
 
 logging.basicConfig()
 logging.root.setLevel(logging.NOTSET)
@@ -79,12 +80,13 @@ def _start(initialize, restore_prepare, debug, ignore_indicates, cluster_start_i
 
     mgr.wait_for_unblock()
 
+    # Go bootstrap or just initialize.
+    engine = mgr.engine()
+    engine.try_flush_meta_when_start()
+
     # Handle indicates including pod block.
     if not ignore_indicates:
         mgr.handle_indicates()
-
-    # Go bootstrap or just initialize.
-    engine = mgr.engine()
 
     _write_convenient_access_script(context)
 
@@ -103,6 +105,9 @@ def _start(initialize, restore_prepare, debug, ignore_indicates, cluster_start_i
         engine.set_restore_prepare(True)
         engine.clean_data_log()
 
+    # create a process to enable audit log
+    audit_controller = AuditController()
+    audit_controller.start_process()
 
     # Bootstrap when not only initialize.
     if not initialize:

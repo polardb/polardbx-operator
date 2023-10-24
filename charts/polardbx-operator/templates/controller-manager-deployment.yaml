@@ -42,15 +42,15 @@ spec:
       {{- end }}
       {{- with .Values.controllerManager.nodeSelector }}
       nodeSelector:
-      {{ toYaml . | indent 8 }}
+        {{- toYaml . | nindent 8 }}
       {{- end }}
       {{- with .Values.controllerManager.affinity }}
       affinity:
-      {{ toYaml . | indent 8 }}
+        {{- toYaml . | nindent 8 }}
       {{- end }}
       {{- with .Values.controllerManager.tolerations }}
       tolerations:
-      {{ toYaml . | indent 8 }}
+        {{- toYaml . | nindent 8 }}
       {{- end }}
       containers:
       - name: polardbx-operator

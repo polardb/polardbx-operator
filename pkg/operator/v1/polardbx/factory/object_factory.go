@@ -17,14 +17,13 @@ limitations under the License.
 package factory
 
 import (
+	polardbxv1 "github.com/alibaba/polardbx-operator/api/v1"
 	"github.com/alibaba/polardbx-operator/api/v1/polardbx"
+	"github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/convention"
+	polardbxv1reconcile "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/reconcile"
 	promv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-
-	polardbxv1 "github.com/alibaba/polardbx-operator/api/v1"
-	"github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/convention"
-	polardbxv1reconcile "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/reconcile"
 )
 
 type ObjectFactory interface {
@@ -59,6 +58,7 @@ type ObjectFactory interface {
 type Context struct {
 	HasCdcXBinLog   bool
 	BuildCdcXBinLog bool
+	CdcGroup        *polardbx.CdcGroup
 }
 
 type objectFactory struct {

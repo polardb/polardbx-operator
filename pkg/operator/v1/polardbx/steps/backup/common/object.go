@@ -306,8 +306,7 @@ var CollectBinlogStartIndex = polardbxv1reconcile.NewStepBinder("CollectBinlogSt
 
 var DrainCommittingTrans = polardbxv1reconcile.NewStepBinder("DrainCommittingTrans",
 	func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
-		backup := rc.MustGetPolarDBXBackup()
-		cnManager, err := rc.GetPolarDBXGroupManagerByBackup(backup)
+		cnManager, err := rc.GetPolarDBXGroupManager()
 		if err != nil {
 			return flow.Error(err, "get CN DataSource Failed")
 		}
@@ -322,7 +321,7 @@ var DrainCommittingTrans = polardbxv1reconcile.NewStepBinder("DrainCommittingTra
 var SendHeartBeat = polardbxv1reconcile.NewStepBinder("SendHeartBeat",
 	func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
 		backup := rc.MustGetPolarDBXBackup()
-		cnManager, err := rc.GetPolarDBXGroupManagerByBackup(backup)
+		cnManager, err := rc.GetPolarDBXGroupManager()
 		if err != nil {
 			return flow.Error(err, "Get CN dataSource failed")
 		}
@@ -333,7 +332,7 @@ var SendHeartBeat = polardbxv1reconcile.NewStepBinder("SendHeartBeat",
 			"  `id` bigint(20) NOT NULL AUTO_INCREMENT BY GROUP,\n" +
 			"  `sname` varchar(10) DEFAULT NULL,\n" +
 			"  `gmt_modified` datetime(3) DEFAULT NULL,\n" +
-			"  PRIMARY KEY (`id`)\n) ENGINE = InnoDB AUTO_INCREMENT = 1666172319 DEFAULT CHARSET = utf8mb4 DEFAULT COLLATE = utf8mb4_0900_ai_ci  broadcast"
+			"  PRIMARY KEY (`id`)\n) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 broadcast"
 		err = cnManager.CreateTable("__cdc__", heartbeatTableDDL)
 		if err != nil {
 			return flow.Error(err, "Create heartbeat table failed: "+err.Error())

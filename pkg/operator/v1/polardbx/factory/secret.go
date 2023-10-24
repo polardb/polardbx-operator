@@ -57,6 +57,10 @@ func (f *objectFactory) NewSecret() (*corev1.Secret, error) {
 
 	privileges := polardbx.Spec.Privileges
 
+	if polardbx.Spec.Readonly {
+		privileges = f.rc.MustGetPrimaryPolarDBX().Spec.Privileges
+	}
+
 	// Random password if not specified.
 	accounts := make(map[string]string)
 	for _, priv := range privileges {

@@ -30,12 +30,18 @@ import (
 var ConfigFilepath = "/config/config.yaml"
 
 const (
+	SinkTypeMinio                      = "s3"
 	SinkTypeOss                        = "oss"
 	SinkTypeSftp                       = "sftp"
 	SinkTypeNone                       = "none"
 	DefaultLocalExpireLogHours float64 = 7
 	DefaultMaxLocalBinlogCount         = 50
 )
+
+type MinioSink struct {
+	OssSink
+	UseSSL bool `json:"useSSL,omitempty"`
+}
 
 type OssSink struct {
 	Endpoint     string `json:"endpoint,omitempty"`
@@ -56,6 +62,7 @@ type Sink struct {
 	Type string `json:"type,omitempty"`
 	OssSink
 	SftpSink
+	MinioSink
 }
 
 type BackupBinlogConfig struct {

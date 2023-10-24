@@ -303,6 +303,11 @@ func (r *GalaxyReconciler) newReconcileTask(rc *xstorev1reconcile.Context, xstor
 	case polardbxv1xstore.PhaseUpgrading, polardbxv1xstore.PhaseRepairing:
 		selfHeal := xstore.Status.Phase == polardbxv1xstore.PhaseRepairing
 		instancesteps.PrepareHostPathVolumes(task)
+		control.Block(
+			instancesteps.ReconcileConsensusRoleLabels,
+			instancesteps.WaitUntilLeaderElected,
+			instancesteps.SyncPaxosMeta,
+		)(task)
 		switch xstore.Status.Stage {
 		case polardbxv1xstore.StageEmpty:
 			ec, err := instancesteps.LoadExecutionContext(rc)
@@ -350,6 +355,12 @@ func (r *GalaxyReconciler) newReconcileTask(rc *xstorev1reconcile.Context, xstor
 				)(task)
 			}
 		case polardbxv1xstore.StageClean:
+			control.Block(
+				instancesteps.ReconcileConsensusRoleLabels,
+				instancesteps.WaitUntilLeaderElected,
+				instancesteps.SyncPaxosMeta,
+			)(task)
+			instancesteps.CleanFlushLocalAnnotation(task)
 			instancesteps.DeleteExecutionContext(task)
 			instancesteps.UpdatePhaseTemplate(polardbxv1xstore.PhaseRunning, true)(task)
 		case polardbxv1xstore.StageUpdate:
