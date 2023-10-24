@@ -25,6 +25,7 @@ class BackupStorage(Enum):
     """
     OSS = "OSS"
     SFTP = "SFTP"
+    S3 = "S3"
 
 
 class ClientAction(Enum):
@@ -35,6 +36,8 @@ class ClientAction(Enum):
     UploadOss = "uploadOss"
     DownloadSsh = "DownloadSsh"
     UploadSsh = "uploadSsh"
+    DownloadMinio = "downloadMinio"
+    UploadMinio = "uploadMinio"
 
 
 class FileStreamClient:
@@ -61,6 +64,8 @@ class FileStreamClient:
         ]
         if is_string_input and self._storage == BackupStorage.OSS:
             upload_cmd.append("--meta.ossBufferSize=102400")
+        if is_string_input and self._storage == BackupStorage.S3:
+            upload_cmd.append("--meta.minioBufferSize=102400")
         if logger:
             logger.info("Upload command: %s" % upload_cmd)
         with subprocess.Popen(upload_cmd, stdin=stdin, stderr=stderr, close_fds=True) as up:
@@ -122,5 +127,8 @@ class FileStreamClient:
         elif self._storage == BackupStorage.SFTP:
             self._download_action = ClientAction.DownloadSsh
             self._upload_action = ClientAction.UploadSsh
+        elif self._storage == BackupStorage.S3:
+            self._download_action = ClientAction.DownloadMinio
+            self._upload_action = ClientAction.UploadMinio
         else:
             raise NotImplementedError

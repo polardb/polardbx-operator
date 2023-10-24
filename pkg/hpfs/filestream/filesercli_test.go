@@ -20,6 +20,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"encoding/base64"
+	"github.com/alibaba/polardbx-operator/pkg/hpfs/config"
 	"github.com/google/uuid"
 	. "github.com/onsi/gomega"
 	"io"
@@ -316,4 +317,97 @@ func TestDownloadRemote(t *testing.T) {
 	fd.Close()
 	time.Sleep(2 * time.Second)
 	checkFile(g)
+}
+
+func TestUploadAndDownloadMinio(t *testing.T) {
+	config.ConfigFilepath = "/Users/wkf/hpfs/config.yaml"
+	g := NewGomegaWithT(t)
+	config.InitConfig()
+	fileServer := startFileServer()
+	defer fileServer.Stop()
+	client := NewFileClient("127.0.0.1", 22222, nil)
+
+	defer os.RemoveAll("./busuinstanceid/")
+	fd, err := os.OpenFile("./filesercli_test.go", os.O_RDONLY, 0664)
+	g.Expect(err).Should(BeNil())
+	actionMetadata := ActionMetadata{
+		Action:     UploadMinio,
+		InstanceId: "busuinstanceid",
+		Filename:   "busutest.txt",
+		RequestId:  uuid.New().String(),
+	}
+	_, err = client.Upload(fd, actionMetadata)
+	fd.Close()
+	client.Check(actionMetadata)
+	g.Expect(err).Should(BeNil())
+	actionMetadata = ActionMetadata{
+		Action:     DownloadMinio,
+		InstanceId: "busuinstanceid",
+		Filename:   "busutest.txt",
+	}
+	os.MkdirAll("./busuinstanceid", os.ModePerm)
+	fd, err = os.OpenFile("./busuinstanceid/busutest.txt", os.O_CREATE|os.O_RDWR, os.ModePerm)
+	g.Expect(err).Should(BeNil())
+	_, err = client.Download(fd, actionMetadata)
+	fd.Close()
+	g.Expect(err).Should(BeNil())
+	checkFile(g)
+	os.RemoveAll("./busuinstanceid/")
+}
+
+func TestUploadAndDownloadMinioUsingMinioBufferSize(t *testing.T) {
+	config.ConfigFilepath = "/Users/wkf/hpfs/config.yaml"
+	g := NewGomegaWithT(t)
+	config.InitConfig()
+	fileServer := startFileServer()
+	defer fileServer.Stop()
+	client := NewFileClient("127.0.0.1", 22222, nil)
+	defer os.RemoveAll("./busuinstanceid/")
+	fd, err := os.OpenFile("./filesercli_test.go", os.O_RDONLY, 0664)
+	g.Expect(err).Should(BeNil())
+	actionMetadata := ActionMetadata{
+		Action:          UploadMinio,
+		InstanceId:      "busuinstanceid",
+		Filename:        "busutest.txt",
+		RequestId:       uuid.New().String(),
+		MinioBufferSize: "102400",
+	}
+	_, err = client.Upload(fd, actionMetadata)
+	fd.Close()
+	client.Check(actionMetadata)
+	g.Expect(err).Should(BeNil())
+	actionMetadata = ActionMetadata{
+		Action:     DownloadMinio,
+		InstanceId: "busuinstanceid",
+		Filename:   "busutest.txt",
+	}
+	os.MkdirAll("./busuinstanceid", os.ModePerm)
+	fd, err = os.OpenFile("./busuinstanceid/busutest.txt", os.O_CREATE|os.O_RDWR, os.ModePerm)
+	g.Expect(err).Should(BeNil())
+	_, err = client.Download(fd, actionMetadata)
+	fd.Close()
+	g.Expect(err).Should(BeNil())
+	checkFile(g)
+	os.RemoveAll("./busuinstanceid/")
+
+}
+
+func TestListFilesMinio(t *testing.T) {
+	config.ConfigFilepath = "/Users/wkf/hpfs/config.yaml"
+	g := NewGomegaWithT(t)
+	config.InitConfig()
+	fileServer := startFileServer()
+	defer fileServer.Stop()
+	client := NewFileClient("127.0.0.1", 22222, nil)
+
+	actionMetadata := ActionMetadata{
+		Action:   ListMinio,
+		Filepath: "busuhhhh",
+	}
+	os.MkdirAll("./busuinstanceid", os.ModePerm)
+	fd, err := os.OpenFile("./busuinstanceid/busutest.txt", os.O_CREATE|os.O_RDWR, os.ModePerm)
+	g.Expect(err).Should(BeNil())
+	_, err = client.List(fd, actionMetadata)
+	fd.Close()
+	g.Expect(err).Should(BeNil())
 }

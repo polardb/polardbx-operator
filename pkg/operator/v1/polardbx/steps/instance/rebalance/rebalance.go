@@ -419,7 +419,7 @@ var EnsureTrailingDNsAreDrainedOrBlock = polardbxv1reconcile.NewStepBinder(
 		polardbx := rc.MustGetPolarDBX()
 		cdcNodeSpec := polardbx.Status.SpecSnapshot.Topology.Nodes.CDC
 		if featuregate.WaitDrainedNodeToBeOffline.Enabled() ||
-			(cdcNodeSpec != nil && (cdcNodeSpec.Replicas+cdcNodeSpec.XReplicas) > 0) {
+			(cdcNodeSpec != nil && (cdcNodeSpec.Replicas.IntValue()+cdcNodeSpec.XReplicas) > 0) {
 			offline, err := rebalanceTask.areScaleInDrainedNodesOffline(rc)
 			if err != nil {
 				return flow.Error(err, "Unable to determine offline status from GMS.")

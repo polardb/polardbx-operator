@@ -20,6 +20,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"github.com/alibaba/polardbx-operator/pkg/util/database"
 	"strings"
 
 	"github.com/alibaba/polardbx-operator/pkg/featuregate"
@@ -65,6 +66,26 @@ func init() {
 					}
 				}
 			}
+
+			rows, err := db.Query("show slave status")
+			if err != nil {
+				return err
+			}
+			defer rows.Close()
+			for rows.Next() {
+				queryMap := map[string]interface{}{
+					"Last_SQL_Error": &sql.NullString{},
+				}
+				err = database.Scan(rows, queryMap, database.ScanOpt{CaseInsensitive: true})
+				if err != nil {
+					return err
+				}
+				val := queryMap["Last_SQL_Error"].(*sql.NullString)
+				if !(val.Valid && val.String == "") {
+					return errors.New("Last_SQL_Error is not null")
+				}
+			}
+
 			return nil
 		}))
 }

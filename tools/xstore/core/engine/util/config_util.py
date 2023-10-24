@@ -36,6 +36,8 @@ def get_dynamic_mysql_cnf_by_spec(cpu, mem):
     result["loose_rds_reserved_connections"] = str(maintain_max_connections)
     result["loose_maintain_max_connections"] = str(maintain_max_connections)
     max_user_connections = int(cpu)
+    if max_user_connections < 8000:
+        max_user_connections = 8000
     result["max_user_connections"] = str(max_user_connections)
     max_connections = loose_rds_kill_connections + maintain_max_connections + max_user_connections
     result["max_connections"] = str(max_connections)

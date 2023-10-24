@@ -96,7 +96,7 @@ func CreateTaskConfig(rc *polardbxv1reconcile.Context, pxcBackup *polarxv1.Polar
 	xstoreConfigs := generateXStoreTaskConfigs(xstoreBackups.Items)
 
 	var currentXStores polarxv1.XStoreList
-	err = rc.Client().List(rc.Context(), &currentXStores, client.InNamespace(pxcBackup.Namespace), client.MatchingLabels{
+	err = rc.Client().List(rc.Context(), &currentXStores, client.InNamespace(namespace), client.MatchingLabels{
 		meta.LabelName: pxcBackup.Spec.Cluster.Name,
 	})
 	if err != nil {
@@ -142,6 +142,10 @@ func generateXStoreTaskConfigs(dnBackups []polarxv1.XStoreBackup) map[string]*pi
 		if strings.HasSuffix(xstoreName, "gms") {
 			globalConsistent = false
 		}
+		podName := backup.Status.TargetPod
+		if podName == "" {
+			podName = backup.Spec.XStore.Name + "-cand-0"
+		}
 		dnConfig := pitr.XStoreConfig{
 			GlobalConsistent:    globalConsistent,
 			XStoreName:          xstoreName,
@@ -149,8 +153,8 @@ func generateXStoreTaskConfigs(dnBackups []polarxv1.XStoreBackup) map[string]*pi
 			BackupSetStartIndex: uint64(backup.Status.CommitIndex),
 			HeartbeatSname:      backupbinlog.Sname,
 			Pods: map[string]*pitr.PodConfig{
-				backup.Status.TargetPod: {
-					PodName: backup.Status.TargetPod,
+				podName: {
+					PodName: podName,
 				},
 			},
 		}

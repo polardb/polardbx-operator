@@ -49,6 +49,7 @@ PORT_PAXOS = 'paxos'
 
 ANNOTATION_XSTORE_INDICATE = 'xstore/indicate'
 ANNOTATION_RUNMODE = 'runmode'
+ANNOTATION_FLUSH_LOCAL = 'xstore/flushlocal'
 
 # Node roles.
 

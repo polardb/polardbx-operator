@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"github.com/alibaba/polardbx-operator/pkg/util/network"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"strings"
 	"time"
 
@@ -245,7 +246,7 @@ func SyncDynamicConfigs(force bool) control.BindFunc {
 
 		// Initialize template parameters
 		if polardbx.Spec.ParameterTemplate.Name != "" {
-			parameter := rc.MustGetPolarDBXParameterTemplate(polardbx.Spec.ParameterTemplate.Name)
+			parameter := rc.MustGetPolarDBXParameterTemplate(polardbx.Spec.ParameterTemplate.Namespace, polardbx.Spec.ParameterTemplate.Name)
 			params := parameter.Spec.NodeType.CN.ParamList
 			for _, param := range params {
 				// dynamic config priority higher than parameter template
@@ -352,17 +353,30 @@ func transformIntoStorageInfos(rc *polardbxreconcile.Context, polardbx *polardbx
 		})
 
 		// Add readonly pod cluster ip service, since CN will not fetch it
-		if readonly {
+		if readonly && polardbx.Status.ReadonlyStorageInfoHash == "" {
 			nodeSets := xstore.Spec.Topology.NodeSets
 			for index, nodeSet := range nodeSets {
 				podName := xstoreconvention.NewPodName(xstore, &nodeSet, index)
 				containerPort := int32(xstore.Status.PodPorts[podName].ToMap()[convention.PortAccess])
 				xPort := network.GetXPort(containerPort)
+				host := ""
+				clusterIpService, _ := rc.GetService(xstoreconvention.NewClusterIpServiceName(podName))
+				if clusterIpService != nil {
+					host = clusterIpService.Name
+				} else {
+					pod, _ := rc.GetPodFromPodName(types.NamespacedName{Namespace: rc.Namespace(), Name: podName})
+					if pod != nil {
+						host = pod.Status.PodIP
+					}
+				}
+				if host == "" {
+					continue
+				}
 				storageInfos = append(storageInfos, gms.StorageNodeInfo{
 					Id:            xstore.Name,
 					MasterId:      masterInstId,
 					ClusterId:     polardbx.Name,
-					Host:          xstoreconvention.NewClusterIpServiceName(podName),
+					Host:          host,
 					Port:          containerPort,
 					XProtocolPort: xPort,
 					User:          xstoreconvention.SuperAccount,

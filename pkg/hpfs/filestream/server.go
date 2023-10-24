@@ -57,6 +57,7 @@ const (
 )
 
 var OssParams = map[string]string{"write_len": "true"}
+var minioParams = map[string]string{"write_len": "true"}
 
 var TaskMap = sync.Map{}
 
@@ -166,6 +167,14 @@ func (f *FileServer) handleRequest(conn net.Conn) error {
 		f.processDownloadSsh(logger, metadata, conn)
 	case strings.ToLower(string(ListSsh)):
 		f.processListSsh(logger, metadata, conn)
+	case strings.ToLower(string(UploadMinio)):
+		f.markTask(logger, metadata, TaskStateDoing)
+		err := f.processUploadMinio(logger, metadata, conn)
+		f.processTaskResult(logger, err, metadata)
+	case strings.ToLower(string(DownloadMinio)):
+		f.processDownloadMinio(logger, metadata, conn)
+	case strings.ToLower(string(ListMinio)):
+		f.processListMinio(logger, metadata, conn)
 	case strings.ToLower(string(CheckTask)):
 		f.processCheckTask(logger, metadata, conn)
 	default:
@@ -417,6 +426,15 @@ func getOssAuth(sink Sink) map[string]string {
 	}
 }
 
+func getMinioAuth(sink Sink) map[string]string {
+	return map[string]string{
+		"endpoint":   sink.Endpoint,
+		"access_key": sink.AccessKey,
+		"secret_key": sink.AccessSecret,
+		"useSSL":     strconv.FormatBool(sink.UseSSL),
+	}
+}
+
 func (f *FileServer) processUploadOss(logger logr.Logger, metadata ActionMetadata, conn net.Conn) error {
 	sink, err := GetSink(metadata.Sink, SinkTypeOss)
 	if err != nil {
@@ -569,6 +587,172 @@ func (f *FileServer) processListOss(logger logr.Logger, metadata ActionMetadata,
 	nowOssParams["bucket"] = sink.Bucket
 	ossAuth := getOssAuth(*sink)
 	ft, err := fileService.ListFiles(ctx, writer, metadata.Filepath, ossAuth, nowOssParams)
+	if err != nil {
+		logger.Error(err, "Failed to list file from oss ")
+		return err
+	}
+	err = ft.Wait()
+	writer.Close()
+	if err != nil {
+		logger.Error(err, "Failed to list file from oss ")
+		return err
+	}
+	wg.Wait()
+	return nil
+}
+
+func (f *FileServer) processUploadMinio(logger logr.Logger, metadata ActionMetadata, conn net.Conn) error {
+	sink, err := GetSink(metadata.Sink, SinkTypeMinio)
+	if err != nil {
+		logger.Error(err, "fail to get sink", "sinkName", metadata.Sink)
+		return err
+	}
+	fileService, err := remote.GetFileService("s3")
+	if err != nil {
+		logger.Error(err, "Failed to get file service of minio")
+		return err
+	}
+	if metadata.Filepath == "" {
+		filepath := filepath.Join(metadata.InstanceId, metadata.Filename)
+		metadata.Filepath = filepath
+	}
+	reader, writer := io.Pipe()
+	defer func() {
+		reader.Close()
+		writer.Close()
+	}()
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer func() {
+			writer.Close()
+			wg.Done()
+		}()
+		len, _ := f.flowControl.LimitFlow(conn, writer, conn)
+		logger.Info("limitFlow", "len", len)
+	}()
+	ctx := context.Background()
+	newMinioParams := polarxMap.MergeMap(map[string]string{
+		"retention-time": metadata.RetentionTime,
+	}, minioParams, false).(map[string]string)
+	if newMinioParams["retention-time"] == "" {
+		delete(newMinioParams, "retention-time")
+	}
+	if metadata.MinioBufferSize != "" {
+		newMinioParams["limit_reader_size"] = metadata.MinioBufferSize
+	}
+	newMinioParams["bucket"] = sink.Bucket
+	minioAuth := getMinioAuth(*sink)
+	ft, err := fileService.UploadFile(ctx, reader, metadata.Filepath, minioAuth, newMinioParams)
+	if err != nil {
+		logger.Error(err, "Failed to upload file to minio")
+		return err
+	}
+	err = ft.Wait()
+	reader.Close()
+	if err != nil {
+		logger.Error(err, "Failed to upload file to minio after wait")
+		return err
+	}
+	wg.Wait()
+	return nil
+}
+
+func (f *FileServer) processDownloadMinio(logger logr.Logger, metadata ActionMetadata, conn net.Conn) error {
+	sink, err := GetSink(metadata.Sink, SinkTypeMinio)
+	if err != nil {
+		logger.Error(err, "fail to get sink", "sinkName", metadata.Sink)
+		return err
+	}
+	fileService, err := remote.GetFileService("s3")
+	if err != nil {
+		logger.Error(err, "Failed to get file service of minio")
+		return err
+	}
+	if metadata.Filepath == "" {
+		filepath := filepath.Join(metadata.InstanceId, metadata.Filename)
+		metadata.Filepath = filepath
+	}
+	pReader, writer := io.Pipe()
+	defer func() {
+		writer.Close()
+		pReader.Close()
+	}()
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer func() {
+			err := recover()
+			if err != nil {
+				logger.Info("panic", "err", err)
+			}
+		}()
+		defer func() {
+			pReader.Close()
+			wg.Done()
+		}()
+		var reader io.Reader = pReader
+		if metadata.LimitSize != "" {
+			limitSize, _ := strconv.ParseInt(metadata.LimitSize, 10, 64)
+			reader = io.LimitReader(reader, limitSize)
+		}
+		len, _ := f.flowControl.LimitFlow(reader, conn, nil)
+		logger.Info("limitFlow", "len", len)
+	}()
+	ctx := context.Background()
+	newMinioParams := polarxMap.MergeMap(map[string]string{}, minioParams, false).(map[string]string)
+	newMinioParams["bucket"] = sink.Bucket
+	minioAuth := getMinioAuth(*sink)
+	ft, err := fileService.DownloadFile(ctx, writer, metadata.Filepath, minioAuth, newMinioParams)
+	if err != nil {
+		logger.Error(err, "Failed to download file from minio ")
+		return err
+	}
+	err = ft.Wait()
+	writer.Close()
+	if err != nil {
+		logger.Error(err, "Failed to download file from minio ")
+		return err
+	}
+	wg.Wait()
+	return nil
+}
+
+func (f *FileServer) processListMinio(logger logr.Logger, metadata ActionMetadata, conn net.Conn) error {
+	sink, err := GetSink(metadata.Sink, SinkTypeMinio)
+	if err != nil {
+		logger.Error(err, "fail to get sink", "sinkName", metadata.Sink)
+		return err
+	}
+	fileService, err := remote.GetFileService("s3")
+	if err != nil {
+		logger.Error(err, "Failed to get file service of minio")
+		return err
+	}
+	if metadata.Filepath != "" && metadata.Filepath[len(metadata.Filepath)-1] != '/' {
+		metadata.Filepath = polarxPath.NewPathFromStringSequence(metadata.Filepath, "")
+	}
+	logger.Info("filepath to be listed: " + metadata.Filepath)
+	reader, writer := io.Pipe()
+	defer func() {
+		writer.Close()
+		reader.Close()
+	}()
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer func() {
+			reader.Close()
+			wg.Done()
+		}()
+		len, _ := f.flowControl.LimitFlow(reader, conn, nil)
+		logger.Info("limitFlow", "len", len)
+	}()
+	ctx := context.Background()
+	minioParams := polarxMap.MergeMap(map[string]string{}, minioParams, false).(map[string]string)
+	minioParams["bucket"] = sink.Bucket
+	minioAuth := getMinioAuth(*sink)
+	ft, err := fileService.ListFiles(ctx, writer, metadata.Filepath, minioAuth, minioParams)
 	if err != nil {
 		logger.Error(err, "Failed to list file from oss ")
 		return err
@@ -881,17 +1065,18 @@ func (f *FileServer) readMetadata(reader io.Reader) (actionMeta ActionMetadata, 
 		return
 	}
 	actionMeta = ActionMetadata{
-		Action:        Action(metadata[MetadataActionOffset]),
-		InstanceId:    metadata[MetadataInstanceIdOffset],
-		Filename:      metadata[MetadataFilenameOffset],
-		RedirectAddr:  metadata[MetadataRedirectOffset],
-		Filepath:      metadata[MetadataFilepathOffset],
-		RetentionTime: metadata[MetadataRetentionTimeOffset],
-		Stream:        metadata[MetadataStreamOffset],
-		Sink:          metadata[MetadataSinkOffset],
-		RequestId:     metadata[MetadataRequestIdOffset],
-		OssBufferSize: metadata[MetadataOssBufferSizeOffset],
-		LimitSize:     metadata[MetadataLimitSize],
+		Action:          Action(metadata[MetadataActionOffset]),
+		InstanceId:      metadata[MetadataInstanceIdOffset],
+		Filename:        metadata[MetadataFilenameOffset],
+		RedirectAddr:    metadata[MetadataRedirectOffset],
+		Filepath:        metadata[MetadataFilepathOffset],
+		RetentionTime:   metadata[MetadataRetentionTimeOffset],
+		Stream:          metadata[MetadataStreamOffset],
+		Sink:            metadata[MetadataSinkOffset],
+		RequestId:       metadata[MetadataRequestIdOffset],
+		OssBufferSize:   metadata[MetadataOssBufferSizeOffset],
+		LimitSize:       metadata[MetadataLimitSize],
+		MinioBufferSize: metadata[MetadataMinioBufferSizeOffset],
 	}
 	return
 }

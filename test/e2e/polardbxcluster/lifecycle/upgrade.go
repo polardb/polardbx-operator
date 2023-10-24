@@ -21,6 +21,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"time"
 
 	"github.com/onsi/ginkgo"
@@ -175,7 +176,7 @@ var _ = ginkgo.Describe("[PolarDBXCluster] [Lifecycle:Upgrade]", func() {
 		exp.ExpectDeploymentsOk()
 		exp.ExpectXStoresOk()
 
-		obj.Spec.Topology.Nodes.CDC.Replicas = 2
+		obj.Spec.Topology.Nodes.CDC.Replicas = intstr.FromInt(2)
 		err := f.Client.Update(f.Ctx, obj)
 		framework.ExpectNoError(err)
 
@@ -226,7 +227,7 @@ var _ = ginkgo.Describe("[PolarDBXCluster] [Lifecycle:Upgrade]", func() {
 		exp.ExpectXStoresOk()
 
 		obj.Spec.Topology.Nodes.CDC = &polardbxv1polardbx.TopologyNodeCDC{
-			Replicas: 1,
+			Replicas: intstr.FromInt(1),
 		}
 		obj.Spec.Topology.Nodes.CDC.Template.Resources = resources
 		err := f.Client.Update(f.Ctx, obj)

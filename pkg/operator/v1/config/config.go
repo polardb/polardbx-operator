@@ -27,6 +27,7 @@ import (
 )
 
 type config struct {
+	Version         string          `json:"version,omitempty"`
 	ImagesConfig    imagesConfig    `json:"images,omitempty"`
 	SchedulerConfig schedulerConfig `json:"scheduler,omitempty"`
 	ClusterConfig   clusterConfig   `json:"cluster,omitempty"`

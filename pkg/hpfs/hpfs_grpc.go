@@ -837,6 +837,13 @@ func GetFileServiceParam(sinkName string, sinkType string) (err error, params ma
 		auth["username"] = sinkPtr.User
 		auth["password"] = sinkPtr.Password
 		fileServiceName = "sftp"
+	} else if sinkPtr.Type == config.SinkTypeMinio {
+		auth["endpoint"] = sinkPtr.Endpoint
+		auth["access_key"] = sinkPtr.AccessKey
+		auth["secret_key"] = sinkPtr.AccessSecret
+		auth["useSSL"] = strconv.FormatBool(sinkPtr.UseSSL)
+		params["bucket"] = sinkPtr.Bucket
+		fileServiceName = "s3"
 	}
 	return
 }

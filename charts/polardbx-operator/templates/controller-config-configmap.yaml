@@ -12,6 +12,7 @@ data:
       storage_engine: {{ .Values.webhook.defaults.storageEngine }}
       service_type: {{ .Values.webhook.defaults.serviceType }}
       upgrade_strategy: {{ .Values.webhook.defaults.upgradeStrategy }}
+      operator_version: {{ .Values.version }}
   config.yaml: |-
     images:
       repo: {{ .Values.imageRepo }}
@@ -50,6 +51,7 @@ data:
       enable_aliyun_ack_resource_controller: {{ .Values.controllerManager.config.scheduler.enableAliyunAckResourceController }}
       enable_debug_mode_for_compute_nodes: false
       enable_privileged_container: {{ .Values.controllerManager.config.container.privileged }}
+      enable_run_mode_check: false
       force_cgroup: {{ .Values.controllerManager.config.container.forceCGroup }}
     store:
       enable_privileged_container: {{ .Values.controllerManager.config.container.privileged }}

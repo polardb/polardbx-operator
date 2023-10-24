@@ -14,6 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+## Periodically copy tools/xstore to /target
+
 set -e
 
 if [[ $# -lt 1 ]]; then

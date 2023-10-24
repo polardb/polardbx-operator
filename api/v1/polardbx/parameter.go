@@ -24,6 +24,8 @@ const (
 type ParameterTemplate struct {
 	// parameter template
 	// +optional
+	Namespace string `json:"namespace,omitempty"`
+	// +optional
 	Name string `json:"name,omitempty"`
 }
 

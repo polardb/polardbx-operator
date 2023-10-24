@@ -203,6 +203,16 @@ func CreateTmpPod(podTemplate *corev1.Pod, nodeName string, label map[string]str
 	pod.SetLabels(k8shelper.PatchLabels(pod.Labels, label, map[string]string{
 		xstoremeta.LabelOriginName: pod.Labels[xstoremeta.LabelName],
 	}))
+	pod.SetAnnotations(k8shelper.PatchAnnotations(pod.Annotations, map[string]string{
+		"runmode": "debug",
+	}))
+	for i := range pod.Spec.Containers {
+		if pod.Spec.Containers[i].Name == "engine" {
+			pod.Spec.Containers[i].Command = []string{"/bin/bash", "-c"}
+			pod.Spec.Containers[i].Args = []string{`sleep 36000000`}
+			break
+		}
+	}
 	podAntiAffinity := pod.Spec.Affinity.PodAntiAffinity
 	if podAntiAffinity != nil {
 		if podAntiAffinity.RequiredDuringSchedulingIgnoredDuringExecution == nil {

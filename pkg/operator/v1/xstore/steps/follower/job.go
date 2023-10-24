@@ -40,7 +40,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"strconv"
 	"strings"
-	"time"
 )
 
 type JobContext struct {
@@ -171,7 +170,7 @@ func JobArgFlushConsensusFunc(ctx JobContext) []string {
 		learnerFlag = "--learner"
 	}
 	return []string{"-c",
-		"chown -R  mysql:mysql  /data/mysql && rm -fR /data/mysql/log/mysql_bin.* && /tools/xstore/current/venv/bin/python3 /tools/xstore/current/cli.py engine reset_meta --recover-index-filepath=" + backupBinlogInfoFilepath + " " + learnerFlag,
+		"chown -R  mysql:mysql  /data/mysql && rm -fR /data/mysql/log/mysql_bin.* && /tools/xstore/current/venv/bin/python3 /tools/xstore/current/cli.py engine reset_meta --learner --recover-index-filepath=" + backupBinlogInfoFilepath + " " + learnerFlag,
 	}
 }
 
@@ -189,16 +188,20 @@ func GetFileStreamDir(pod *corev1.Pod) string {
 	return filepath.Join(FileStreamRootDir, GetFileStreamInstanceId(pod), FileStreamBackupFilename)
 }
 
-func newJobName(task JobTask, targetPod *corev1.Pod) string {
-	hashStr := strconv.FormatUint(security.Hash(targetPod.Name), 16)
+func newJobName(task JobTask, targetPod *corev1.Pod, xfName string) string {
+	hashStr := strconv.FormatUint(security.Hash(targetPod.Name+xfName), 16)
 	suffix := ""
 	if val, ok := targetPod.Labels[polarxmeta.LabelRole]; ok {
-		suffix = suffix + "-" + val
+		suffix = suffix + val
 	}
 	if val, ok := targetPod.Labels[polarxmeta.LabelDNIndex]; ok {
-		suffix += suffix + "-" + val
+		suffix = suffix + val
 	}
-	return fmt.Sprintf("job-%s-%s-%d-%s%s", string(task), hashStr, time.Now().Unix(), targetPod.Labels[xstoremeta.LabelNodeSet], suffix)
+	jobName := fmt.Sprintf("job%s%s%s", string(task), hashStr, suffix)
+	if len(jobName) > 63 {
+		jobName = jobName[:62] + "0"
+	}
+	return jobName
 }
 
 func newJob(ctx JobContext) *batchv1.Job {
@@ -341,7 +344,7 @@ var StartBackupJob = NewStepBinder("StartBackupJob", func(rc *xstorev1reconcile.
 	if err != nil {
 		return flow.RetryErr(err, "GetXStorePod Failed")
 	}
-	jobName := newJobName(JobTaskBackup, fromPod)
+	jobName := newJobName(JobTaskBackup, fromPod, rc.MustGetXStoreFollower().GetName())
 	jobContext := JobContext{
 		jobName:       jobName,
 		jobTask:       JobTaskBackup,
@@ -407,7 +410,7 @@ func CreateJob(rc *xstorev1reconcile.FollowerContext, jobTask JobTask) (string, 
 	if err != nil {
 		return "", err
 	}
-	jobName := newJobName(jobTask, targetPod)
+	jobName := newJobName(jobTask, targetPod, rc.MustGetXStoreFollower().GetName())
 	jobContext := JobContext{
 		jobName:       jobName,
 		jobTask:       jobTask,

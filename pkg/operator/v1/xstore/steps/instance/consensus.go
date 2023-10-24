@@ -18,9 +18,13 @@ package instance
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	polarxv1 "github.com/alibaba/polardbx-operator/api/v1"
+	"github.com/alibaba/polardbx-operator/api/v1/common"
+	"github.com/alibaba/polardbx-operator/pkg/featuregate"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/plugin/common/channel"
+	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"strconv"
@@ -46,6 +50,76 @@ const (
 	SlaveSqlRunningYes      string  = "Yes"
 	ReplicationDelaySeconds float64 = 1800 //half an hour
 )
+
+type ConsensusGlobalInfoItem struct {
+	ServerId       int64  `json:"serverId,omitempty"`
+	Addr           string `json:"addr,omitempty"`
+	Role           string `json:"role,omitempty"`
+	MatchIndex     int64  `json:"matchIndex,omitempty"`
+	NextIndex      int64  `json:"nextIndex,omitempty"`
+	AppliedIndex   int64  `json:"appliedIndex,omitempty"`
+	ElectionWeight int64  `json:"electionWeight,omitempty"`
+	ForceSync      bool   `json:"forceSync,omitempty"`
+	LearnerSource  int64  `json:"learnerSource,omitempty"`
+	IsLogger       *bool  `json:"isLogger,omitempty"`
+	Local          bool   `json:"local,omitempty"`
+	Pod            string `json:"pod,omitempty"`
+}
+
+func ShowGlobalInfo(rc *xstorev1reconcile.Context, pod *corev1.Pod, logger logr.Logger) ([]ConsensusGlobalInfoItem, error) {
+	cmd := xstoreexec.NewCanonicalCommandBuilder().Consensus().List(true).Build()
+	stdout := &bytes.Buffer{}
+	err := rc.ExecuteCommandOn(pod, "engine", cmd, control.ExecOptions{
+		Logger:  logger,
+		Stdout:  stdout,
+		Timeout: 10 * time.Second,
+	})
+	if err != nil {
+		return nil, err
+	}
+	commandResult := stdout.String()
+	logger.Info(fmt.Sprintf("show global info result = %s", commandResult))
+	parsedResult, err := xstoreexec.ParseCommandResultGenerally(commandResult)
+	if err != nil {
+		return nil, err
+	}
+	if len(parsedResult) == 0 {
+		return nil, fmt.Errorf("failed to get global info")
+	}
+	result := make([]ConsensusGlobalInfoItem, 0, len(parsedResult))
+	for _, oneParsedResult := range parsedResult {
+		item := ConsensusGlobalInfoItem{}
+		item.ServerId, err = strconv.ParseInt(strings.TrimSpace(oneParsedResult["server_id"].(string)), 10, 64)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to parse server_id")
+		}
+		item.Addr = strings.TrimSpace(oneParsedResult["addr"].(string))
+		item.Role = strings.TrimSpace(oneParsedResult["role"].(string))
+		item.MatchIndex, err = strconv.ParseInt(strings.TrimSpace(oneParsedResult["match_index"].(string)), 10, 64)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to parse match_index")
+		}
+		item.NextIndex, err = strconv.ParseInt(strings.TrimSpace(oneParsedResult["next_index"].(string)), 10, 64)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to parse next_index")
+		}
+		item.AppliedIndex, err = strconv.ParseInt(strings.TrimSpace(oneParsedResult["applied_index"].(string)), 10, 64)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to parse applied_index")
+		}
+		item.ElectionWeight, err = strconv.ParseInt(strings.TrimSpace(oneParsedResult["election_weight"].(string)), 10, 64)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to parse election_weight")
+		}
+		item.ForceSync = "Yes" == strings.TrimSpace(oneParsedResult["force_sync"].(string))
+		item.LearnerSource, err = strconv.ParseInt(strings.TrimSpace(oneParsedResult["learner_source"].(string)), 10, 64)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to parse learner_source")
+		}
+		result = append(result, item)
+	}
+	return result, nil
+}
 
 type ShowSlaveStatusResult struct {
 	RelayLogFile         string
@@ -257,15 +331,13 @@ func TryDetectLeaderChange(rc *xstorev1reconcile.Context, pods []corev1.Pod, log
 
 	// Detect current leader, first let's see if leader isn't changed.
 	if previousLeader != "" {
-		role, leader, err := ReportRoleAndCurrentLeader(rc, previousLeaderPod, logger)
+		role, _, err := ReportRoleAndCurrentLeader(rc, previousLeaderPod, logger)
 		podsVisited[previousLeader] = struct{}{}
 		if err != nil {
 			logger.Error(err, "Unable to report role and current leader on previous leader.", "pod", previousLeader)
 		} else {
 			if role == xstoremeta.RoleLeader {
 				return previousLeader, false
-			} else if leader != "" {
-				return leader, true
 			}
 		}
 	}
@@ -290,21 +362,12 @@ func TryDetectLeaderChange(rc *xstorev1reconcile.Context, pods []corev1.Pod, log
 			continue
 		}
 
-		role, leader, err := ReportRoleAndCurrentLeader(rc, pod, logger)
+		role, _, err := ReportRoleAndCurrentLeader(rc, pod, logger)
 		if err != nil {
 			logger.Error(err, "Unable to report role and current leader on pod.", "pod", pod.Name)
 		} else {
 			if role == xstoremeta.RoleLeader {
 				return pod.Name, pod.Name != previousLeader
-			} else if leader != "" {
-				// Do not trust followers, as they can cache the status. Just make sure again.
-				if _, visited := podsVisited[leader]; !visited {
-					role, _, err := ReportRoleAndCurrentLeader(rc, podMap[leader], logger)
-					if err == nil && role == xstoremeta.RoleLeader {
-						return leader, true
-					}
-					podsVisited[leader] = struct{}{}
-				}
 			}
 		}
 
@@ -411,31 +474,12 @@ var AddLearnerNodesToClusterOnLeader = xstorev1reconcile.NewStepBinder("AddLearn
 		if leaderPod == nil {
 			return flow.RetryAfter(10*time.Second, "Leader not found, keep waiting...")
 		}
-		sharedCm, err := rc.GetXStoreConfigMap(convention.ConfigMapTypeShared)
-		if err != nil {
-			return flow.Error(err, "Unable to get shared config map.")
-		}
-
-		sharedChannel, err := commonsteps.ParseChannelFromConfigMap(sharedCm)
-		if err != nil {
-			return flow.Error(err, "Unable to parse shared channel from config map.")
-		}
-		nodeMap := map[string]channel.Node{}
-		for _, node := range sharedChannel.Nodes {
-			nodeMap[node.Pod] = node
-		}
 		for _, learnerNode := range learnerNodes {
-			node, ok := nodeMap[learnerNode.Pod]
-			if !ok {
-				return flow.RetryErr(fmt.Errorf("%s", "failed to get node in the shared channel"), "PodName", learnerNode.Pod)
-			}
-			cmd := xstoreexec.NewCanonicalCommandBuilder().Consensus().AddLearner(fmt.Sprintf("%s:%d", node.Host, node.Port)).Build()
-
+			cmd := xstoreexec.NewCanonicalCommandBuilder().Consensus().AddLearner(fmt.Sprintf("%s:%d", learnerNode.Host, learnerNode.Port)).Build()
 			err := rc.ExecuteCommandOn(leaderPod, convention.ContainerEngine, cmd, control.ExecOptions{
 				Logger:  flow.Logger(),
 				Timeout: 2 * time.Second,
 			})
-
 			if err != nil {
 				return flow.RetryErr(err, "Unable to add learner node.", "pod", learnerNode.Pod, "leader", leaderPod.Name)
 			}
@@ -451,6 +495,11 @@ func newXStoreFollowerName(xStoreName string) string {
 
 var RestoreToLearner = xstorev1reconcile.NewStepBinder("RestoreToLearner",
 	func(rc *xstorev1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+		if featuregate.EnableLabMode.Enabled() {
+			if rc.MustGetXStore().Spec.Engine != "xcluster" {
+				return flow.Pass()
+			}
+		}
 		//check xStore follower task exists
 		xfName := newXStoreFollowerName(rc.Name())
 		objKey := types.NamespacedName{
@@ -626,3 +675,257 @@ var EnableElection = xstorev1reconcile.NewStepBinder("EnableElection",
 		return flow.Continue("Enable Election Success.")
 	},
 )
+
+var CleanFlushLocalAnnotation = xstorev1reconcile.NewStepBinder("CleanFlushLocalAnnotation",
+	func(rc *xstorev1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+		pods, err := rc.GetXStorePods()
+		if err != nil {
+			return flow.RetryErr(err, "failed to get xstore pods")
+		}
+		for _, pod := range pods {
+			podAnnotations := k8shelper.PatchAnnotations(pod.Annotations, map[string]string{
+				xstoremeta.AnnotationFlushLocal: "false",
+			})
+			pod.SetAnnotations(podAnnotations)
+			err := rc.Client().Update(rc.Context(), &pod)
+			if err != nil {
+				return flow.RetryErr(err, "failed to update pod annotation")
+			}
+		}
+		return flow.Continue("CleanFlushLocalAnnotation Success.")
+	},
+)
+
+var SyncPaxosMeta = xstorev1reconcile.NewStepBinder("SyncPaxosMeta",
+	func(rc *xstorev1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+		leaderPod, err := rc.TryGetXStoreLeaderPod()
+		if err != nil || leaderPod == nil {
+			return flow.RetryErr(err, "Failed to get xstore leader pod")
+		}
+		globalInfo, err := ShowGlobalInfo(rc, leaderPod, flow.Logger())
+		if err != nil {
+			return flow.RetryErr(err, "failed to show global info")
+		}
+		globalInfoMap := map[string]*ConsensusGlobalInfoItem{}
+		for i, oneGlobalInfo := range globalInfo {
+			globalInfoMap[oneGlobalInfo.Addr] = &globalInfo[i]
+		}
+		globalInfoItems, svcMetaMap, err := GenerateExpectedGlobalInfo(rc)
+		if err != nil {
+			return flow.RetryErr(err, "failed to generate expected global info")
+		}
+		if bytes, err := json.Marshal(globalInfoItems); err == nil {
+			flow.Logger().Info(fmt.Sprintf("globalInfoItems = %s", string(bytes)))
+		}
+		for _, item := range globalInfoItems {
+			svcMetaMap[item.Pod] = !item.Local
+		}
+		rc.SetSvcMetaMap(svcMetaMap)
+
+		var leaderMatchIndex int64 = -1
+		for _, globalInfoItem := range globalInfo {
+			if strings.EqualFold(globalInfoItem.Role, string(polardbxv1xstore.RoleLeader)) {
+				leaderMatchIndex = globalInfoItem.MatchIndex
+				break
+			}
+		}
+		if leaderMatchIndex == -1 {
+			return flow.Retry("failed to find match index of leader")
+		}
+
+		var retry bool
+		accessMap := map[string]bool{}
+		for _, globalInfoItem := range globalInfoItems {
+			accessMap[globalInfoItem.Addr] = true
+			if actualItem, ok := globalInfoMap[globalInfoItem.Addr]; ok {
+
+				if strings.EqualFold(actualItem.Role, string(polardbxv1xstore.RoleFollower)) && !(globalInfoItem.IsLogger != nil && *globalInfoItem.IsLogger) {
+					if rc.GetMetaFollowerAddr() == "" {
+						rc.SetMetaFollowerAddr(globalInfoItem.Addr)
+					}
+				}
+
+				if strings.EqualFold(actualItem.Role, string(polardbxv1xstore.RoleLearner)) {
+					if leaderMatchIndex-actualItem.AppliedIndex > 2000 || actualItem.AppliedIndex == 0 {
+						retry = true
+						flow.Logger().Info(fmt.Sprintf("addr = %s , leaderMatchIndex-actualItem.AppliedIndex = %d", actualItem.Addr, leaderMatchIndex-actualItem.AppliedIndex))
+						continue
+					}
+					if strings.EqualFold(globalInfoItem.Role, string(polardbxv1xstore.RoleFollower)) {
+						cmd := xstoreexec.NewCanonicalCommandBuilder().Consensus().ChangeLearnerToFollower(actualItem.Addr).Build()
+						err := rc.ExecuteCommandOn(leaderPod, "engine", cmd, control.ExecOptions{
+							Logger: flow.Logger(),
+						})
+						if err != nil {
+							return flow.RetryErr(err, fmt.Sprintf("failed to change learner to follower addr: %s", actualItem.Addr))
+						}
+						if globalInfoItem.IsLogger != nil && *globalInfoItem.IsLogger {
+							// change weight to 1
+							_, err := SetPodElectionWeight(rc, leaderPod, flow.Logger(), 1, []string{globalInfoItem.Addr})
+							if err != nil {
+								return flow.RetryErr(err, fmt.Sprintf("failed to set weight of %s to 1", globalInfoItem.Addr))
+							}
+						}
+					}
+				}
+			} else {
+				cmd := xstoreexec.NewCanonicalCommandBuilder().Consensus().AddLearner(globalInfoItem.Addr).Build()
+				err := rc.ExecuteCommandOn(leaderPod, "engine", cmd, control.ExecOptions{
+					Logger: flow.Logger(),
+				})
+				if err != nil {
+					return flow.RetryErr(err, fmt.Sprintf("failed to add learner addr: %s", actualItem.Addr))
+				}
+				retry = true
+			}
+		}
+		for _, globalInfoItem := range globalInfo {
+			if !accessMap[globalInfoItem.Addr] {
+				serverId := globalInfoItem.Addr
+				host := strings.Split(globalInfoItem.Addr, ":")[0]
+				if _, err := strconv.ParseInt(strings.Split(host, ".")[0], 10, 64); err != nil {
+					serverId = strconv.FormatInt(globalInfoItem.ServerId, 10)
+				}
+				if strings.EqualFold(globalInfoItem.Role, string(polardbxv1xstore.RoleFollower)) {
+					cmd := xstoreexec.NewCanonicalCommandBuilder().Consensus().ChangeFollowerToLearner(serverId).Build()
+					err := rc.ExecuteCommandOn(leaderPod, "engine", cmd, control.ExecOptions{
+						Logger: flow.Logger(),
+					})
+					if err != nil {
+						return flow.RetryErr(err, fmt.Sprintf("failed to change follower to learner: %s", globalInfoItem.Addr))
+					}
+					globalInfoItem.Role = string(polardbxv1xstore.RoleLearner)
+				}
+				if strings.EqualFold(globalInfoItem.Role, string(polardbxv1xstore.RoleLearner)) {
+					cmd := xstoreexec.NewCanonicalCommandBuilder().Consensus().DropLearner(serverId).Build()
+					err := rc.ExecuteCommandOn(leaderPod, "engine", cmd, control.ExecOptions{
+						Logger: flow.Logger(),
+					})
+					if err != nil {
+						return flow.RetryErr(err, fmt.Sprintf("failed to drop learner: %s", globalInfoItem.Addr))
+					}
+				}
+			}
+		}
+
+		if retry {
+			return flow.Retry("to retry")
+		}
+
+		return flow.Continue("SyncPaxosMeta Success.")
+	},
+)
+
+func GenerateExpectedGlobalInfo(rc *xstorev1reconcile.Context) ([]ConsensusGlobalInfoItem, map[string]bool, error) {
+	pods, err := rc.GetPrimaryXStorePods()
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "failed to get xstore pods¬")
+	}
+	readOnlyPods, err := rc.GetReadonlyPods()
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "failed to get readonly pods")
+	}
+	if len(readOnlyPods) > 0 {
+		pods = append(pods, readOnlyPods...)
+	}
+	podMap := make(map[string]corev1.Pod, 0)
+	for _, pod := range pods {
+		podMap[pod.Name] = pod
+	}
+
+	podServices, err := rc.GetPrimaryXStorePodServices()
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "failed to get xstore pod")
+	}
+	readonlyPodServices, err := rc.GetReadonlyPodServices()
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "failed to get readonly pod services")
+	}
+	if len(readonlyPodServices) > 0 {
+		for k, v := range readonlyPodServices {
+			podServices[k] = v
+		}
+	}
+	carePodService := featuregate.EnableXStoreWithPodService.Enabled()
+	xstore := rc.MustGetXStore()
+	if xstore.Annotations[common.AnnotationOperatorCreateVersion] == "" {
+		carePodService = true
+	}
+	if xstore.Spec.Readonly {
+		primaryXStore := rc.MustGetPrimaryXStore()
+		if primaryXStore.Annotations[common.AnnotationOperatorCreateVersion] == "" {
+			carePodService = true
+		}
+	}
+	globalInfo := make([]ConsensusGlobalInfoItem, 0)
+	markMap := map[string]bool{}
+	svcMetaMap := map[string]bool{}
+	if carePodService {
+		for _, podService := range podServices {
+			podName := podService.Labels[xstoremeta.LabelPod]
+			svcMetaMap[podName] = true
+			pod, ok := podMap[podName]
+			if !ok {
+				return nil, nil, fmt.Errorf("failed to get pod by pod name %s podService %s", podName, podService.Name)
+			}
+			nodeRole := pod.Labels[xstoremeta.LabelNodeRole]
+			role := polardbxv1xstore.RoleFollower
+			if nodeRole == xstoremeta.RoleLearner {
+				role = polardbxv1xstore.RoleLearner
+			}
+			isLogger := xstoremeta.IsPodRoleVoter(&pod)
+			host := podService.Spec.ClusterIP
+			var addr string
+			if strings.EqualFold(host, "None") {
+				host = podService.Name
+				paxosPort := k8shelper.MustGetPortFromContainer(
+					k8shelper.MustGetContainerFromPod(&pod, convention.ContainerEngine),
+					"paxos",
+				).ContainerPort
+				addr = fmt.Sprintf("%s:%d", host, paxosPort)
+			} else {
+				for _, svcPort := range podService.Spec.Ports {
+					if svcPort.Name == "paxos" {
+						addr = fmt.Sprintf("%s:%d", host, svcPort.Port)
+						break
+					}
+				}
+			}
+			if addr != "" {
+				globalInfo = append(globalInfo, ConsensusGlobalInfoItem{
+					Addr:     addr,
+					Role:     string(role),
+					IsLogger: &isLogger,
+					Pod:      podName,
+				})
+				markMap[podName] = true
+			}
+		}
+	}
+	for podName, pod := range podMap {
+		if !markMap[podName] {
+			nodeRole := pod.Labels[xstoremeta.LabelNodeRole]
+			role := polardbxv1xstore.RoleFollower
+			if nodeRole == xstoremeta.RoleLearner {
+				role = polardbxv1xstore.RoleLearner
+			}
+			if pod.Status.PodIP != "" {
+				paxosPort := k8shelper.MustGetPortFromContainer(
+					k8shelper.MustGetContainerFromPod(&pod, convention.ContainerEngine),
+					"paxos",
+				).ContainerPort
+				addr := fmt.Sprintf("%s:%d", pod.Status.PodIP, paxosPort)
+				isLogger := xstoremeta.IsPodRoleVoter(&pod)
+				globalInfo = append(globalInfo, ConsensusGlobalInfoItem{
+					Addr:     addr,
+					Role:     string(role),
+					IsLogger: &isLogger,
+					Local:    true,
+					Pod:      pod.Name,
+				})
+				markMap[podName] = true
+			}
+		}
+	}
+	return globalInfo, svcMetaMap, nil
+}

@@ -348,13 +348,14 @@ var InitializeParameterTemplate = xstorev1reconcile.NewStepBinder("InitializePar
 	func(rc *xstorev1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
 		paramMap := rc.GetPolarDBXParams()
 		parameterTemplateName := rc.GetPolarDBXTemplateName()
+		parameterTemplateNameSpace := rc.GetPolarDBXTemplateNameSpace()
 		templateParams := rc.GetPolarDBXTemplateParams()
 
 		if parameterTemplateName == "" {
 			return flow.Continue("No parameter template specified, use default.")
 		}
 
-		pt, err := rc.GetPolarDBXParameterTemplate(parameterTemplateName)
+		pt, err := rc.GetPolarDBXParameterTemplate(parameterTemplateNameSpace, parameterTemplateName)
 		if pt == nil {
 			return flow.Error(err, "Unable to get parameter template.", "node", parameterTemplateName)
 		}
@@ -414,7 +415,7 @@ var GetParametersRoleMap = xstorev1reconcile.NewStepBinder("GetParametersRoleMap
 		templateParams := rc.GetPolarDBXTemplateParams()
 		xstore := rc.MustGetXStore()
 
-		pt, err := rc.GetPolarDBXParameterTemplate(xstore.Spec.ParameterTemplate.Name)
+		pt, err := rc.GetPolarDBXParameterTemplate(xstore.Spec.ParameterTemplate.Namespace, xstore.Spec.ParameterTemplate.Name)
 		if pt == nil {
 			return flow.Error(err, "Unable to get parameter template.")
 		}

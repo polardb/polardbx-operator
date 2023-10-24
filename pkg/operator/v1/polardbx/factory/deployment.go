@@ -162,6 +162,9 @@ func (f *objectFactory) getStatelessMatchingRules(replicas int, hostNetwork bool
 	if defaultRule != nil {
 		defaultRuleName = defaultRule.Name
 	}
+	if f.buildContext.CdcGroup != nil && defaultRuleName == "" {
+		defaultRuleName = f.buildContext.CdcGroup.Name
+	}
 	if replicas > ruleDeclaredReplicas {
 		ruleReplicas[defaultRuleName] = matchingRule{
 			replicas: replicas - ruleDeclaredReplicas,
@@ -609,6 +612,9 @@ func (f *objectFactory) newDeployment4CDC(group string, mr *matchingRule, mustSt
 	config := f.rc.Config()
 	topology := polardbx.Status.SpecSnapshot.Topology
 	template := polardbx.Status.SpecSnapshot.Topology.Nodes.CDC.Template
+	if f.buildContext.CdcGroup != nil && f.buildContext.CdcGroup.Template != nil {
+		template = *f.buildContext.CdcGroup.Template
+	}
 
 	// Factories
 	envFactory, err := NewEnvFactory(f.rc, polardbx, f)
@@ -968,6 +974,16 @@ func (f *objectFactory) buildDeployments(rules map[string]matchingRule, builder 
 	return deployments, nil
 }
 
+func (f *objectFactory) filterRules(rules []polardbxv1polardbx.StatelessTopologyRuleItem, filter func(polardbxv1polardbx.StatelessTopologyRuleItem) bool) []polardbxv1polardbx.StatelessTopologyRuleItem {
+	resultRules := make([]polardbxv1polardbx.StatelessTopologyRuleItem, 0)
+	for _, rule := range rules {
+		if filter(rule) {
+			resultRules = append(resultRules, rule)
+		}
+	}
+	return resultRules
+}
+
 func (f *objectFactory) NewDeployments4CDC() (map[string]appsv1.Deployment, error) {
 	polardbx, err := f.rc.GetPolarDBX()
 	if err != nil {
@@ -975,23 +991,27 @@ func (f *objectFactory) NewDeployments4CDC() (map[string]appsv1.Deployment, erro
 	}
 	topology := polardbx.Status.SpecSnapshot.Topology
 	rules := topology.Rules.Components.CDC
+
 	nodes := topology.Nodes.CDC
 	if nodes == nil {
 		return nil, nil
 	}
 
-	replicas := topology.Nodes.CDC.Replicas + topology.Nodes.CDC.XReplicas
+	normalRules := f.filterRules(rules, func(item polardbxv1polardbx.StatelessTopologyRuleItem) bool {
+		return item.ExtraName == ""
+	})
+	replicas := topology.Nodes.CDC.Replicas.IntValue() + topology.Nodes.CDC.XReplicas
 	// FIXME Host network for CDC not supported.
-	matchingRules, err := f.getStatelessMatchingRules(int(replicas) /*template.HostNetwork*/, false, rules)
+	matchingRules, err := f.getStatelessMatchingRules(int(replicas) /*template.HostNetwork*/, false, normalRules)
 	if err != nil {
 		return nil, err
 	}
 
+	deployments := map[string]appsv1.Deployment{}
 	if topology.Nodes.CDC.XReplicas > 0 {
 		//first global binlog cdc, then binlog x cdc.
-		resultMatchRules := SplitMatchRules(matchingRules, int(topology.Nodes.CDC.Replicas), int(topology.Nodes.CDC.XReplicas))
+		resultMatchRules := SplitMatchRules(matchingRules, topology.Nodes.CDC.Replicas.IntValue(), topology.Nodes.CDC.XReplicas)
 		buildXReplicasFlags := []bool{false, true}
-		deployments := map[string]appsv1.Deployment{}
 		f.buildContext.HasCdcXBinLog = true
 		for index, xReplicasFlags := range buildXReplicasFlags {
 			f.buildContext.BuildCdcXBinLog = xReplicasFlags
@@ -1002,10 +1022,32 @@ func (f *objectFactory) NewDeployments4CDC() (map[string]appsv1.Deployment, erro
 			deployments = maputil.MergeMap(deployments, builtDeployments, false).(map[string]appsv1.Deployment)
 		}
 		return deployments, nil
+	} else {
+		deployments, err = f.buildDeployments(matchingRules, f.newDeployment4CDC)
+		if err != nil {
+			return deployments, err
+		}
 	}
 
-	// Build deployments according rules.
-	return f.buildDeployments(matchingRules, f.newDeployment4CDC)
+	for _, group := range topology.Nodes.CDC.Groups {
+		f.buildContext.CdcGroup = group
+		exactRules := f.filterRules(rules, func(item polardbxv1polardbx.StatelessTopologyRuleItem) bool {
+			return item.ExtraName == group.Name
+		})
+		matchingRules, err = f.getStatelessMatchingRules(int(group.Replicas), false, exactRules)
+		if err != nil {
+			return nil, err
+		}
+		cdcGroupDeployments, err := f.buildDeployments(matchingRules, f.newDeployment4CDC)
+		if err != nil {
+			return cdcGroupDeployments, err
+		}
+		for k, v := range cdcGroupDeployments {
+			deployments[k] = v
+		}
+		f.buildContext.CdcGroup = nil
+	}
+	return deployments, nil
 }
 
 func SplitMatchRules(matchRules map[string]matchingRule, replicasGroups ...int) (resultMatchRules []map[string]matchingRule) {

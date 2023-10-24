@@ -15,11 +15,11 @@
 # limitations under the License.
 
 
-SOURCE_REPO=polardbx
-SOURCE_VERSION=v1.4.1
+SOURCE_REPO=polarximages-registry.cn-zhangjiakou.cr.aliyuncs.com/daixingpolarximages
+SOURCE_VERSION=v1.5.0-beta
 DEST_REPO=polardbx
-DEST_VERSION=latest
-TARGETS="xstore-tools polardbx-operator probe-proxy polardbx-exporter polardbx-init polardbx-hpfs polardbx-job"
+DEST_VERSION=v1.5.0-beta
+TARGETS="xstore-tools polardbx-operator probe-proxy polardbx-exporter polardbx-init polardbx-hpfs polardbx-job polardbx-logstash"
 
 #pull from source image and tag it
 for i in $TARGETS

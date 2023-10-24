@@ -32,6 +32,9 @@ const (
 	UploadSsh      Action = "uploadSsh"
 	DownloadSsh    Action = "downloadSsh"
 	ListSsh        Action = "listSsh"
+	UploadMinio    Action = "uploadMinio"
+	DownloadMinio  Action = "downloadMinio"
+	ListMinio      Action = "listMinio"
 	InvalidAction  Action = ""
 )
 
@@ -42,19 +45,20 @@ const (
 )
 
 const (
-	MetaDataLenLen              = 4
-	MetaFiledLen                = 11
-	MetadataActionOffset        = 0
-	MetadataInstanceIdOffset    = 1
-	MetadataFilenameOffset      = 2
-	MetadataRedirectOffset      = 3
-	MetadataFilepathOffset      = 4
-	MetadataRetentionTimeOffset = 5
-	MetadataStreamOffset        = 6
-	MetadataSinkOffset          = 7
-	MetadataRequestIdOffset     = 8
-	MetadataOssBufferSizeOffset = 9
-	MetadataLimitSize           = 10
+	MetaDataLenLen                = 4
+	MetaFiledLen                  = 12
+	MetadataActionOffset          = 0
+	MetadataInstanceIdOffset      = 1
+	MetadataFilenameOffset        = 2
+	MetadataRedirectOffset        = 3
+	MetadataFilepathOffset        = 4
+	MetadataRetentionTimeOffset   = 5
+	MetadataStreamOffset          = 6
+	MetadataSinkOffset            = 7
+	MetadataRequestIdOffset       = 8
+	MetadataOssBufferSizeOffset   = 9
+	MetadataLimitSize             = 10
+	MetadataMinioBufferSizeOffset = 11
 )
 
 var ActionLocal2Remote2 = map[Action]Action{
@@ -65,22 +69,23 @@ var ActionLocal2Remote2 = map[Action]Action{
 }
 
 type ActionMetadata struct {
-	Action        `json:"action,omitempty"`
-	InstanceId    string `json:"instanceId,omitempty"`
-	Filename      string `json:"filename,omitempty"`
-	RedirectAddr  string `json:"redirectAddr,omitempty"`
-	Filepath      string `json:"filepath,omitempty"`
-	RetentionTime string `json:"retentionTime,omitempty"`
-	Stream        string `json:"stream,omitempty"`
-	Sink          string `json:"sink,omitempty"`
-	RequestId     string `json:"requestId,omitempty"`
-	OssBufferSize string `json:"ossBufferSize,omitempty"`
-	LimitSize     string `json:"limitSize,omitempty"`
-	redirect      bool
+	Action          `json:"action,omitempty"`
+	InstanceId      string `json:"instanceId,omitempty"`
+	Filename        string `json:"filename,omitempty"`
+	RedirectAddr    string `json:"redirectAddr,omitempty"`
+	Filepath        string `json:"filepath,omitempty"`
+	RetentionTime   string `json:"retentionTime,omitempty"`
+	Stream          string `json:"stream,omitempty"`
+	Sink            string `json:"sink,omitempty"`
+	RequestId       string `json:"requestId,omitempty"`
+	OssBufferSize   string `json:"ossBufferSize,omitempty"`
+	LimitSize       string `json:"limitSize,omitempty"`
+	MinioBufferSize string `json:"minioBufferSize,omitempty"`
+	redirect        bool
 }
 
 func (action *ActionMetadata) ToString() string {
-	return strings.Join([]string{string(action.Action), action.InstanceId, action.Filename, action.RedirectAddr, action.Filepath, action.RetentionTime, action.Stream, action.Sink, action.RequestId, action.OssBufferSize, action.LimitSize}, ",")
+	return strings.Join([]string{string(action.Action), action.InstanceId, action.Filename, action.RedirectAddr, action.Filepath, action.RetentionTime, action.Stream, action.Sink, action.RequestId, action.OssBufferSize, action.LimitSize, action.MinioBufferSize}, ",")
 }
 
 const (

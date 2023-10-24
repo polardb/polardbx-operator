@@ -331,7 +331,7 @@ var GetParametersRoleMap = polardbxv1reconcile.NewStepBinder("GetParametersRoleM
 		//	return flow.Continue("No parameter template specified, use default.")
 		//}
 
-		pt, err := rc.GetPolarDBXParameterTemplate(parameterTemplateName)
+		pt, err := rc.GetPolarDBXParameterTemplate("", parameterTemplateName)
 		if pt == nil {
 			return flow.Error(err, "Unable to get parameter template.", "node", parameterTemplateName)
 		}

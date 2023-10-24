@@ -96,18 +96,23 @@ func (p *probeConfigure) ConfigureForCNExporter(container *corev1.Container, por
 }
 
 func (p *probeConfigure) ConfigureForCDCEngine(container *corev1.Container, ports CDCPorts) {
+	hanlder := corev1.Handler{
+		TCPSocket: &corev1.TCPSocketAction{
+			Port: intstr.FromInt(ports.GetAccessPort()),
+		},
+	}
 	container.StartupProbe = &corev1.Probe{
 		InitialDelaySeconds: 10,
 		TimeoutSeconds:      10,
 		PeriodSeconds:       10,
 		FailureThreshold:    18,
-		Handler:             p.newProbeWithProber("/liveness", probe.TypeCdc, &ports),
+		Handler:             hanlder,
 	}
 	container.LivenessProbe = &corev1.Probe{
 		TimeoutSeconds:   10,
 		PeriodSeconds:    10,
 		FailureThreshold: 5,
-		Handler:          p.newProbeWithProber("/liveness", probe.TypeCdc, &ports),
+		Handler:          hanlder,
 	}
 }
 
