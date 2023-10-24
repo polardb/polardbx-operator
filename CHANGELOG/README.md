@@ -10,6 +10,7 @@ Release v1.5.0-beta
   + Support cross-cluster point-in-time recovery(PITR)
   + Support collecting DN logs including sql, error, slow logs
   + Support uploading and downloading backupset by Simple Storage Service (S3)
+  + Support creating cdc groups with different cluster types
 + Bug Fix
   + Fix failing to delete the cluster when its gms is not available
   + Fix failing to delele rebuild job when the *fromPod* does not exist
