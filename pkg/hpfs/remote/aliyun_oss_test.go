@@ -45,3 +45,21 @@ func TestDeleteExpiredFilesOnSftp(t *testing.T) {
 	ft.Wait()
 	fmt.Println(*expiredFilesPtr)
 }
+
+func TestDeleteExpiredFilesOnMinio(t *testing.T) {
+	auth := map[string]string{}
+	auth["endpoint"] = "play.min.io"
+	auth["access_key"] = ""
+	auth["secret_key"] = ""
+	auth["useSSL"] = "true"
+	params := map[string]string{}
+	params["bucket"] = "yj-test-bucket"
+	params["deadline"] = strconv.FormatInt(time.Now().Unix(), 10)
+	fileService, _ := GetFileService("s3")
+	expiredFiles := make([]string, 0)
+	expiredFilesPtr := &expiredFiles
+	ctx := context.WithValue(context.Background(), common.AffectedFiles, expiredFilesPtr)
+	ft, _ := fileService.DeleteExpiredFile(ctx, "busuhhhh", auth, params)
+	ft.Wait()
+	fmt.Println(*expiredFilesPtr)
+}

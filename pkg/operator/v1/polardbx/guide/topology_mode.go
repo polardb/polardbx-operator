@@ -121,7 +121,7 @@ func (h *topologyModeHandler) updateTopology(obj *polardbxv1.PolarDBXCluster, mo
 					Resources: *conf.resource,
 				},
 			}
-			obj.Spec.Topology.Nodes.CDC.Replicas = conf.replica
+			obj.Spec.Topology.Nodes.CDC.Replicas = intstr.FromInt(int(conf.replica))
 		default:
 			return errors.New("unexpected type of node")
 		}

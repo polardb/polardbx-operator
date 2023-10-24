@@ -203,9 +203,15 @@ var UpdateDisplayReplicas = polardbxv1reconcile.NewStepBinder("UpdateDisplayRepl
 			if err != nil {
 				return flow.Error(err, "Unable to get deployments of CDC.")
 			}
+			totalCdcReplicas := snapshot.Topology.Nodes.CDC.Replicas.IntValue() + snapshot.Topology.Nodes.CDC.XReplicas
+			if snapshot.Topology.Nodes.CDC.Groups != nil {
+				for _, group := range snapshot.Topology.Nodes.CDC.Groups {
+					totalCdcReplicas += int(group.Replicas)
+				}
+			}
 			statusRef.ReplicaStatus.CDC = &polardbxv1polardbx.ReplicasStatus{
 				Available: int32(countAvailableReplicasFromDeployments(cdcDeployments)),
-				Total:     snapshot.Topology.Nodes.CDC.Replicas + snapshot.Topology.Nodes.CDC.XReplicas,
+				Total:     int32(totalCdcReplicas),
 			}
 		}
 
@@ -318,13 +324,14 @@ var InitializeParameterTemplate = polardbxv1reconcile.NewStepBinder("InitializeP
 
 		paramMap := rc.GetPolarDBXParams()
 		parameterTemplateName := rc.GetPolarDBXTemplateName()
+		parameterTemplateNameSpace := rc.GetPolarDBXTemplateNameSpace()
 		templateParams := rc.GetPolarDBXTemplateParams()
 
 		if parameterTemplateName == "" {
 			return flow.Continue("No parameter template specified, use default.")
 		}
 
-		pt, err := rc.GetPolarDBXParameterTemplate(parameterTemplateName)
+		pt, err := rc.GetPolarDBXParameterTemplate(parameterTemplateNameSpace, parameterTemplateName)
 		if pt == nil {
 			return flow.Error(err, "Unable to get parameter template.", "node", parameterTemplateName)
 		}

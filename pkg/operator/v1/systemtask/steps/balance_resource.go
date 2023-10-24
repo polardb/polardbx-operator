@@ -7,6 +7,7 @@ import (
 	"github.com/alibaba/polardbx-operator/api/v1/systemtask"
 	"github.com/alibaba/polardbx-operator/api/v1/xstore"
 	"github.com/alibaba/polardbx-operator/pkg/k8s/control"
+	k8shelper "github.com/alibaba/polardbx-operator/pkg/k8s/helper"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/systemtask/common"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/command"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/convention"
@@ -364,7 +365,7 @@ func VisitNode(nodes map[string]*MyNode, minLeaderCount int, visitedNodes map[st
 }
 
 func changeLeader(rc *common.Context, leaderPod corev1.Pod, targetPod corev1.Pod, logger logr.Logger) {
-	cmd := command.NewCanonicalCommandBuilder().Consensus().SetLeader(targetPod.Name).Build()
+	cmd := command.NewCanonicalCommandBuilder().Consensus().SetLeader(k8shelper.GetPaxosAddr(&targetPod)).Build()
 	rc.ExecuteCommandOn(&leaderPod, convention.ContainerEngine, cmd, control.ExecOptions{
 		Logger:  logger,
 		Timeout: 8 * time.Second,

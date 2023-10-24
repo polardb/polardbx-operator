@@ -126,7 +126,7 @@ func (ec *ExecutionContext) SetExtraPodFactory(extraPodFactory factory.ExtraPodF
 }
 
 func (ec *ExecutionContext) NeedRebuildPlan() bool {
-	return ec.Plan == nil || !plan.CheckPlan(ec.Plan, ec.StepIndex, ec.Running)
+	return ec.Plan == nil || !plan.CheckPlan(ec.Plan, ec.StepIndex, ec.Running, ec.Generation)
 }
 
 func (ec *ExecutionContext) Completed() bool {

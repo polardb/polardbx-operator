@@ -44,8 +44,7 @@ def report_role(report_leader):
             else:
                 leader_addr = current_node.local_info.current_leader
                 if leader_addr != '':
-                    channel = global_mgr.shared_channel()
-                    print(channel.get_node_by_addr(leader_addr).pod)
+                    print(leader_addr)
                 else:
                     print('')
 
@@ -134,22 +133,22 @@ def list_nodes(full):
         all_nodes = mgr.list_consensus_nodes()
 
         def to_print_tuple(consensus_node: ConsensusNode):
-            node_info = chan.get_node_by_addr(consensus_node.addr)
             if full:
-                return node_info.pod, consensus_node.server_id, consensus_node.addr, \
-                       get_role(consensus_node, node_info), consensus_node.global_info.match_index, \
+                return consensus_node.server_id, consensus_node.addr, \
+                       consensus_node.role.value, consensus_node.global_info.match_index, \
+                       consensus_node.global_info.next_index, \
                        consensus_node.global_info.applied_index, consensus_node.global_info.election_weight, \
                        consensus_node.global_info.force_sync, consensus_node.global_info.learner_source
             else:
-                return node_info.pod, consensus_node.addr, get_role(consensus_node, node_info)
+                return consensus_node.addr, consensus_node.role
 
         if full:
             print_rows(sep=' | ', header=(
-                'pod',
                 'server_id',
                 'addr',
                 'role',
                 'match_index',
+                'next_index',
                 'applied_index',
                 'election_weight',
                 'force_sync',
@@ -157,7 +156,7 @@ def list_nodes(full):
             ), rows=[to_print_tuple(n) for n in all_nodes])
         else:
             print_rows(sep=' | ', header=(
-                'pod', 'addr', 'role'
+                'addr', 'role'
             ), rows=[to_print_tuple(n) for n in all_nodes])
 
 
@@ -166,7 +165,7 @@ consensus_group.add_command(list_nodes)
 
 def _get_addr_from_argument(arg: str, shared_channel: channel.SharedFileChannel) -> str:
     # If in the format of "IP:port", return arg.
-    if re.match('\\d+\\.\\d+\\.\\d+\\.\\d+:\\d+', arg):
+    if re.match('\\d+\\.\\d+\\.\\d+\\.\\d+:\\d+', arg) or arg.isdigit():
         return arg
 
     # Otherwise query the shared channel.
@@ -241,12 +240,7 @@ def drop_learner(node):
     addr = _get_addr_from_argument(node, shared_channel)
 
     with global_mgr.consensus_manager() as mgr:
-        consensus_nodes = mgr.list_consensus_nodes()
-        # check if the leaner node exists
-        for consensus_node in consensus_nodes:
-            if consensus_node.role == ConsensusRole.LEARNER and consensus_node.addr == addr:
-                mgr.drop_learner(addr)
-                return
+        mgr.drop_learner(addr)
 
 
 consensus_group.add_command(drop_learner)
@@ -254,14 +248,26 @@ consensus_group.add_command(drop_learner)
 
 @click.command(name='learner-to-follower')
 @click.argument('node')
-def chanage_to_follower_from_learner(node):
+def change_to_follower_from_learner(node):
     shared_channel = global_mgr.shared_channel()
     addr = _get_addr_from_argument(node, shared_channel)
     with global_mgr.consensus_manager() as mgr:
         mgr.upgrade_learner_to_follower(addr)
 
 
-consensus_group.add_command(chanage_to_follower_from_learner)
+consensus_group.add_command(change_to_follower_from_learner)
+
+
+@click.command(name='follower-to-learner')
+@click.argument('node')
+def change_to_learner_from_follower(node):
+    shared_channel = global_mgr.shared_channel()
+    addr = _get_addr_from_argument(node, shared_channel)
+    with global_mgr.consensus_manager() as mgr:
+        mgr.downgrade_follower_to_learner(addr)
+
+
+consensus_group.add_command(change_to_learner_from_follower)
 
 
 @click.command(name='enable-election')

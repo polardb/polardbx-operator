@@ -20,7 +20,7 @@ import subprocess
 import time
 from abc import ABC, abstractmethod
 from core import consensus, convention
-from core.consensus import AbstractConsensusManager
+from core.consensus import AbstractConsensusManager, ConsensusRole
 from core.context import Context, PodInfo
 from typing import ClassVar, Sequence, AnyStr
 
@@ -192,6 +192,12 @@ class Engine(ABC):
         try to handle indicate
         """
 
+    @abstractmethod
+    def try_flush_meta_when_start(self):
+        """
+         flush cluster info meta
+        """
+
 
 class Mock(Engine):
     """
@@ -274,6 +280,9 @@ class Mock(Engine):
     def try_handle_indicate(self):
         return
 
+    def try_flush_meta_when_start(self):
+        return
+
 
 class EngineCommon(Engine, ABC):
     def __init__(self, context: Context):
@@ -348,6 +357,12 @@ class EngineCommon(Engine, ABC):
             raise
 
     def shutdown(self):
+        current_node = self.consensus_manager().current_node()
+        if current_node.role == ConsensusRole.LEADER:
+            for node in self.consensus_manager().list_consensus_nodes():
+                if node.role == ConsensusRole.FOLLOWER and node.global_info.election_weight != 1:
+                    self.consensus_manager().change_leader(node.addr)
+                    break
         self.exec_cmd(
             cmd=convention.SHELL_CMD['SHUTDOWN_MYSQL']("--socket=" + os.path.join(self.path_run, 'mysql.sock')))
 
@@ -530,8 +545,8 @@ class EngineCommon(Engine, ABC):
         return
 
     def clean_data_log(self):
-        self.exec_cmd(cmd=convention.SHELL_CMD['RM_DIRECTORY_CONTENT']('/data/mysql/data'))
-        self.exec_cmd(cmd=convention.SHELL_CMD['RM_DIRECTORY_CONTENT']('/data/mysql/log'))
+        self.exec_cmd(cmd=convention.SHELL_CMD['RM_DIRECTORY_CONTENT']('/data/mysql/data'), interval=1800)
+        self.exec_cmd(cmd=convention.SHELL_CMD['RM_DIRECTORY_CONTENT']('/data/mysql/log'), interval=1800)
 
     def set_recover_index_filepath(self, filepath):
         self.recover_index_filepath = filepath
@@ -555,5 +570,18 @@ class EngineCommon(Engine, ABC):
         if os.path.exists(indicate_file):
             with open(indicate_file, "r") as f:
                 action = f.readline()
-                self.handle_indicate(action)
+                self.handle_indicate(action.strip())
             os.remove(indicate_file)
+
+    def try_flush_meta_when_start(self):
+        local_ipport = self.context.volume_path(convention.VOLUME_DATA, 'polarx_local_ipport')
+        if self.context.pod_info().annotation(convention.ANNOTATION_FLUSH_LOCAL) == "true":
+            ip_port = '%s:%s' % (self.context.env().get("POD_IP"), self.context.env().get("PORT_PAXOS"))
+            if os.path.exists(local_ipport):
+                with open(local_ipport, 'r') as f:
+                    content = f.readline()
+                    if content == ip_port:
+                        return
+            with open(local_ipport, 'w') as f:
+                f.write(ip_port)
+            self.prepare_handle_indicate("reset-cluster-info-to-learner")

@@ -290,6 +290,9 @@ type Manager interface {
 	// records into metadb.
 	EnableStorageNodes(storageNodes ...StorageNodeInfo) error
 
+	//UpdateRoStorageNodes update the ro not_vip storage node info
+	UpdateRoStorageNodes(storageNodes ...StorageNodeInfo) error
+
 	// DisableStorageNodes disables the specified storage nodes by removing the corresponding
 	// records from metadb.
 	DisableStorageNodes(storageNodes ...StorageNodeInfo) error

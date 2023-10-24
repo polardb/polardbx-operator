@@ -60,4 +60,5 @@ const (
 
 const (
 	AnnotationAutoRebuild = "xstore/auto-rebuild"
+	AnnotationFlushLocal  = "xstore/flushlocal"
 )

@@ -37,7 +37,7 @@ type NodeSpec struct {
 
 	// +kubebuilder:default=false
 
-	// HostNetwork defines whether the node uses the host network. Default is true.
+	// HostNetwork defines whether the node uses the host network. Default is false.
 	HostNetwork *bool `json:"hostNetwork,omitempty"`
 
 	// Affinity defines the affinity of the node (pod).

@@ -163,6 +163,8 @@ spec:
                   used by cn/dn/gms.
                 properties:
                   name:
+                    type: string
+                  namespace:
                     description: Parameter template
                     type: string
                 type: object
@@ -1406,7 +1408,7 @@ spec:
                                 hostNetwork:
                                   default: false
                                   description: HostNetwork defines whether the node
-                                    uses the host network. Default is true.
+                                    uses the host network. Default is false.
                                   type: boolean
                                 image:
                                   description: Image is the image of xstore engine.
@@ -2480,7 +2482,7 @@ spec:
                           hostNetwork:
                             default: false
                             description: HostNetwork defines whether the node uses
-                              the host network. Default is true.
+                              the host network. Default is false.
                             type: boolean
                           image:
                             description: Image is the image of xstore engine. Controller
@@ -3897,7 +3899,7 @@ spec:
                                 hostNetwork:
                                   default: false
                                   description: HostNetwork defines whether the node
-                                    uses the host network. Default is true.
+                                    uses the host network. Default is false.
                                   type: boolean
                                 image:
                                   description: Image is the image of xstore engine.
@@ -4971,7 +4973,7 @@ spec:
                           hostNetwork:
                             default: false
                             description: HostNetwork defines whether the node uses
-                              the host network. Default is true.
+                              the host network. Default is false.
                             type: boolean
                           image:
                             description: Image is the image of xstore engine. Controller

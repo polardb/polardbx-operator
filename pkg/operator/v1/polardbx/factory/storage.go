@@ -407,6 +407,7 @@ func (f *objectFactory) newXStore(
 
 	// Determine parameter template.
 	templateName := polardbx.Spec.ParameterTemplate.Name
+	templateNameSpace := polardbx.Spec.ParameterTemplate.Namespace
 
 	// Build
 	affinity := f.newXStoreNodeSetAffinity(polardbx, nil)
@@ -455,7 +456,8 @@ func (f *objectFactory) newXStore(
 			),
 			Annotations: map[string]string{
 				// Set to empty rand to avoid long xstore/pod names.
-				xstoremeta.AnnotationGuideRand: "",
+				xstoremeta.AnnotationGuideRand:                   "",
+				polardbxv1common.AnnotationOperatorCreateVersion: polardbx.Annotations[polardbxv1common.AnnotationOperatorCreateVersion],
 			},
 			Finalizers: []string{polardbxmeta.Finalizer},
 		},
@@ -484,7 +486,8 @@ func (f *objectFactory) newXStore(
 				NodeSets: nodeSets,
 			},
 			ParameterTemplate: polardbxv1xstore.ParameterTemplate{
-				Name: templateName,
+				Namespace: templateNameSpace,
+				Name:      templateName,
 			},
 		},
 	}

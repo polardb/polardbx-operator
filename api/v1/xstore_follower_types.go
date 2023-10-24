@@ -75,9 +75,6 @@ type XStoreFollowerStatus struct {
 	//CurrentJobTask represents the task name of the current job
 	CurrentJobTask string `json:"currentJobTask,omitempty"`
 
-	//ElectionWeight represents the election weight of target pod
-	ElectionWeight int `json:"electionWeight,omitempty"`
-
 	//TargetPodName represents the target pod name
 	TargetPodName string `json:"targetPodName,omitempty"`
 

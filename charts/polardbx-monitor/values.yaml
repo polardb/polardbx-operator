@@ -30,7 +30,7 @@ monitors:
     # Grafana docker repo and image. It can be set to your private repo.
     repo: grafana
     image: grafana
-    version: 7.5.3
+    version: 8.5.27
     # Grafana replicas, you can scale out/in grafana by this value.
     replicas: 1
     # Grafana port, default: 3000

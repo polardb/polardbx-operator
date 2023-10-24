@@ -95,7 +95,7 @@ func matches(a, b map[string]model.PaxosNode) bool {
 }
 
 // CheckPlan checks if current running nodes sticks to the plan.
-func CheckPlan(plan *Plan, curStep int, running map[string]model.PaxosNodeStatus) bool {
+func CheckPlan(plan *Plan, curStep int, running map[string]model.PaxosNodeStatus, generation int64) bool {
 	runningNodes := statusMapToNodeMap(running)
 
 	expectedNodes := nodeSliceToMap(plan.Nodes)
@@ -109,6 +109,9 @@ func CheckPlan(plan *Plan, curStep int, running map[string]model.PaxosNodeStatus
 
 	// Exclude the current step target.
 	if curStep < len(plan.Steps) {
+		if plan.Steps[curStep].TargetGeneration < generation {
+			return false
+		}
 		delete(expectedNodes, plan.Steps[curStep].Target)
 		delete(runningNodes, plan.Steps[curStep].Target)
 	}

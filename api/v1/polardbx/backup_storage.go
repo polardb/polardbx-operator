@@ -35,8 +35,9 @@ type BackupStorageProvider struct {
 type BackupStorage string
 
 const (
-	OSS  BackupStorage = "oss"
-	SFTP BackupStorage = "sftp"
+	OSS   BackupStorage = "oss"
+	SFTP  BackupStorage = "sftp"
+	MINIO BackupStorage = "s3"
 )
 
 // BackupStorageFilestreamAction records filestream actions related to specified backup storage
@@ -59,6 +60,12 @@ func NewBackupStorageFilestreamAction(storage BackupStorage) (*BackupStorageFile
 			Download: filestream.DownloadSsh,
 			Upload:   filestream.UploadSsh,
 			List:     filestream.ListSsh,
+		}, nil
+	case MINIO:
+		return &BackupStorageFilestreamAction{
+			Download: filestream.DownloadMinio,
+			Upload:   filestream.UploadMinio,
+			List:     filestream.ListMinio,
 		}, nil
 	default:
 		return nil, errors.New("invalid storage: " + string(storage))

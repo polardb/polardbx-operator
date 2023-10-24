@@ -154,7 +154,7 @@ func (p *Plan) Finish() {
 	sort.Slice(p.Steps, func(i, j int) bool {
 		pi, pj := p.Steps[i].Priority(), p.Steps[j].Priority()
 		if pi == pj {
-			return p.Steps[i].Target < p.Steps[j].Target
+			return i < j
 		}
 		return pi < pj
 	})

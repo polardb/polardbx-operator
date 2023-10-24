@@ -382,6 +382,19 @@ func (e *envFactory) newBasicEnvVarsForCDCEngine(gmsConn *StorageConnection) []c
 			})
 		}
 	}
+	if e.objFactory.buildContext.CdcGroup != nil {
+		clusterId = e.polardbx.Name + "-group-" + e.objFactory.buildContext.CdcGroup.Name
+		envs = append(envs, corev1.EnvVar{
+			Name:  "cluster_id",
+			Value: clusterId,
+		})
+		for k, v := range e.objFactory.buildContext.CdcGroup.Config.Envs {
+			envs = append(envs, corev1.EnvVar{
+				Name:  k,
+				Value: v.String(),
+			})
+		}
+	}
 	return envs
 }
 

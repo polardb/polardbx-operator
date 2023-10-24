@@ -131,6 +131,9 @@ type PolarDBXClusterStatus struct {
 
 	//PitrStatus represents the status of the pitr restore
 	PitrStatus *polardbx.PitrStatus `json:"pitrStatus,omitempty"`
+
+	//LatestSyncReadonlyTs represents the lastest time sync readonly storage info to metadb
+	ReadonlyStorageInfoHash string `json:"readonlyStorageInfoHash,omitempty"`
 }
 
 // +kubebuilder:object:root=true

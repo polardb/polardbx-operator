@@ -1,8 +1,10 @@
 package pitr
 
 import (
+	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -58,40 +60,38 @@ func LoadAllBinlog(pCtx *Context) error {
 			pCtx.ConsistentXStoreCount += 1
 		}
 		for _, pod := range xStore.Pods {
-			if pod.Host == "" {
-				continue
-			}
 			var binlogSources []BinlogSource
-			pCtx.Logger.Info("list local binlog list", "pod", pod.PodName, "host", pod.Host, "logDir", pod.LogDir)
-			resp, err := hpfsClient.ListLocalBinlogList(context.Background(), &hpfs.ListLocalBinlogListRequest{
-				Host:   &hpfs.Host{NodeName: pod.Host},
-				LogDir: pod.LogDir,
-			})
-			if err != nil {
-				pCtx.Logger.Error(err, "failed to list local binlog list", "pod", pod.PodName, "host", pod.Host, "logDir", pod.LogDir)
-				return err
-			}
-			if resp.Version != "" {
-				for _, binlogFile := range resp.GetBinlogFiles() {
-					binlogFilename := filepath.Base(binlogFile)
-					absoluteFilepath := filepath.Join(pod.LogDir, binlogFilename)
-					binlogSources = append(binlogSources, BinlogSource{
-						Filename: binlogFilename,
-						LSource: &LocalSource{
-							FsIp:         filestreamIp,
-							FsPort:       filestreamPort,
-							NodeName:     pod.Host,
-							DataFilepath: absoluteFilepath,
-						},
-						BinlogChecksum: taskConfig.BinlogChecksum,
-						Version:        resp.Version,
-						Timestamp:      taskConfig.Timestamp,
-						StartIndex:     xStore.BackupSetStartIndex,
-					})
+			if pod.Host != "" {
+				pCtx.Logger.Info("list local binlog list", "pod", pod.PodName, "host", pod.Host, "logDir", pod.LogDir)
+				resp, err := hpfsClient.ListLocalBinlogList(context.Background(), &hpfs.ListLocalBinlogListRequest{
+					Host:   &hpfs.Host{NodeName: pod.Host},
+					LogDir: pod.LogDir,
+				})
+				if err != nil {
+					pCtx.Logger.Error(err, "failed to list local binlog list", "pod", pod.PodName, "host", pod.Host, "logDir", pod.LogDir)
+					return err
 				}
+				if resp.Version != "" {
+					for _, binlogFile := range resp.GetBinlogFiles() {
+						binlogFilename := filepath.Base(binlogFile)
+						absoluteFilepath := filepath.Join(pod.LogDir, binlogFilename)
+						binlogSources = append(binlogSources, BinlogSource{
+							Filename: binlogFilename,
+							LSource: &LocalSource{
+								FsIp:         filestreamIp,
+								FsPort:       filestreamPort,
+								NodeName:     pod.Host,
+								DataFilepath: absoluteFilepath,
+							},
+							BinlogChecksum: taskConfig.BinlogChecksum,
+							Version:        resp.Version,
+							Timestamp:      taskConfig.Timestamp,
+							StartIndex:     xStore.BackupSetStartIndex,
+						})
+					}
+				}
+				pCtx.Logger.Info("finish list local binlog list", "pod", pod.PodName, "host", pod.Host, "logDir", pod.LogDir, "response", MustMarshalJSON(resp))
 			}
-
-			pCtx.Logger.Info("finish list local binlog list", "pod", pod.PodName, "host", pod.Host, "logDir", pod.LogDir, "response", MustMarshalJSON(resp))
 
 			pCtx.Logger.Info("remote binlog list", "pod", pod.PodName, "host", pod.Host, "logDir", pod.LogDir)
 			remoteResp, err := hpfsClient.ListRemoteBinlogList(context.Background(), &hpfs.ListRemoteBinlogListRequest{
@@ -378,6 +378,10 @@ func Checkpoint(pCtx *Context) error {
 	pCtx.Logger.Info("Checkpoint...")
 	if !pCtx.NeedConsistentPoint() {
 		pCtx.Logger.Info("Skip Checkpoint...")
+		byteBuf := &bytes.Buffer{}
+		binary.Write(byteBuf, binary.LittleEndian, uint32(0))
+		pCtx.RecoverTxsBytes = byteBuf.Bytes()
+		pCtx.Logger.Info(fmt.Sprintf("Write Empty RecoverTxsBytes Length = %d", len(pCtx.RecoverTxsBytes)))
 		return nil
 	}
 	txParsers := map[string]tx.TransactionEventParser{}

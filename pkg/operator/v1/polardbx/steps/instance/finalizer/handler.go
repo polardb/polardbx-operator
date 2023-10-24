@@ -24,6 +24,7 @@ import (
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -63,10 +64,23 @@ func handleFinalizerForPods(rc *polardbxv1reconcile.Context, log logr.Logger, de
 	if len(deletedOrFailedPods) == 0 {
 		return nil
 	}
+	polardbx := rc.MustGetPolarDBX()
 
-	mgr, err := rc.GetPolarDBXGMSManager()
-	if err != nil {
-		return err
+	pxcNotDeleting := polardbx.DeletionTimestamp.IsZero()
+	if polardbx.Spec.Readonly {
+		_, err := rc.GetPrimaryPolarDBX()
+		if apierrors.IsNotFound(err) {
+			pxcNotDeleting = false
+		}
+	}
+
+	var mgr gms.Manager
+	if pxcNotDeleting {
+		var err error
+		mgr, err = rc.GetPolarDBXGMSManager()
+		if err != nil && pxcNotDeleting {
+			return err
+		}
 	}
 
 	canDeleteTime := v1.NewTime(time.Now().Add(-5 * time.Second))
@@ -81,8 +95,7 @@ func handleFinalizerForPods(rc *polardbxv1reconcile.Context, log logr.Logger, de
 	if role == polardbxmeta.RoleCN {
 		toDeleteInfo := make([]gms.ComputeNodeInfo, 0, len(deletedOrFailedPods))
 		for _, pod := range deletedOrFailedPods {
-			// Ignore unscheduled pods.
-			if !k8shelper.IsPodScheduled(&pod) {
+			if pod.Status.PodIP == "" {
 				continue
 			}
 			toDeleteInfo = append(toDeleteInfo, gms.ComputeNodeInfo{
@@ -94,14 +107,16 @@ func handleFinalizerForPods(rc *polardbxv1reconcile.Context, log logr.Logger, de
 				Extra: pod.Name,
 			})
 		}
-		err := mgr.DeleteComputeNodes(toDeleteInfo...)
-		if err != nil {
-			return err
+		if pxcNotDeleting {
+			err := mgr.DeleteComputeNodes(toDeleteInfo...)
+			if err != nil {
+				return err
+			}
 		}
 	} else if role == polardbxmeta.RoleCDC {
 		toDeleteInfo := make([]gms.CdcNodeInfo, 0, len(deletedOrFailedPods))
 		for _, pod := range deletedOrFailedPods {
-			if !k8shelper.IsPodScheduled(&pod) {
+			if pod.Status.PodIP == "" {
 				continue
 			}
 			toDeleteInfo = append(toDeleteInfo, gms.CdcNodeInfo{
@@ -112,9 +127,11 @@ func handleFinalizerForPods(rc *polardbxv1reconcile.Context, log logr.Logger, de
 				).ContainerPort,
 			})
 		}
-		err := mgr.DeleteCdcNodes(toDeleteInfo...)
-		if err != nil {
-			return err
+		if pxcNotDeleting {
+			err := mgr.DeleteCdcNodes(toDeleteInfo...)
+			if err != nil {
+				return err
+			}
 		}
 	}
 

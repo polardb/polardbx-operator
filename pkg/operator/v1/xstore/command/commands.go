@@ -182,6 +182,11 @@ func (b *commandConsensusBuilder) ChangeLearnerToFollower(node string) *CommandB
 	return b.end()
 }
 
+func (b *commandConsensusBuilder) ChangeFollowerToLearner(node string) *CommandBuilder {
+	b.args = append(b.args, "follower-to-learner", node)
+	return b.end()
+}
+
 func (b *commandConsensusBuilder) ChangeRole(pod, from, to string) *CommandBuilder {
 	b.args = append(b.args, "change", "--node", pod, "--from-role", from, "--to-role", to)
 	return b.end()

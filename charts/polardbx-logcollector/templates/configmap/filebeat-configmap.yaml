@@ -50,6 +50,71 @@ data:
                     pattern: '^\[[0-9]{4}-[0-9]{2}-[0-9]{2}'
                     negate: true
                     match: after
+            - condition:
+                and:
+                  - equals:
+                      kubernetes.labels.polardbx/enableAuditLog: "true"
+                  - or:
+                      - equals:
+                          kubernetes.labels.polardbx/role: dn
+                      - equals:
+                          kubernetes.labels.polardbx/role: gms
+              config:
+                - type: filestream
+                  id: dn-audit-log-filestream
+                  prospector.scanner.check_interval: 1s
+                  buffer_size: 1048576
+                  # close.reader.after_interval: 50s
+                  fields:
+                    log_type: dn_audit_log
+                    instance_id: ${data.kubernetes.labels.polardbx/name}
+                    dn_instance_id: ${data.kubernetes.labels.xstore/name}
+                    pod_name: ${data.kubernetes.pod.name}
+                    node_name: ${data.kubernetes.node.name}
+                  paths:
+                    #alog must in mysql/*/*.alog 
+                    - {{ .Values.filebeat.dnDataHostPathPrefix }}/${data.kubernetes.namespace}/${data.kubernetes.pod.name}/tmp/*.alog
+                  parsers:
+                  - multiline:
+                      type: pattern
+                      pattern: '.*\x01$'
+                      negate: true
+                      match: before
+            - condition:
+                or:
+                  - equals:
+                      kubernetes.labels.polardbx/role: dn
+                  - equals:
+                      kubernetes.labels.polardbx/role: gms
+              config:
+                - type: filestream
+                  id: dn-slow-log-filestream
+                  prospector.scanner.check_interval: 1s
+                  fields:
+                    log_type: dn_slow_log
+                    instance_id: ${data.kubernetes.labels.polardbx/name}
+                    dn_instance_id: ${data.kubernetes.labels.xstore/name}
+                    pod_name: ${data.kubernetes.pod.name}
+                    node_name: ${data.kubernetes.node.name}
+                  paths:
+                    - {{ .Values.filebeat.dnDataHostPathPrefix }}/${data.kubernetes.namespace}/${data.kubernetes.pod.name}/data/mysql/slow_log_*.CSV
+                - type: filestream
+                  id: dn-error-log-filestream
+                  prospector.scanner.check_interval: 1s
+                  fields:
+                    log_type: dn_error_log
+                    instance_id: ${data.kubernetes.labels.polardbx/name}
+                    dn_instance_id: ${data.kubernetes.labels.xstore/name}
+                    pod_name: ${data.kubernetes.pod.name}
+                    node_name: ${data.kubernetes.node.name}
+                  paths:
+                    - {{ .Values.filebeat.dnDataHostPathPrefix }}/${data.kubernetes.namespace}/${data.kubernetes.pod.name}/log/alert.log
+                  parsers:
+                  - multiline:
+                      type: pattern
+                      pattern: '^\d{4}-\d{2}-\d{2}|^\[\d{4}-\d{2}-\d{2}'
+                      negate: true
+                      match: after
     
     processors:
       - drop_fields:
@@ -57,7 +122,10 @@ data:
           ignore_missing: false
     
     
-    
+    # output.file:
+    #   path: "/tmp/filebeat"
+    #   filename: filebeat
+
     #output.console:
     #  enable: false
     #  codec.json:
