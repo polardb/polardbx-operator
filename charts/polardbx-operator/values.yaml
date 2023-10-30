@@ -14,10 +14,10 @@ images:
   polardbxJob: polardbx-job
 
 # Default image tag. Use app version if not specified or 'latest' if useLatestImage is true.
-imageTag: v1.5.0-beta
+imageTag: v1.5.0
 
 # version will be written to pxc and xstore annotation 
-version: v1.5.0-beta
+version: v1.5.0
 
 # Uses the latest images for operator components.
 useLatestImage: false
