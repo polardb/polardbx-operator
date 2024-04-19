@@ -2664,13 +2664,6 @@ spec:
         optional: '[131072-2147483647]'
         restart: true
         unit: INT
-      - defaultValue: TLSv1,TLSv1.1,TLSv1.2
-        divisibilityFactor: 0
-        mode: readwrite
-        name: tls_version
-        optional: '[TLSv1,TLSv1.1,TLSv1.2|TLSv1,TLSv1.1|TLSv1.2]'
-        restart: true
-        unit: STRING
       - defaultValue: '2097152'
         divisibilityFactor: 1
         mode: readwrite

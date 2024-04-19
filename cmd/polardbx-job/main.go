@@ -16,9 +16,10 @@ import (
 type JobType string
 
 const (
-	PitrHeartbeatJobType JobType = "PitrHeartbeat"
-	PitrPrepareBinlogs   JobType = "PitrPrepareBinlogs"
-	PitrDownloadFile     JobType = "PitrDownloadFile"
+	PitrHeartbeatJobType              JobType = "PitrHeartbeat"
+	PitrPrepareBinlogs                JobType = "PitrPrepareBinlogs"
+	PitrDownloadFile                  JobType = "PitrDownloadFile"
+	PitrPrepareBinlogForXStoreJobType JobType = "PitrPrepareBinlogsForXStore"
 )
 
 var (
@@ -53,6 +54,14 @@ func main() {
 		})
 	case PitrPrepareBinlogs:
 		waitGroup := pitr.RunAsync()
+		exitActions = append(exitActions, func() {
+			pitr.Exit()
+		})
+		waitActions = append(waitActions, func() {
+			waitGroup.Wait()
+		})
+	case PitrPrepareBinlogForXStoreJobType:
+		waitGroup := pitr.RunAsyncForXStore()
 		exitActions = append(exitActions, func() {
 			pitr.Exit()
 		})

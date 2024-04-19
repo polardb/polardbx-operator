@@ -260,31 +260,19 @@ var SyncDnReplicasAndCheckControllerRef = polardbxv1reconcile.NewStepBinder("Syn
 			return flow.RetryErr(err, "Failed to get primary pxc.")
 		}
 
-		shouldUpdatePolardbx := false
-
 		if err = k8shelper.CheckControllerReference(polardbx, primaryPolardbx); err != nil {
 			err = ctrl.SetControllerReference(primaryPolardbx, polardbx, rc.Scheme())
 			if err != nil {
 				return flow.Error(err, "Failed to set controller ref: %w")
 			}
-			shouldUpdatePolardbx = true
+			rc.MarkPolarDBXChanged()
 		}
 
 		primaryDnReplicas := primaryPolardbx.Spec.Topology.Nodes.DN.Replicas
 
 		if polardbx.Spec.Topology.Nodes.DN.Replicas != primaryDnReplicas {
 			polardbx.Spec.Topology.Nodes.DN.Replicas = primaryDnReplicas
-			shouldUpdatePolardbx = true
-		}
-
-		if shouldUpdatePolardbx {
-			err = rc.Client().Update(rc.Context(), polardbx)
-
-			if err != nil {
-				return flow.Error(err, "Failed to update dn replicas.")
-			} else {
-				return flow.Continue("DN replicas updated.")
-			}
+			rc.MarkPolarDBXChanged()
 		}
 		return flow.Pass()
 	},
@@ -676,7 +664,19 @@ var CreateFileStorage = polardbxv1reconcile.NewStepBinder("CreateFileStorage",
 			// create the file storage
 			err = groupManager.CreateFileStorage(info, config)
 			if err != nil {
-				return flow.Error(err, fmt.Sprintf("Failed to create file storage: %s.", info.Engine))
+				return flow.Error(err, fmt.Sprintf("Failed to create file storage for ColdData: %s.", info.Engine))
+			}
+		}
+		if polardbx.Status.SpecSnapshot.Topology.Nodes.Columnar != nil {
+			for _, info := range polardbx.Spec.Config.Columnar.ColumnarDataFileStorage {
+				// check if the filestorage already existed
+				if info.CheckEngineExists(fileStorageInfoList) {
+					continue
+				}
+				err = groupManager.CreateFileStorage(info, config)
+				if err != nil {
+					flow.Logger().Error(err, fmt.Sprintf("Failed to create file storage for Columnar: %s.", info.Engine))
+				}
 			}
 		}
 		return flow.Pass()
@@ -1064,3 +1064,44 @@ var TrySyncGMSLabelToPodsDirectly = polardbxv1reconcile.NewStepBinder("TrySyncGM
 		return flow.Continue(" GMS labels are synced", "count", changedCount)
 	},
 )
+
+var WaitUntilDNsTdeReady = polardbxv1reconcile.NewStepBinder("WaitUntilDNsReady",
+	func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+		polardbx := rc.MustGetPolarDBX()
+		topology := &polardbx.Status.SpecSnapshot.Topology
+
+		dnStores, err := rc.GetDNMap()
+		if err != nil {
+			return flow.Error(err, "Unable to list xstores of DNs.")
+		}
+
+		notReadyCnt, skipCnt := 0, 0
+		for i, dnStore := range dnStores {
+			// Trailing DNs.
+			if i >= int(topology.Nodes.DN.Replicas) {
+				skipCnt++
+				continue
+			}
+
+			if dnStore.Status.Phase == polardbxv1xstore.PhaseFailed {
+				helper.TransferPhase(rc.MustGetPolarDBX(), polardbxv1polardbx.PhaseFailed)
+				return flow.Retry("XStore of DN is failed, transfer phase into failed.", "xstore", dnStore.Name)
+			}
+
+			if !isXStoreTdeReady(dnStore) {
+				notReadyCnt++
+			}
+		}
+
+		if notReadyCnt > 0 {
+			return flow.Wait("Some xstore of DN is not ready, wait.", "not-ready", notReadyCnt, "skip", skipCnt)
+		}
+
+		return flow.Continue("XStores of DNs are ready.", "skip", skipCnt)
+	},
+)
+
+func isXStoreTdeReady(xstore *polardbxv1.XStore) bool {
+	return xstore.Status.ObservedGeneration == xstore.Generation &&
+		xstore.Status.Phase == polardbxv1xstore.PhaseRunning && xstore.Status.TdeStatus && !xstore.Status.Restarting
+}

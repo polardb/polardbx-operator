@@ -11,6 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import subprocess
+import sys
+from sys import stdin, stderr
 
 import click
 
@@ -98,3 +101,38 @@ def xtrabackup_home():
 
 
 engine_group.add_command(xtrabackup_home)
+
+
+@click.command(name='filestream')
+@click.option('--action', type=str)
+@click.option('--local_file', type=str)
+@click.option('--instance_id', type=str)
+@click.option('--filename', type=str)
+@click.option('--destnode_name', type=str)
+def filestream(action, local_file, instance_id, filename, destnode_name):
+    with open(local_file, "r") as f:
+        upload_cmd = [
+            global_mgr.engine().context.filestream_client(),
+            "--meta.action=" + action,
+            "--meta.instanceId=" + instance_id,
+            "--meta.filename=" + filename,
+            "--hostInfoFilePath=" + global_mgr.engine().context.host_info(),
+            "--destNodeName=" + destnode_name
+        ]
+        with subprocess.Popen(upload_cmd, stdin=f, stderr=sys.stderr, close_fds=True) as up:
+            up.wait()
+
+
+engine_group.add_command(filestream)
+
+
+@click.command(name="xtrabackup_plugin")
+def xtrabackup_plugin_home():
+    xtrabackup_plugin = global_mgr.engine().context.xtrabackup_plugin
+    print(xtrabackup_plugin)
+    return
+
+
+engine_group.add_command(xtrabackup_plugin_home)
+
+

@@ -203,3 +203,15 @@ func NewPolarDBXCluster(name, namespace string, opts ...FactoryOption) *polardbx
 
 	return obj
 }
+
+func EnableTde(selfSigned bool, keyringPath string) FactoryOption {
+	return func(polardbxcluster *polardbxv1.PolarDBXCluster) {
+		if &polardbxcluster.Spec.TDE == nil {
+			polardbxcluster.Spec.TDE = polardbxv1polardbx.TDE{}
+		}
+		polardbxcluster.Spec.TDE = polardbxv1polardbx.TDE{
+			Enable:      selfSigned,
+			KeyringPath: keyringPath,
+		}
+	}
+}

@@ -73,7 +73,7 @@ type Splicer struct {
 func NewSplicer(options ...func(*Splicer)) *Splicer {
 	splicer := &Splicer{
 		Delimiter: "-",
-		Limit:     63,
+		Limit:     253,
 	}
 	for _, option := range options {
 		option(splicer)
@@ -81,6 +81,7 @@ func NewSplicer(options ...func(*Splicer)) *Splicer {
 	return splicer
 }
 
+// getAbbreviateName generate a hashed string from sourceName
 func (s *Splicer) getAbbreviateName(sourceName string) string {
 	hashVal := security.MustSha1Hash(sourceName)
 	if s.Prefix == "" {
@@ -89,6 +90,7 @@ func (s *Splicer) getAbbreviateName(sourceName string) string {
 	return fmt.Sprintf("%s%s%s", s.Prefix, s.Delimiter, hashVal)
 }
 
+// GetName returns spliced name if length less than limit, otherwise an abbreviate name with hash value
 func (s *Splicer) GetName() string {
 	name := strings.Join(*s.Tokens, s.Delimiter)
 	if s.Limit == 0 || len(name) < s.Limit {

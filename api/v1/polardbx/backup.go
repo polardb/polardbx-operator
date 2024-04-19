@@ -71,3 +71,19 @@ func NewBackupStorageFilestreamAction(storage BackupStorage) (*BackupStorageFile
 		return nil, errors.New("invalid storage: " + string(storage))
 	}
 }
+
+type CleanPolicyType string
+
+const (
+	// CleanPolicyRetain represents that remote backup files will be retained
+	// when the backup object is deleted in any case.
+	CleanPolicyRetain CleanPolicyType = "Retain"
+
+	// CleanPolicyDelete represents that remote backup files will be deleted
+	// when the backup object is deleted in any case.
+	CleanPolicyDelete CleanPolicyType = "Delete"
+
+	// CleanPolicyOnFailure represents that if backup failed, remote backup files will be deleted
+	// when the backup object is deleted.
+	CleanPolicyOnFailure CleanPolicyType = "OnFailure"
+)

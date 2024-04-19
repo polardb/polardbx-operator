@@ -36,9 +36,12 @@ var CreateOrUpdateConfigMaps = plugin.NewStepBinder(galaxy.Engine, "CreateOrUpda
 			convention.ConfigMapTypeConfig,
 			convention.ConfigMapTypeShared,
 			convention.ConfigMapTypeTask,
+			convention.ConfigMapTypeTde,
 		} {
 			loopFlow := flow.WithLoggerValues("configmap-type", cmType)
-
+			if !rc.IsTdeEnable() && cmType == convention.ConfigMapTypeTde {
+				continue
+			}
 			cm, err := rc.GetXStoreConfigMap(cmType)
 			if client.IgnoreNotFound(err) != nil {
 				return loopFlow.Error(err, "Unable to get configmap.")

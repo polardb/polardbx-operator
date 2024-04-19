@@ -21,6 +21,7 @@ spec:
         app.kubernetes.io/instance: {{ .Release.Name }}
         app.kubernetes.io/component: polardbx-hpfs
     spec:
+      priorityClassName: system-cluster-critical
       volumes:
       - name: tools-vol
         hostPath:
@@ -42,9 +43,18 @@ spec:
         hostPath:
           path: {{ .Values.node.volumes.filestream }}
           type: DirectoryOrCreate
-      - name: cgroups-blkio
+      - name: cgroups
         hostPath:
-          path: /sys/fs/cgroup/blkio
+          path: /sys/fs/cgroup
+      - name: proc
+        hostPath:
+          path: /proc
+      - name: varrun
+        hostPath:
+          path: /var/run
+      - name: run
+        hostPath:
+          path: /run
       - name: tmpfs
         emptyDir: {}
       - name: config
@@ -85,14 +95,20 @@ spec:
           name: hpfs-data
         - mountPath: /filestream
           name: filestream
-        - mountPath: /sys/fs/cgroup/blkio
-          name: cgroups-blkio
+        - mountPath: /sys/fs/cgroup
+          name: cgroups
         - mountPath: /tools/xstore
           name: tools-vol
         - mountPath: /tmp
           name: tmpfs
         - mountPath: /config
           name: config
+        - mountPath: /proc
+          name: proc
+        - mountPath: /var/run
+          name: varrun
+        - mountPath: /run
+          name: run
         ports:
         - containerPort: {{ .Values.hostPathFileService.port }}
           name: hpfs
@@ -103,17 +119,18 @@ spec:
         args:
         - --port={{ .Values.hostPathFileService.port }}
         - --host-name=$(NODE_NAME)
-        - --limited-paths={{ .Values.node.volumes.data }},{{ .Values.node.volumes.log }},{{ .Values.node.volumes.filestream }}
+        - --limited-paths={{ .Values.node.volumes.data }},{{ .Values.node.volumes.log }},/filestream
         - --task-db={{ .Values.node.volumes.data }}/hpfs/task.db
         - --k8s-namespace=$(NAMESPACE)
         - --k8s-selector=app.kubernetes.io/component=polardbx-hpfs
         - --lock-file={{ .Values.node.volumes.data }}/hpfs/hpfs.lock
         - --fss-port={{ .Values.hostPathFileService.fsPort }}
-        - --fss-root-path={{ .Values.node.volumes.filestream }}
+        - --fss-root-path=/filestream
         - --fc-min-flow={{ .Values.hostPathFileService.fsMinFlow }}
         - --fc-max-flow={{ .Values.hostPathFileService.fsMaxFlow }}
         - --fc-total-flow={{ .Values.hostPathFileService.fsTotalFlow }}
         - --fc-buffer-size={{ int .Values.hostPathFileService.fsBufferSize }}
+        - --cpu-set-bind-output={{ .Values.node.volumes.data }}/hpfs/cpusetbind.txt
         securityContext:
           privileged: true
         livenessProbe:

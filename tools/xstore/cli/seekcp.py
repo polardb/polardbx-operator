@@ -90,7 +90,7 @@ def get_binlog_indexes(pipe, filestream_client, indexes_file, logger):
 def get_heartbeat_txid(context, filestream_client, tx_events_dir, logger):
     local_heartbeat_path = os.path.join(context.volume_path(VOLUME_DATA, "backup", "heartbeat"))
     if not os.path.exists(local_heartbeat_path):  # to deal with oss download issue
-        remote_heartbeat_path = os.path.join('/'.join(tx_events_dir.split('/')[:-1]), 'heartbeat')
+        remote_heartbeat_path = os.path.join(tx_events_dir, 'heartbeat')
         filestream_client.download_to_file(remote=remote_heartbeat_path, local=local_heartbeat_path, logger=logger)
 
     with open(local_heartbeat_path, "r") as file:

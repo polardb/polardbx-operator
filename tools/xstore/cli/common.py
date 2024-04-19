@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+import configparser
 from typing import List, Sequence
 
 # Global context.
@@ -21,6 +21,28 @@ from core import Context, Manager
 from .root import root_group
 
 global_mgr = Manager(Context())
+
+
+def check_parameters_exist(section, parameters):
+    config = configparser.ConfigParser(allow_no_value=True)
+    config.read(global_mgr.engine().file_config)
+    try:
+        for param in parameters:
+            if not config.has_option(section, param):
+                return False
+    except configparser.NoSectionError:
+        return False
+    return True
+
+
+def get_parameter_value(section, parameter):
+    config = configparser.ConfigParser(allow_no_value=True)
+    config.read(global_mgr.engine().file_config)
+    try:
+        value = config.get(section, parameter)
+    except (configparser.NoSectionError, configparser.NoOptionError):
+        value = None
+    return value
 
 
 def print_rows(rows: List[Sequence[str]], sep=' ', *, header: List[str] or None = None):

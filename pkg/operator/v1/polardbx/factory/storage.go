@@ -135,31 +135,6 @@ func (f *objectFactory) getNodeSelectorFromRef(polardbx *polardbxv1.PolarDBXClus
 
 func (f *objectFactory) newXStoreNodeSetAffinity(polardbx *polardbxv1.PolarDBXCluster,
 	nodeSelector *corev1.NodeSelector) *corev1.Affinity {
-	config := f.rc.Config()
-
-	if !config.Scheduler().AllowScheduleToMasterNode() {
-		masterNotAllowed := corev1.NodeSelectorRequirement{
-			Key:      k8shelper.NodeRoleKey,
-			Operator: corev1.NodeSelectorOpNotIn,
-			Values:   []string{"master"},
-		}
-
-		if nodeSelector == nil || nodeSelector.NodeSelectorTerms == nil {
-			nodeSelector = &corev1.NodeSelector{
-				NodeSelectorTerms: []corev1.NodeSelectorTerm{{
-					MatchExpressions: []corev1.NodeSelectorRequirement{
-						masterNotAllowed,
-					}},
-				},
-			}
-		} else {
-			for i := range nodeSelector.NodeSelectorTerms {
-				term := &nodeSelector.NodeSelectorTerms[i]
-				term.MatchExpressions = append(term.MatchExpressions, masterNotAllowed)
-			}
-		}
-	}
-
 	// Try scatter between DN & GMS
 	affinity := &corev1.Affinity{
 		NodeAffinity: &corev1.NodeAffinity{
@@ -489,6 +464,11 @@ func (f *objectFactory) newXStore(
 				Namespace: templateNameSpace,
 				Name:      templateName,
 			},
+			TDE: polardbxv1.TDE{
+				Enable:      polardbx.Spec.TDE.Enable,
+				KeyringPath: polardbx.Spec.TDE.KeyringPath,
+			},
+			Exclusive: polardbx.Spec.Exclusive,
 		},
 	}
 	restoreOpt := polardbx.Spec.Restore

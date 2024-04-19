@@ -259,7 +259,7 @@ func (v *volumeFactory) NewVolumeMountsForCNEngine() []corev1.VolumeMount {
 	if nfsConfig.Server() != "" {
 		volumeMounts = append(volumeMounts, corev1.VolumeMount{
 			Name:             "polardbx-nfs",
-			MountPath:        "/home/admin/drds-server/cold-data",
+			MountPath:        "/home/admin/polardbx-external-disk",
 			MountPropagation: mountPropagationModePtr(corev1.MountPropagationHostToContainer),
 		})
 	}
@@ -315,6 +315,15 @@ func (v *volumeFactory) NewVolumesForColumnar() []corev1.Volume {
 			VolumeSource: v.newEmptyDirVolumeSource(),
 		},
 	}
+
+	nfsConfig := v.rc.Config().Nfs()
+	if nfsConfig.Server() != "" {
+		volumes = append(volumes, corev1.Volume{
+			Name:         "polardbx-nfs",
+			VolumeSource: v.newNFS(nfsConfig.Path(), nfsConfig.Server()),
+		})
+	}
+
 	return append(systemVols, volumes...)
 }
 
@@ -334,6 +343,16 @@ func (v *volumeFactory) NewVolumeMountsForColumnarEngine() []corev1.VolumeMount 
 		//	MountPropagation: mountPropagationModePtr(corev1.MountPropagationHostToContainer),
 		//},
 	}
+
+	nfsConfig := v.rc.Config().Nfs()
+	if nfsConfig.Server() != "" {
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:             "polardbx-nfs",
+			MountPath:        "/home/admin/polardbx-external-disk",
+			MountPropagation: mountPropagationModePtr(corev1.MountPropagationHostToContainer),
+		})
+	}
+
 	return append(systemVolMounts, volumeMounts...)
 }
 

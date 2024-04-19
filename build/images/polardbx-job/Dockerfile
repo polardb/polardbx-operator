@@ -13,7 +13,7 @@
 # limitations under the License.
 
 # Build the init command
-FROM golang:1.18 as builder
+FROM golang:1.21.1 as builder
 
 WORKDIR /workspace
 

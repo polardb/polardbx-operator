@@ -22,6 +22,7 @@ import (
 	polarxv1xstore "github.com/alibaba/polardbx-operator/api/v1/xstore"
 	"github.com/alibaba/polardbx-operator/pkg/k8s/control"
 	k8shelper "github.com/alibaba/polardbx-operator/pkg/k8s/helper"
+	polardbxmeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/meta"
 	xstoremeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/meta"
 	xstorev1reconcile "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -30,6 +31,14 @@ import (
 func IsNotLogger(xstoreFollower *polarxv1.XStoreFollower) bool {
 	result := xstoreFollower.Spec.Role != polarxv1xstore.FollowerRoleLogger
 	return result
+}
+
+func IsTdeOpen(xstore *polarxv1.XStore) bool {
+	role := xstore.Labels[polardbxmeta.LabelRole]
+	if role != polardbxmeta.RoleGMS && xstore.Spec.TDE.Enable {
+		return true
+	}
+	return false
 }
 
 //check if the xstore exists

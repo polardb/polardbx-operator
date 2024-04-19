@@ -226,7 +226,6 @@ func (e *Exporter) scrape(ch chan<- prometheus.Metric) (up float64) {
 	scrapeTasks := []ScrapeTask{
 		{Query: "SHOW @@STATS", Metrics: e.statsMetrics, VarLabels: []string{"name"}},
 		{Query: "SHOW @@STC", Metrics: e.stcMetrics, VarLabels: []string{"dbname", "mysqladdr", "appname", "groupname", "atomname"}},
-		{Query: "SHOW @@HTC", Metrics: e.htcMetrics, VarLabels: []string{}},
 	}
 
 	errs := make([]error, len(scrapeTasks))

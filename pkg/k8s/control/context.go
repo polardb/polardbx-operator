@@ -35,7 +35,6 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	k8shelper "github.com/alibaba/polardbx-operator/pkg/k8s/helper"
@@ -61,9 +60,9 @@ func (opts *ExecOptions) setDefaults() {
 	}
 
 	// Logging
-	if opts.Logger == nil {
-		opts.Logger = log.NullLogger{}
-	}
+	//if opts.Logger == nil {
+	//	opts.Logger = log.NullLogger
+	//}
 }
 
 type ReconcileRemoteCommandHelper interface {

@@ -136,6 +136,7 @@ var UpdateObservedTopologyAndConfig = xstorev1reconcile.NewStepBinder("UpdateObs
 		xstore := rc.MustGetXStore()
 		xstore.Status.ObservedTopology = xstore.Spec.Topology.DeepCopy()
 		xstore.Status.ObservedConfig = xstore.Spec.Config.DeepCopy()
+		xstore.Status.TdeStatus = xstore.Spec.TDE.Enable
 		return flow.Continue("Update observed topology and config.", "current-generation", xstore.Generation)
 	},
 )
@@ -509,6 +510,11 @@ func setMycnfOverrideParams(paramsRoleMap map[string]map[string]polardbxv1.Param
 	}
 }
 
+func setTDEValue(mycnfOverrride *ini.File, xstore *polardbxv1.XStore) {
+	mycnfOverrride.Section("mysqld").Key(convention.KeyringPluginKey).SetValue(convention.KeyringPluginValue)
+	mycnfOverrride.Section("mysqld").Key(convention.KeyringFile).SetValue(xstore.Spec.TDE.KeyringPath)
+}
+
 var UpdateXStoreConfigMap = xstorev1reconcile.NewStepBinder("UpdateXStoreConfigMap",
 	func(rc *xstorev1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
 		xstore := rc.MustGetXStore()
@@ -561,6 +567,53 @@ var UpdateXStoreConfigMap = xstorev1reconcile.NewStepBinder("UpdateXStoreConfigM
 		} else {
 			setMycnfOverrideParams(paramsRoleMap, gmsParamList, mycnfOverrride, xstore)
 		}
+
+		templateCm.Data[convention.ConfigMyCnfOverride] = iniutil.ToString(mycnfOverrride)
+
+		mycnfVersion := templateCm.Data["my.cnf.override.version"]
+		if mycnfVersion == "" {
+			templateCm.Data["my.cnf.override.version"] = "1"
+		} else {
+			version, err := strconv.Atoi(mycnfVersion)
+			if err != nil {
+				return flow.Error(err, "Unable to get version of my.cnf.override.")
+			}
+			version = version + 1
+			templateCm.Data["my.cnf.override.version"] = strconv.Itoa(version)
+		}
+
+		// Update config map.
+		err = rc.Client().Update(rc.Context(), templateCm)
+		if err != nil {
+			return flow.Error(err, "Unable to update task config map.")
+		}
+
+		return flow.Pass()
+	},
+)
+
+var UpdateXStoreConfigMapForTde = xstorev1reconcile.NewStepBinder("UpdateXStoreConfigMapForTde",
+	func(rc *xstorev1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+		xstore := rc.MustGetXStore()
+		templateCm, err := rc.GetXStoreConfigMap(convention.ConfigMapTypeConfig)
+		if err != nil {
+			return flow.Error(err, "Unable to get config map for config.")
+		}
+		if templateCm.Data == nil {
+			templateCm.Data = make(map[string]string)
+		}
+		mycnfOverrride, err := ini.LoadSources(ini.LoadOptions{
+			AllowBooleanKeys:           true,
+			AllowPythonMultilineValues: true,
+			SpaceBeforeInlineComment:   true,
+			PreserveSurroundedQuote:    true,
+			IgnoreInlineComment:        true,
+		}, []byte(templateCm.Data[convention.ConfigMyCnfOverride]))
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+
+		setTDEValue(mycnfOverrride, xstore)
 
 		templateCm.Data[convention.ConfigMyCnfOverride] = iniutil.ToString(mycnfOverrride)
 
@@ -793,6 +846,35 @@ var CloseXStoreRestartPhase = plugin.NewStepBinder(galaxy.Engine, "CloseXStoreRe
 				return flow.Retry("Update conflict, Retry")
 			} else {
 				return flow.Error(err, "Unable to Update dn status")
+			}
+		}
+		return flow.Pass()
+	},
+)
+
+var UpdateTdeStatus = xstorev1reconcile.NewStepBinder("UpdateTdeStatus",
+	func(rc *xstorev1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+		xstore := rc.MustGetXStore()
+		if &xstore.Spec.TDE.Enable != nil {
+			xstore.Status.TdeStatus = xstore.Spec.TDE.Enable
+		}
+		err := rc.UpdateXStoreStatus()
+		if err != nil {
+			return flow.Error(err, "Unable to Update PolarDBX Status")
+		}
+		return flow.Pass()
+	},
+)
+
+var RestartingDNs = xstorev1reconcile.NewStepBinder("RestartingDNs",
+	func(rc *xstorev1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+		xstore := rc.MustGetXStore()
+		if rc.IsTdeEnable() {
+			xstore.Status.RestartingType = polardbxv1polardbx.RolingRestart
+			xstore.Status.Restarting = true
+			err := rc.UpdateXStoreStatus()
+			if err != nil {
+				return flow.Error(err, "Unable to Update PolarDBX Status")
 			}
 		}
 		return flow.Pass()

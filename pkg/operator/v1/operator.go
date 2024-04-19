@@ -19,7 +19,9 @@ package v1
 import (
 	"context"
 	systemtaskv1controllers "github.com/alibaba/polardbx-operator/pkg/operator/v1/systemtask/controllers"
+	"net/http"
 	"os"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
 	promv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -29,6 +31,7 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	ctrlwebhook "sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	polardbxv1 "github.com/alibaba/polardbx-operator/api/v1"
 	"github.com/alibaba/polardbx-operator/pkg/k8s/control"
@@ -38,6 +41,7 @@ import (
 	xstorev1controllers "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/controllers"
 	"github.com/alibaba/polardbx-operator/pkg/webhook"
 	"github.com/alibaba/polardbx-operator/pkg/webhook/polardbxcluster"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 )
 
 var (
@@ -224,6 +228,22 @@ func setupXStoreBackupControllers(opts controllerOptions) error {
 	return nil
 }
 
+func setupXStoreBackupBinlogControllers(opts controllerOptions) error {
+	xstoreBackupBinlogReconciler := xstorev1controllers.XStoreBackupBinlogReconciler{
+		BaseRc:         opts.BaseReconcileContext,
+		LoaderFactory:  opts.LoaderFactory,
+		Logger:         ctrl.Log.WithName("controller").WithName("xstorebackupbinlog"),
+		MaxConcurrency: opts.opts.MaxConcurrentReconciles,
+	}
+
+	err := xstoreBackupBinlogReconciler.SetupWithManager(opts.Manager)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 //func setupXStoreBackupScheduleControllers(opts controllerOptions) error {
 //	xstoreBackupReconciler := xstorev1controllers.XStoreBackupReconciler{
 //		BaseRc:         opts.BaseReconcileContext,
@@ -270,15 +290,24 @@ func Start(ctx context.Context, opts Options) {
 		os.Exit(1)
 	}
 
+	var webhookSever ctrlwebhook.Server = &nullWebhookServer{}
+	if opts.WebhookListenPort == 0 {
+		webhookSever = ctrlwebhook.NewServer(ctrlwebhook.Options{
+			CertDir: opts.CertDir,
+		})
+	}
+
 	// New manager.
 	mgr, err := ctrl.NewManager(restConfig, ctrl.Options{
-		Scheme:                  scheme,
-		MetricsBindAddress:      opts.MetricsAddr,
-		Port:                    opts.ListenPort,
+		Scheme: scheme,
+		Metrics: metricsserver.Options{
+			BindAddress: opts.MetricsAddr,
+			CertDir:     opts.CertDir,
+		},
 		LeaderElection:          opts.LeaderElection,
 		LeaderElectionNamespace: opts.LeaderElectionNamespace,
 		LeaderElectionID:        "polardbx.aliyun.com",
-		CertDir:                 opts.CertDir,
+		WebhookServer:           webhookSever,
 	})
 	if err != nil {
 		setupLog.Error(err, "Unable to new manager.")
@@ -303,6 +332,12 @@ func Start(ctx context.Context, opts Options) {
 	err = setupXStoreControllers(ctrlOpts)
 	if err != nil {
 		setupLog.Error(err, "Unable to setup controllers for xstore.")
+		os.Exit(1)
+	}
+
+	err = setupXStoreBackupBinlogControllers(ctrlOpts)
+	if err != nil {
+		setupLog.Error(err, "Unable to setup controllers for xstorebackbinlog.")
 		os.Exit(1)
 	}
 
@@ -361,4 +396,27 @@ func Start(ctx context.Context, opts Options) {
 		setupLog.Error(err, "Unable to start controllers.")
 		os.Exit(1)
 	}
+}
+
+type nullWebhookServer struct {
+}
+
+func (n *nullWebhookServer) NeedLeaderElection() bool {
+	return false
+}
+
+func (n *nullWebhookServer) Register(path string, hook http.Handler) {
+
+}
+
+func (n *nullWebhookServer) Start(ctx context.Context) error {
+	return nil
+}
+
+func (n *nullWebhookServer) StartedChecker() healthz.Checker {
+	return nil
+}
+
+func (n *nullWebhookServer) WebhookMux() *http.ServeMux {
+	return nil
 }

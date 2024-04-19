@@ -40,6 +40,12 @@ const (
 	AnnotationBackupBinlog = "polardbx/backupbinlog"
 )
 
+// Restore annotations
+const (
+	// AnnotationImmutableBackupSetPath denotes whether mutate webhook is enabled for RestoreSpec.From.BackupSetPath
+	AnnotationImmutableBackupSetPath = "polardbx/immutable-backup-set-path"
+)
+
 const (
 	AnnotationStorageType = "polardbx/storage-type"
 )

@@ -20,6 +20,7 @@ type JobTask string
 
 const (
 	JobTaskBackup              JobTask = "backup"
+	JobTaskBackupKeyring       JobTask = "backup-keyring"
 	JobTaskRestoreCleanDataDir JobTask = "clean-restore"
 	JobTaskRestorePrepare      JobTask = "prepare-restore"
 	JobTaskRestoreMoveBack     JobTask = "move-restore"
@@ -27,6 +28,7 @@ const (
 	JobTaskFlushConsensusMeta  JobTask = "flush-meta"
 	JobTaskAfterRestore        JobTask = "after-restore"
 	JobTaskInitLogger          JobTask = "init-logger"
+	JobTaskRestoreKeyring      JobTask = "restore-keyring"
 )
 
 var (
@@ -34,7 +36,7 @@ var (
 )
 
 func init() {
-	jobList := []JobTask{JobTaskBackup, JobTaskBeforeRestore, JobTaskRestoreCleanDataDir, JobTaskRestorePrepare, JobTaskRestoreMoveBack, JobTaskFlushConsensusMeta, JobTaskInitLogger, JobTaskAfterRestore}
+	jobList := []JobTask{JobTaskBackupKeyring, JobTaskBackup, JobTaskBeforeRestore, JobTaskRestoreCleanDataDir, JobTaskRestoreKeyring, JobTaskRestorePrepare, JobTaskRestoreMoveBack, JobTaskFlushConsensusMeta, JobTaskInitLogger, JobTaskAfterRestore}
 	for i, jobTask := range jobList {
 		JobTaskOrderIndexMap[jobTask] = i
 	}

@@ -59,7 +59,7 @@ func setupWebhooksForPolarDBXClusterV1(mgr ctrl.Manager, webhookConfigLoader Web
 				func() *DefaulterConfig {
 					return &webhookConfigLoader().Defaulter
 				},
-			),
+			), mgr.GetScheme(),
 		),
 	)
 
@@ -71,6 +71,7 @@ func setupWebhooksForPolarDBXClusterV1(mgr ctrl.Manager, webhookConfigLoader Web
 					return &webhookConfigLoader().Validator
 				},
 			),
+			mgr.GetScheme(),
 		),
 	)
 
@@ -79,7 +80,6 @@ func setupWebhooksForPolarDBXClusterV1(mgr ctrl.Manager, webhookConfigLoader Web
 
 func registerWebhook(mux *http.ServeMux, path string, webhook *admission2.Webhook, mgr ctrl.Manager) error {
 	opts := admission2.StandaloneOptions{
-		Scheme:      mgr.GetScheme(),
 		Logger:      mgr.GetLogger().WithName("webhooks.admission"),
 		MetricsPath: path,
 	}
@@ -105,6 +105,7 @@ func webhookHandlerForPolarDBXClusterV1(mux *http.ServeMux, mgr ctrl.Manager, we
 					return &webhookConfigLoader().Defaulter
 				},
 			),
+			mgr.GetScheme(),
 		),
 		mgr,
 	)
@@ -119,6 +120,7 @@ func webhookHandlerForPolarDBXClusterV1(mux *http.ServeMux, mgr ctrl.Manager, we
 					return &webhookConfigLoader().Validator
 				},
 			),
+			mgr.GetScheme(),
 		),
 		mgr,
 	)

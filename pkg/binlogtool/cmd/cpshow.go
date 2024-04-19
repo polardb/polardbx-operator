@@ -45,14 +45,17 @@ func init() {
 // =========Consistent point file layout===========
 // TXID LENGTH 						-- 4 bytes
 // REPEAT
-//		TXID						-- 8 bytes
+//
+//	TXID						-- 8 bytes
+//
 // STREAM LENGTH					-- 2 bytes
 // REPEAT
-//		STREAM NAME LEN				-- 1 byte
-//		STREAM NAME					-- len bytes
-//		OFFSET BINLOG FILE NAME LEN	-- 1 byte
-//		OFFSET BINLOG FILE NAME		-- len bytes
-//		OFFSET						-- 8 bytes
+//
+//	STREAM NAME LEN				-- 1 byte
+//	STREAM NAME					-- len bytes
+//	OFFSET BINLOG FILE NAME LEN	-- 1 byte
+//	OFFSET BINLOG FILE NAME		-- len bytes
+//	OFFSET						-- 8 bytes
 func parseConsistentPoint(gr io.Reader) (map[uint64]int, map[string]binlog.EventOffset, error) {
 	var length uint32
 	if err := layout.Number(&length).FromStream(gr); err != nil {

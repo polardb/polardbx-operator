@@ -13,7 +13,7 @@
 # limitations under the License.
 
 # Build the init command
-FROM golang:1.18 as builder
+FROM golang:1.21.1 as builder
 
 WORKDIR /workspace
 
@@ -35,11 +35,19 @@ ADD third-party third-party
 RUN mkdir -p target
 RUN CGO_ENABLED=0 GOOS=linux GO111MODULE=on go build -o target/polardbx-hpfs cmd/polardbx-hpfs/main.go
 
+FROM alpine:latest as certs
+
+# install ca-certificates
+RUN apk --update add ca-certificates
+
+
 # Use alpine as the base image
 FROM busybox:latest
 
 WORKDIR /
 COPY --from=builder /workspace/target/polardbx-hpfs .
+
+COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
 USER root:root
 

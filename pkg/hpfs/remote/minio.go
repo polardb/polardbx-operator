@@ -135,7 +135,48 @@ func (m minioFs) DeleteFile(ctx context.Context, path string, auth, params map[s
 	if err != nil {
 		return fmt.Errorf("failed to create minio client: %w", err)
 	}
-	return client.RemoveObject(ctx, minioCtx.bucket, path, minio.RemoveObjectOptions{})
+
+	recursive, err := strconv.ParseBool(params["recursive"])
+	if err != nil {
+		return fmt.Errorf("invalid value for param 'recursive': %w", err)
+	}
+	if !recursive {
+		// Only tend to delete a single object
+		return client.RemoveObject(ctx, minioCtx.bucket, path, minio.RemoveObjectOptions{})
+	}
+
+	// Path points to a single file
+	_, err = client.StatObject(ctx, minioCtx.bucket, path, minio.StatObjectOptions{})
+	if err == nil {
+		return client.RemoveObject(ctx, minioCtx.bucket, path, minio.RemoveObjectOptions{GovernanceBypass: true})
+	}
+
+	// Path may point to a directory (or does not exist)
+	for marker := ""; ; {
+		result, err := client.ListObjects(minioCtx.bucket, path, marker, "", 1000)
+		if err != nil {
+			return fmt.Errorf("failed to list objects in path '%s', error: '%w'", path, err)
+		}
+
+		objectsCh := make(chan minio.ObjectInfo)
+		go func() {
+			defer close(objectsCh)
+			for _, objectInfo := range result.Contents {
+				objectsCh <- objectInfo
+			}
+		}()
+
+		errCh := client.RemoveObjects(ctx, minioCtx.bucket, objectsCh, minio.RemoveObjectsOptions{GovernanceBypass: true})
+		for removeErr := range errCh {
+			return fmt.Errorf("failed to delete object '%s', error: '%w'", removeErr.ObjectName, removeErr.Err)
+		}
+
+		if !result.IsTruncated {
+			break
+		}
+		marker = result.NextMarker
+	}
+	return nil
 }
 
 func (m minioFs) DeleteExpiredFile(ctx context.Context, path string, auth, params map[string]string) (FileTask, error) {

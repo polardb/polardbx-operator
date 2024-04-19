@@ -24,6 +24,7 @@ import (
 	k8shelper "github.com/alibaba/polardbx-operator/pkg/k8s/helper"
 	"github.com/alibaba/polardbx-operator/pkg/meta/core/group"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/meta"
+	polardbxmeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/meta"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/convention"
 	xstoreconvention "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/convention"
 	xstoremeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/meta"
@@ -45,6 +46,7 @@ type BackupContext struct {
 	xStoreContext              *Context
 	xstore                     *polardbxv1.XStore
 	xstoreBackup               *polardbxv1.XStoreBackup
+	xstoreBackupChanged        bool
 	xstoreBackupStatusSnapshot *polardbxv1.XStoreBackupStatus
 	xstorePods                 []corev1.Pod
 	xstoreTargetPod            *corev1.Pod
@@ -169,6 +171,34 @@ func (rc *BackupContext) GetXStore() (*polardbxv1.XStore, error) {
 		rc.xstore = &xstore
 	}
 	return rc.xstore, nil
+}
+
+func (rc *BackupContext) MarkXstoreBackupChanged() {
+	rc.xstoreBackupChanged = true
+}
+
+func (rc *BackupContext) IsXstoreBackupChanged() bool {
+	return rc.xstoreBackupChanged
+}
+
+// UpdateXStoreBackup only updates spec and replaces the status with the value from server
+func (rc *BackupContext) UpdateXStoreBackup() error {
+	if rc.xstoreBackup == nil {
+		return nil
+	}
+
+	// Deep copy status before updating because client.update will update
+	// the status of object.
+	status := rc.xstoreBackup.Status.DeepCopy()
+	err := rc.Client().Update(rc.Context(), rc.xstoreBackup)
+	if err != nil {
+		return err
+	}
+
+	// Restore the status (shallow copy is enough)
+	rc.xstoreBackup.Status = *status
+
+	return nil
 }
 
 func (rc *BackupContext) UpdateXStoreBackupStatus() error {
@@ -299,20 +329,6 @@ func (rc *BackupContext) GetXStoreTargetPod() (*corev1.Pod, error) {
 		rc.xstoreTargetPod = pod
 	}
 	return rc.xstoreTargetPod, nil
-}
-
-func (rc *BackupContext) UpdateXStoreBackup() error {
-	if rc.xstoreBackup == nil {
-		return nil
-	}
-
-	err := rc.Client().Update(rc.Context(), rc.xstoreBackup)
-	if err != nil {
-		return err
-	}
-
-	rc.xstoreBackupStatusSnapshot = rc.xstoreBackup.Status.DeepCopy()
-	return nil
 }
 
 func (rc *BackupContext) GetCollectBinlogJob() (*batchv1.Job, error) {
@@ -526,4 +542,16 @@ func (rc *BackupContext) GetXstoreGroupManagerByPod(pod *corev1.Pod) (group.Grou
 		},
 		true,
 	), nil
+}
+
+func (rc *BackupContext) GetXStoreIsStandard() (bool, error) {
+	xstore, err := rc.GetXStore()
+	if err != nil {
+		return false, err
+	}
+	isStandard := false
+	if _, ok := xstore.Labels[polardbxmeta.LabelName]; !ok {
+		isStandard = true
+	}
+	return isStandard, nil
 }

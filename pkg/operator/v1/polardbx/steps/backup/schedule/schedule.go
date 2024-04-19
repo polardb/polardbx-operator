@@ -5,6 +5,7 @@ import (
 	"github.com/alibaba/polardbx-operator/pkg/k8s/control"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/factory"
 	polardbxv1reconcile "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/reconcile"
+	"github.com/alibaba/polardbx-operator/pkg/util/slice"
 	"github.com/robfig/cron"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -61,30 +62,35 @@ var CheckNextScheduleTime = polardbxv1reconcile.NewStepBinder("CheckNextSchedule
 	func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
 		backupSchedule := rc.MustGetPolarDBXBackupSchedule()
 
+		currentTime, nextTime, lastTime := time.Now(), backupSchedule.Status.NextBackupTime, backupSchedule.Status.LastBackupTime
+
 		// Parse schedule
 		schedule, err := cron.ParseStandard(backupSchedule.Spec.Schedule)
+		newNextTime := &metav1.Time{Time: schedule.Next(currentTime)}
 		if err != nil {
 			return flow.Error(err, "Parse schedule string failed.")
 		}
 
-		// Check whether it is time to perform backup
-		var lastTime time.Time
-		if backupSchedule.Status.LastBackupTime != nil {
-			lastTime = backupSchedule.Status.LastBackupTime.Time
+		if nextTime == nil {
+			// Init next time if no planned backup found
+			backupSchedule.Status.NextBackupTime = newNextTime
+		} else if nextTime.Time.Before(currentTime) {
+			if lastTime == nil || lastTime.Before(nextTime) {
+				// lastTime < nextTime < currentTime ==> perform backup
+				return flow.Continue("It is high time for backup.")
+			} else {
+				// nextTime < lastTime < currentTime ==> plan a new backup
+				backupSchedule.Status.NextBackupTime = newNextTime
+			}
 		} else {
-			lastTime = backupSchedule.CreationTimestamp.Time
-		}
-		nextTime := schedule.Next(lastTime)
-		currentTime := time.Now()
-
-		// Ready for backup
-		if nextTime.Before(currentTime) {
-			return flow.Continue("It is high time for backup.")
+			if nextTime != newNextTime {
+				// Schedule may have been changed
+				backupSchedule.Status.NextBackupTime = newNextTime
+			}
 		}
 
-		// Wait until next backup
-		backupSchedule.Status.NextBackupTime = &metav1.Time{Time: nextTime}
-		return flow.RetryAfter(nextTime.Sub(time.Now()), "It is not the time for backup.", "next backup time", nextTime)
+		return flow.RetryAfter(nextTime.Sub(currentTime), "It is not the time for backup.",
+			"next backup time", nextTime)
 	})
 
 var CheckUnderwayBackup = polardbxv1reconcile.NewStepBinder("CheckUnderwayBackup",
@@ -96,7 +102,7 @@ var CheckUnderwayBackup = polardbxv1reconcile.NewStepBinder("CheckUnderwayBackup
 			return flow.Error(err, "Failed to get backup list", "PolarDBX name", polardbxName)
 		}
 		for _, backup := range backupList.Items {
-			if backup.Status.Phase != v1.BackupFinished && backup.Status.Phase != v1.BackupFailed && backup.Status.Phase != v1.BackupDummy {
+			if slice.NotIn(backup.Status.Phase, v1.BackupFailed, v1.BackupFinished, v1.BackupDeleting, v1.BackupDummy) {
 				return flow.RetryAfter(1*time.Minute, "Backup is still underway", "backup name", backup.Name)
 			}
 		}

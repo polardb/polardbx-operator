@@ -61,4 +61,14 @@ const (
 const (
 	AnnotationAutoRebuild = "xstore/auto-rebuild"
 	AnnotationFlushLocal  = "xstore/flushlocal"
+	AnnotationFlushIp     = "xstore/fluship"
+)
+
+const (
+	AnnotationDummyBackup  = "xstore/dummy-backup"
+	AnnotationBackupBinlog = "xstore/backupbinlog"
+)
+
+const (
+	AnnotationPitrConfig = "xstore/pitr-config"
 )

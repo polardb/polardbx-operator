@@ -33,6 +33,7 @@ const (
 	PhaseRestarting Phase = "Restarting"
 	PhaseUnknown    Phase = "Unknown"
 	PhaseAdapting   Phase = "Adapting"
+	PhaseTdeOpening Phase = "PhaseTdeOpening"
 )
 
 type Stage string

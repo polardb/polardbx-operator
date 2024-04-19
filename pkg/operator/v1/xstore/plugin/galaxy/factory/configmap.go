@@ -34,6 +34,8 @@ func NewConfigMap(rc *reconcile.Context, xstore *polardbxv1.XStore, cmType conve
 		return xstoreplugincommonfactory.NewSharedConfigMap(xstore)
 	case convention.ConfigMapTypeTask:
 		return xstorecommonfactory.NewTaskConfigMap(xstore), nil
+	case convention.ConfigMapTypeTde:
+		return xstorecommonfactory.NewTaskTdeMap(rc, xstore)
 	default:
 		panic("unrecognized configmap type: " + cmType)
 	}

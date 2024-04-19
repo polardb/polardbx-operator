@@ -472,11 +472,31 @@ func (m *groupManager) ListAllGroups() (map[string][]Group, error) {
 	}
 	defer dbutil.DeferClose(rs)
 
+	columns, err := rs.Columns()
+	if err != nil {
+		return nil, err
+	}
+	columnNameIndex := map[string]int{}
+	for i, column := range columns {
+		columnNameIndex[strings.ToLower(column)] = i
+	}
+
 	groups := make(map[string][]Group)
 	var id, movable int
 	var storageId, db, group, phyDB string
 	for rs.Next() {
-		err = rs.Scan(&id, &storageId, &db, &group, &phyDB, &movable)
+		columnValues := make([]sql.NullString, len(columns))
+		valueRefs := make([]interface{}, len(columns))
+		for i := range columnValues {
+			valueRefs[i] = &columnValues[i]
+		}
+		valueRefs[columnNameIndex["id"]] = &id
+		valueRefs[columnNameIndex["storage_inst_id"]] = &storageId
+		valueRefs[columnNameIndex["db"]] = &db
+		valueRefs[columnNameIndex["group"]] = &group
+		valueRefs[columnNameIndex["phy_db"]] = &phyDB
+		valueRefs[columnNameIndex["movable"]] = &movable
+		err = rs.Scan(valueRefs...)
 		if err != nil {
 			return nil, err
 		}
@@ -705,8 +725,11 @@ func (m *groupManager) CreateFileStorage(info polardbx.FileStorageInfo, config c
 		accessKeySecret = ossConfig.AccessSecret()
 		stmt = fmt.Sprintf("create filestorage oss with ('file_uri' = '%s', 'endpoint'='%s', 'access_key_id'='%s', 'access_key_secret'='%s')", fileUri, endpoint, accessKeyId, accessKeySecret)
 	case polardbx.EngineTypeLocalDisk:
-		fileUri = "file:///home/admin/drds-server/cold-data"
+		fileUri = "file:///home/admin/polardbx-local-disk"
 		stmt = fmt.Sprintf("create filestorage local_disk with ('file_uri' = '%s')", fileUri)
+	case polardbx.EngineTypeExternalDisk:
+		fileUri = "file:///home/admin/polardbx-external-disk"
+		stmt = fmt.Sprintf("create filestorage external_disk with ('file_uri' = '%s')", fileUri)
 	default:
 		return errors.New(fmt.Sprintf("Unsupported file storage type: %s", info.Engine))
 	}

@@ -107,6 +107,9 @@ class GalaxyEngine(EngineCommon):
         elif self.context.node_role() == convention.NODE_ROLE_LEARNER:
             args['loose-cluster-learner-node'] = 'ON'
 
+        if self.cluster_start_index is not None:
+            args['cluster-start-index'] = self.cluster_start_index
+        
         # build cmd, use --k=v or --k to build the arguments
         cmd = [os.path.join(self.path_home, 'bin', binary), '--defaults-file=' + self.file_config] + [
             '--%s=%s' % (str(k), v) if v else ('--' + str(k)) for k, v in args.items()]

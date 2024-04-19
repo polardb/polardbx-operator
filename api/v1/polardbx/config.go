@@ -62,6 +62,9 @@ type CDCConfig struct {
 
 type ColumnarConfig struct {
 	Envs map[string]intstr.IntOrString `json:"envs,omitempty"`
+
+	// ColumnarDataFileStorage defines the file storage used to store cold data
+	ColumnarDataFileStorage []FileStorageInfo `json:"columnarDataFileStorage,omitempty"`
 }
 
 type Config struct {

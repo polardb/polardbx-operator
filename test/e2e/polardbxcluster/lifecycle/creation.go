@@ -17,6 +17,8 @@ limitations under the License.
 package lifecycle
 
 import (
+	"context"
+	"database/sql"
 	polardbxv1 "github.com/alibaba/polardbx-operator/api/v1"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/convention"
 	"github.com/onsi/gomega"
@@ -340,6 +342,56 @@ var _ = ginkgo.Describe("[PolarDBXCluster] [Lifecycle:Create]", func() {
 			}
 		}
 		gomega.Expect(hasTargetEnv).Should(gomega.BeEquivalentTo(true))
+	})
+
+	ginkgo.It("should tde be enabled as expected", func() {
+		obj := pxcframework.NewPolarDBXCluster(
+			"e2e-test-tde",
+			f.Namespace,
+			pxcframework.ProtocolVersion(5),
+			pxcframework.TopologyModeGuide("quick-start"),
+			pxcframework.EnableTde(true, "/data/mysql/mysql-keyring/keyring"),
+		)
+
+		// Always run clean up to make sure objects are cleaned.
+		defer DeletePolarDBXClusterAndWaitUntilItDisappear(f, obj, 1*time.Minute)
+
+		// Do create and verify.
+		CreatePolarDBXClusterAndWaitUntilRunningOrFail(f, obj, 10*time.Minute)
+
+		// Update object.
+		framework.ExpectNoError(f.Client.Get(f.Ctx, types.NamespacedName{
+			Name: obj.Name, Namespace: f.Namespace,
+		}, obj))
+
+		// Expect TDE enabled.
+		exp := pxcframework.NewExpectation(f, obj)
+
+		// Create test database and table, and insert some data.
+		exp.ExpectQueriesOk(func(ctx context.Context, db *sql.DB) error {
+			_, err := db.ExecContext(ctx, "CREATE DATABASE IF NOT EXISTS test")
+			if err != nil {
+				return err
+			}
+			conn, err := db.Conn(ctx)
+			if err != nil {
+				return err
+			}
+			defer conn.Close()
+			_, err = conn.ExecContext(ctx, "USE test")
+			if err != nil {
+				return err
+			}
+			_, err = conn.ExecContext(ctx, "CREATE TABLE IF NOT EXISTS orders (id int primary key)")
+			if err != nil {
+				return err
+			}
+			_, err = conn.ExecContext(ctx, "ALTER TABLE orders ENCRYPTION='Y'")
+			if err != nil {
+				return err
+			}
+			return nil
+		}, "sql should be executed as expected")
 	})
 
 })

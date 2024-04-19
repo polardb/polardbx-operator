@@ -89,6 +89,14 @@ type PolarDBXClusterSpec struct {
 	// InitReadonly is the list of readonly cluster that needs to be created and initialized
 	// +optional
 	InitReadonly []*polardbx.ReadonlyParam `json:"initReadonly,omitempty"`
+
+	// TDE defines the transparent data encryption of clusters
+	// +optional
+	TDE polardbx.TDE `json:"tde,omitempty"`
+
+	// Exclusive if true, it means more resource isolation.
+	// +optional
+	Exclusive bool `json:"exclusive,omitempty"`
 }
 
 type PolarDBXClusterStatus struct {
@@ -134,6 +142,14 @@ type PolarDBXClusterStatus struct {
 
 	//LatestSyncReadonlyTs represents the lastest time sync readonly storage info to metadb
 	ReadonlyStorageInfoHash string `json:"readonlyStorageInfoHash,omitempty"`
+
+	// +kubebuilder:default=false
+	// TdeStatus represents if tde open
+	TdeStatus bool `json:"tdeStatus,omitempty"`
+
+	// Message includes human-readable message related to current status.
+	// +optional
+	Message string `json:"message,omitempty"`
 }
 
 // +kubebuilder:object:root=true

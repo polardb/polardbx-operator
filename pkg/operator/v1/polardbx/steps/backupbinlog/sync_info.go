@@ -13,21 +13,12 @@ import (
 	"github.com/alibaba/polardbx-operator/pkg/k8s/control"
 	polardbxv1reconcile "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/reconcile"
 	xstoremeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/meta"
-	"google.golang.org/grpc"
 	"path/filepath"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"strconv"
 	"strings"
 	"time"
 )
-
-func GetHpfsClient(rc *polardbxv1reconcile.Context) (hpfs.HpfsServiceClient, error) {
-	hpfsConn, err := grpc.Dial(rc.Config().Store().HostPathFileServiceEndpoint(), grpc.WithInsecure())
-	if err != nil {
-		return nil, err
-	}
-	return hpfs.NewHpfsServiceClient(hpfsConn), nil
-}
 
 func SyncInfoToXStore(rc *polardbxv1reconcile.Context, xstore *v1.XStore, info *backupbinlog.Info, infoHash string, hpfsClient hpfs.HpfsServiceClient) error {
 	if xstore.Status.BoundVolumes != nil {
@@ -146,8 +137,8 @@ func generateInfo(backupBinlog *v1.PolarDBXBackupBinlog, xStores []*v1.XStore) (
 	return dnPodInfoMap, dnPodInfoHashMap, nil
 }
 
-var SyncInfo = polardbxv1reconcile.NewStepBinder("AddFinalizer", func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
-	hpfsClient, err := GetHpfsClient(rc)
+var SyncInfo = polardbxv1reconcile.NewStepBinder("SyncInfo", func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+	hpfsClient, err := rc.GetHpfsClient()
 	if err != nil {
 		return flow.RetryErr(err, "failed to get hpfs client")
 	}
@@ -186,7 +177,7 @@ var SyncInfo = polardbxv1reconcile.NewStepBinder("AddFinalizer", func(rc *polard
 	return flow.Continue("SyncInfo.")
 })
 
-var RunningRoute = polardbxv1reconcile.NewStepBinder("AddFinalizer", func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+var RunningRoute = polardbxv1reconcile.NewStepBinder("RunningRoute", func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
 	backupBinlog := rc.MustGetPolarDBXBackupBinlog()
 	now := time.Now()
 	checkInterval, err := rc.Config().Backup().CheckBinlogExpiredFileInterval()
@@ -204,7 +195,7 @@ var RunningRoute = polardbxv1reconcile.NewStepBinder("AddFinalizer", func(rc *po
 })
 
 var CloseBackupBinlog = polardbxv1reconcile.NewStepBinder("CloseBackupBinlog", func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
-	hpfsClient, err := GetHpfsClient(rc)
+	hpfsClient, err := rc.GetHpfsClient()
 	if err != nil {
 		return flow.RetryErr(err, "failed to get hpfs client")
 	}

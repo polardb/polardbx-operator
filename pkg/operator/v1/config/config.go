@@ -295,6 +295,7 @@ type backupConfig struct {
 	CheckBinlogExpiredInterval string `json:"check_binlog_expired_interval,omitempty"`
 	HeartbeatJobNamePrefix     string `json:"heartbeat_job_name_prefix,omitempty"`
 	HeartbeatInterval          string `json:"heartbeat_interval,omitempty"`
+	RestorePodSuffix           string `json:"restore_pod_suffix,omitempty"`
 }
 
 func (b *backupConfig) CheckBinlogExpiredFileInterval() (time.Duration, error) {
@@ -309,4 +310,8 @@ func (b *backupConfig) GetHeartbeatJobNamePrefix() string {
 func (b *backupConfig) GetHeartbeatInterval() (time.Duration, error) {
 	interval := defaults.NonEmptyStrOrDefault(b.HeartbeatInterval, "1s")
 	return time.ParseDuration(interval)
+}
+
+func (b *backupConfig) GetRestorePodSuffix() string {
+	return defaults.NonEmptyStrOrDefault(b.RestorePodSuffix, "-cand-0")
 }

@@ -21,9 +21,11 @@ import (
 	"errors"
 	"fmt"
 	"github.com/alibaba/polardbx-operator/pkg/hpfs/filestream"
+	hpfs "github.com/alibaba/polardbx-operator/pkg/hpfs/proto"
 	xstoreconvention "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/convention"
 	xstoremeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/meta"
 	"github.com/alibaba/polardbx-operator/pkg/util/name"
+	"google.golang.org/grpc"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -110,6 +112,10 @@ type Context struct {
 
 	// Filestream client
 	filestreamClient *filestream.FileClient
+
+	//hpfs client
+	hpfsConn   *grpc.ClientConn
+	hpfsClient hpfs.HpfsServiceClient
 
 	//backup binlog
 	backupBinlog    *polardbxv1.PolarDBXBackupBinlog
@@ -367,6 +373,7 @@ func (rc *Context) IsPolarDBXChanged() bool {
 	return rc.polardbxChanged
 }
 
+// MarkPolarDBXChanged marks the change of spec for several crds
 func (rc *Context) MarkPolarDBXChanged() {
 	rc.polardbxChanged = true
 }
@@ -1174,6 +1181,15 @@ func (rc *Context) Close() error {
 		}
 	}
 
+	if rc.hpfsConn != nil {
+		err := rc.hpfsConn.Close()
+		rc.hpfsConn = nil
+		rc.hpfsClient = nil
+		if err != nil {
+			errs = append(errs, err)
+		}
+	}
+
 	if err := rc.BaseReconcileContext.Close(); err != nil {
 		errs = append(errs, err)
 	}
@@ -1239,15 +1255,23 @@ func (rc *Context) MustGetPolarDBXBackup() *polardbxv1.PolarDBXBackup {
 	return polardbxBackup
 }
 
+// UpdatePolarDBXBackup only updates spec and replaces the status with the value from server
 func (rc *Context) UpdatePolarDBXBackup() error {
 	if rc.polardbxBackup == nil {
 		return nil
 	}
+
+	// Deep copy status before updating because client.update will update
+	// the status of object.
+	status := rc.polardbxBackup.Status.DeepCopy()
 	err := rc.Client().Update(rc.Context(), rc.polardbxBackup)
 	if err != nil {
 		return err
 	}
-	rc.polardbxBackupStatusSnapshot = rc.polardbxBackup.Status.DeepCopy()
+
+	// Restore the status (shallow copy is enough)
+	rc.polardbxBackup.Status = *status
+
 	return nil
 }
 
@@ -1822,4 +1846,17 @@ func (rc *Context) UpdatePolarDbXBackupBinlog() error {
 	backupBinlog := rc.MustGetPolarDBXBackupBinlog()
 	err := rc.Client().Update(rc.Context(), backupBinlog)
 	return err
+}
+
+func (rc *Context) GetHpfsClient() (hpfs.HpfsServiceClient, error) {
+	if rc.hpfsConn == nil {
+		hpfsConn, err := grpc.Dial(rc.Config().Store().HostPathFileServiceEndpoint(), grpc.WithInsecure())
+		if err != nil {
+			return nil, err
+		}
+		rc.hpfsConn = hpfsConn
+		rc.hpfsClient = hpfs.NewHpfsServiceClient(rc.hpfsConn)
+	}
+
+	return rc.hpfsClient, nil
 }

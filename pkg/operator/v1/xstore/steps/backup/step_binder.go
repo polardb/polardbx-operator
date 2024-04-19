@@ -17,6 +17,7 @@ limitations under the License.
 package backup
 
 import (
+	polardbxv1 "github.com/alibaba/polardbx-operator/api/v1"
 	"github.com/alibaba/polardbx-operator/pkg/k8s/control"
 	xstorev1reconcile "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/reconcile"
 	"github.com/go-logr/logr"
@@ -49,4 +50,17 @@ func NewStepIfBinder(conditionName string, condFunc ConditionFunc, binders ...co
 	}
 
 	return control.CombineBinders(ifBinders...)
+}
+
+func WhenDeletedAndNotDeleting(binders ...control.BindFunc) control.BindFunc {
+	return NewStepIfBinder("Deleted",
+		func(rc *xstorev1reconcile.BackupContext, log logr.Logger) (bool, error) {
+			backup := rc.MustGetXStoreBackup()
+			if backup.Status.Phase == polardbxv1.XStoreBackupDeleting {
+				return false, nil
+			}
+			return !backup.DeletionTimestamp.IsZero(), nil
+		},
+		binders...,
+	)
 }

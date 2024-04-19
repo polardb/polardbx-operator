@@ -18,10 +18,9 @@ package main
 
 import (
 	"flag"
+	"github.com/go-logr/zapr"
 	"strings"
 
-	"github.com/go-logr/logr"
-	"github.com/go-logr/zapr"
 	"go.uber.org/zap"
 
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -59,8 +58,7 @@ func init() {
 		panic(err)
 	}
 
-	// Hack to fix the stupid call stack frame problem in zapr 0.4.0.
-	logger := logr.WithCallDepth(zapr.NewLogger(zapLogger), -1)
+	logger := zapr.NewLogger(zapLogger).WithCallDepth(0)
 	ctrl.SetLogger(logger)
 
 	// Enable feature gates.

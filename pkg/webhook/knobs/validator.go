@@ -56,7 +56,7 @@ func (v *Validator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.O
 		return err
 	}
 
-	if oldKnobs.ClusterName != newKnobs.ClusterName {
+	if oldKnobs.Spec.ClusterName != newKnobs.Spec.ClusterName {
 		return apierrors.NewForbidden(
 			schema.GroupResource{Group: gvk.Group, Resource: gvk.Kind}, newKnobs.Name,
 			field.Forbidden(field.NewPath("spec", "clusterName"), "immutable field"))

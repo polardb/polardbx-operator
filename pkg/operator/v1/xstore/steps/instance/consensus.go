@@ -696,6 +696,27 @@ var CleanFlushLocalAnnotation = xstorev1reconcile.NewStepBinder("CleanFlushLocal
 	},
 )
 
+var MarkFlushIpInAnnotation = xstorev1reconcile.NewStepBinder("MarkFlushIpInAnnotation",
+	func(rc *xstorev1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+		pods, err := rc.GetXStorePods()
+		if err != nil {
+			return flow.RetryErr(err, "failed to get xstore pods")
+		}
+		for _, pod := range pods {
+			if pod.Status.PodIP != "" {
+				pod.SetAnnotations(k8shelper.PatchAnnotations(pod.Annotations, map[string]string{
+					xstoremeta.AnnotationFlushIp: pod.Status.PodIP,
+				}))
+				err := rc.Client().Update(rc.Context(), &pod)
+				if err != nil {
+					return flow.RetryErr(err, "failed to update pod", "pod", pod.Name)
+				}
+			}
+		}
+		return flow.Continue("CleanFlushLocalAnnotation Success.")
+	},
+)
+
 var SyncPaxosMeta = xstorev1reconcile.NewStepBinder("SyncPaxosMeta",
 	func(rc *xstorev1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
 		leaderPod, err := rc.TryGetXStoreLeaderPod()

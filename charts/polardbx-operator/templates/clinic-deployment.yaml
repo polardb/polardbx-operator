@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: polardbx-clinic
+  namespace: polardbx-operator-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Chart.Name }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: clinic
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ .Chart.Name }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: clinic
+    spec:
+      containers:
+      - name: polardbx-clinic
+        args:
+        - -c
+        - "while true; do sleep 3600; done"
+        command:
+        - /bin/bash
+        
+        {{- if .Values.useLatestImage }}
+        image: {{ .Values.imageRepo }}{{ "/" }}{{ .Values.images.polardbxClinic }}:latest
+        {{- else }}
+        image: {{ .Values.imageRepo }}{{ "/" }}{{ .Values.images.polardbxClinic }}:{{ .Values.imageTag | default .Chart.AppVersion }}
+        {{- end }}
+        imagePullPolicy: {{ .Values.imagePullPolicy | default "IfNotPresent" }}
+        resources:
+{{ toYaml .Values.clinic.resources | indent 10 }}
+        
+        volumeMounts:
+        - mountPath: /root/workspace
+          name: workspace
+          
+      volumes:
+      - emptyDir: {}
+        name: workspace
+      {{- if .Values.imagePullSecrets }}
+      imagePullSecrets:
+{{ toYaml .Values.imagePullSecrets | indent 6}}
+      {{- end }}
+      {{- with .Values.controllerManager.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.controllerManager.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.controllerManager.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      restartPolicy: Always
+      {{- if .Values.serviceAccount }}
+      serviceAccount: {{ .Values.serviceAccount }}
+      {{- end }}

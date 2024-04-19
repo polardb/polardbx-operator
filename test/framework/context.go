@@ -80,14 +80,18 @@ func (t *TestContextType) NewContext() (context.Context, context.CancelFunc) {
 }
 
 func newClient(config *rest.Config) (client.Client, error) {
-	mapper, err := apiutil.NewDynamicRESTMapper(config)
+	httpClient, err := rest.HTTPClientFor(config)
+	if err != nil {
+		return nil, err
+	}
+	mapper, err := apiutil.NewDynamicRESTMapper(config, httpClient)
 	if err != nil {
 		return nil, err
 	}
 	return client.New(config, client.Options{
-		Scheme: scheme,
-		Mapper: mapper,
-		Opts:   client.WarningHandlerOptions{},
+		Scheme:         scheme,
+		Mapper:         mapper,
+		WarningHandler: client.WarningHandlerOptions{},
 	})
 }
 

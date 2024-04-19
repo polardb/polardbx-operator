@@ -20,9 +20,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/alibaba/polardbx-operator/pkg/hpfs/filestream"
 	"github.com/alibaba/polardbx-operator/pkg/meta/core/gms"
 	"github.com/alibaba/polardbx-operator/pkg/util/name"
 	"k8s.io/utils/pointer"
+	"strconv"
 	"strings"
 	"time"
 
@@ -71,6 +73,9 @@ type Context struct {
 	// Hpfs
 	hpfsConn   *grpc.ClientConn
 	hpfsClient hpfs.HpfsServiceClient
+
+	// Filestream client
+	filestreamClient *filestream.FileClient
 
 	// Config
 	configLoader func() config.Config
@@ -341,6 +346,13 @@ func (rc *Context) SetControllerRefAndCreate(obj client.Object) error {
 	return rc.Client().Create(rc.Context(), obj)
 }
 
+func (rc *Context) SetControllerToOwnerAndCreate(owner, obj client.Object) error {
+	if err := ctrl.SetControllerReference(owner, obj, rc.Scheme()); err != nil {
+		return err
+	}
+	return rc.Client().Create(rc.Context(), obj)
+}
+
 func (rc *Context) IsXStoreStatusChanged() bool {
 	if rc.xstoreStatus == nil {
 		return false
@@ -518,21 +530,22 @@ func (rc *Context) GetConfigMap(name string) (*corev1.ConfigMap, error) {
 func (rc *Context) GetXStoreConfigMap(cmType convention.ConfigMapType) (*corev1.ConfigMap, error) {
 	xstore := rc.MustGetXStore()
 
+	var cm corev1.ConfigMap
 	configMapKey := types.NamespacedName{
 		Namespace: rc.xstoreKey.Namespace,
 		Name:      convention.NewConfigMapName(xstore, cmType),
 	}
 
-	cm, err := rc.objectCache.GetObject(rc.Context(), configMapKey, &corev1.ConfigMap{})
+	err := rc.Client().Get(rc.Context(), configMapKey, &cm)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := k8shelper.CheckControllerReference(cm, rc.MustGetXStore()); err != nil {
+	if err := k8shelper.CheckControllerReference(&cm, rc.MustGetXStore()); err != nil {
 		return nil, err
 	}
 
-	return cm.(*corev1.ConfigMap), nil
+	return &cm, nil
 }
 
 func (rc *Context) GetXStorePodByPrefix(name string) (*corev1.Pod, error) {
@@ -804,7 +817,7 @@ func (rc *Context) ParseRestoreTime() (time.Time, error) {
 
 	location, err := time.LoadLocation(gms.StrOrDefault(xcluster.Spec.Restore.TimeZone, "Asia/Shanghai"))
 	if err != nil {
-		return time.Time{}, nil
+		return time.Time{}, err
 	}
 
 	return time.ParseInLocation("2006-01-02 15:04:05", xcluster.Spec.Restore.Time, location)
@@ -1028,4 +1041,72 @@ func NewTaskConfigMap(xstore *polardbxv1.XStore) *corev1.ConfigMap {
 		},
 		Immutable: pointer.Bool(false),
 	}
+}
+
+func (rc *Context) GetXStoreIsStandard() (bool, error) {
+	xstore, err := rc.GetXStore()
+	if err != nil {
+		return false, err
+	}
+	isStandard := false
+	if _, ok := xstore.Labels[polardbxmeta.LabelName]; !ok {
+		isStandard = true
+	}
+	return isStandard, nil
+}
+
+func (rc *Context) IsPitrRestore(xstore *polardbxv1.XStore) bool {
+	if IsPhaseIn(xstore, polardbxv1xstore.PhaseRestoring, polardbxv1xstore.PhasePending) && xstore.Spec.Restore != nil && xstore.Spec.Restore.Time != "" {
+		return true
+	}
+	return false
+}
+
+func IsPhaseIn(xstore *polardbxv1.XStore, phases ...polardbxv1xstore.Phase) bool {
+	if xstore == nil {
+		return false
+	}
+	for _, phase := range phases {
+		if xstore.Status.Phase == phase {
+			return true
+		}
+	}
+	return false
+}
+
+func (rc *Context) GetXStoreBackupByName(name string) (*polardbxv1.XStoreBackup, error) {
+	xstoreBackup := &polardbxv1.XStoreBackup{}
+	xstoreBackupKey := types.NamespacedName{
+		Namespace: rc.Namespace(),
+		Name:      name,
+	}
+	err := rc.Client().Get(rc.Context(), xstoreBackupKey, xstoreBackup)
+	if err != nil {
+		return nil, err
+	}
+	return xstoreBackup, nil
+}
+
+func (rc *Context) IsTdeEnable() bool {
+	xstore := rc.MustGetXStore()
+	role := xstore.Labels[polardbxmeta.LabelRole]
+	if role != polardbxmeta.RoleGMS && xstore.Spec.TDE.Enable {
+		return true
+	}
+	return false
+}
+
+func (rc *Context) GetFilestreamClient() (*filestream.FileClient, error) {
+	if rc.filestreamClient == nil {
+		hostPort := strings.SplitN(rc.Config().Store().FilestreamServiceEndpoint(), ":", 2)
+		if len(hostPort) < 2 {
+			return nil, errors.New("invalid filestream endpoint: " + rc.Config().Store().FilestreamServiceEndpoint())
+		}
+		port, err := strconv.Atoi(hostPort[1])
+		if err != nil {
+			return nil, errors.New("invalid filestream port: " + hostPort[1])
+		}
+		rc.filestreamClient = filestream.NewFileClient(hostPort[0], port, nil)
+	}
+	return rc.filestreamClient, nil
 }

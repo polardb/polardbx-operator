@@ -45,6 +45,7 @@ class Context(object):
             self.engine_home = self._env.get('ENGINE_HOME', '/opt/galaxy_engine')
             self.xtrabackup_home = self._env.get('XTRABACKUP_HOME', self.get_galaxy_xtrabackup_home())
             self.xtrabackup = os.path.join(self.xtrabackup_home, "xtrabackup")
+            self.xtrabackup_plugin = os.path.join(os.path.dirname(self.xtrabackup_home),"lib/plugin")
         else:
             self.engine_home = self._env.get('ENGINE_HOME', '/u01/xcluster_current')
             self.xtrabackup_home = self._env.get('XTRABACKUP_HOME', '/u01/xcluster_xtrabackup24/bin')
@@ -343,7 +344,7 @@ class Context(object):
         mysqld_system_conf = {
             'user': 'mysql',
             'port': int(self.port_access()),
-            'galaxyx_port': int(self.port_polarx()),
+            'loose_galaxyx_port': int(self.port_polarx()),
             'basedir': self.engine_home,
             'datadir': data_dir,
             'tmpdir': tmp_dir,
@@ -444,11 +445,13 @@ class Context(object):
     def get_galaxy_xtrabackup_home(self) -> str:
         res = os.popen("mysqld -V")
         lines = res.readlines()
-        if res.close() is None and len(lines) > 1:
-            version = lines[1].strip().split()[-1]
-            if version.split(".")[0].isdigit():
-                version0 = int(version.split(".")[0])
-                if version0 > 1:
-                    return "/tools/xstore/current/xtrabackup/8.0-2/xcluster_xtrabackup80/bin"
-            return "/tools/xstore/current/xcluster_xtrabackup80/bin"
+        if res.close() is None and len(lines) >= 1:
+
+            version = lines[0].strip().split()[2]
+            if "8.0.18" in version or "8.0.30" in version:
+                return "/tools/xstore/current/xtrabackup/8018/xcluster_xtrabackup80/bin"
+
+            if "8.0.32" in version:
+                return "/tools/xstore/current/xtrabackup/8032/xcluster_xtrabackup80/bin"
+
         raise Exception("failed to get xtrabackup home by `mysqld -V`")

@@ -5,20 +5,21 @@ import (
 	hpfs "github.com/alibaba/polardbx-operator/pkg/hpfs/proto"
 	"github.com/alibaba/polardbx-operator/pkg/k8s/control"
 	polardbxv1reconcile "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/reconcile"
+	"math"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"time"
 )
 
 var TryDeleteExpiredFiles = polardbxv1reconcile.NewStepBinder("TryDeleteExpiredFiles", func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
-	hpfsClient, err := GetHpfsClient(rc)
+	hpfsClient, err := rc.GetHpfsClient()
 	if err != nil {
 		return flow.RetryErr(err, "failed to get hpfs client")
 	}
 	now := time.Now()
 	backupBinlog := rc.MustGetPolarDBXBackupBinlog()
-	seconds := backupBinlog.Spec.RemoteExpireLogHours.IntValue() * 3600
+	deadline := now.Unix() - int64(backupBinlog.Spec.RemoteExpireLogHours.IntValue()*3600)
 	if !backupBinlog.DeletionTimestamp.IsZero() {
-		seconds = -3600
+		deadline = math.MaxInt64
 	}
 	rep, err := hpfsClient.DeleteBinlogFilesBefore(rc.Context(), &hpfs.DeleteBinlogFilesBeforeRequest{
 		Namespace: backupBinlog.Namespace,
@@ -26,7 +27,7 @@ var TryDeleteExpiredFiles = polardbxv1reconcile.NewStepBinder("TryDeleteExpiredF
 		PxcUid:    backupBinlog.Spec.PxcUid,
 		SinkName:  backupBinlog.Spec.StorageProvider.Sink,
 		SinkType:  string(backupBinlog.Spec.StorageProvider.StorageName),
-		UnixTime:  now.Unix() - int64(seconds),
+		UnixTime:  deadline,
 	})
 	if err != nil {
 		flow.Logger().Error(err, "failed to DeleteBinlogFilesBefore")
@@ -44,7 +45,7 @@ var TryDeleteExpiredFiles = polardbxv1reconcile.NewStepBinder("TryDeleteExpiredF
 })
 
 var ConfirmRemoteEmptyFiles = polardbxv1reconcile.NewStepBinder("TryDeleteExpiredFiles", func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
-	hpfsClient, err := GetHpfsClient(rc)
+	hpfsClient, err := rc.GetHpfsClient()
 	if err != nil {
 		return flow.RetryErr(err, "failed to get hpfs client")
 	}

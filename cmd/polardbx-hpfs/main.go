@@ -23,6 +23,7 @@ import (
 	"github.com/alibaba/polardbx-operator/pkg/hpfs"
 	"github.com/alibaba/polardbx-operator/pkg/hpfs/backupbinlog"
 	"github.com/alibaba/polardbx-operator/pkg/hpfs/config"
+	"github.com/alibaba/polardbx-operator/pkg/hpfs/cpusetbind"
 	"github.com/alibaba/polardbx-operator/pkg/hpfs/discovery"
 	"github.com/alibaba/polardbx-operator/pkg/hpfs/filestream"
 	"github.com/alibaba/polardbx-operator/pkg/hpfs/local"
@@ -42,15 +43,16 @@ import (
 
 var (
 	// hdfs
-	debug        bool
-	debugHosts   string
-	hostName     string
-	hpfsPort     int
-	limitedPaths string
-	taskDb       string
-	k8sNamespace string
-	k8sSelector  string
-	lockFile     string
+	debug            bool
+	debugHosts       string
+	hostName         string
+	hpfsPort         int
+	limitedPaths     string
+	taskDb           string
+	k8sNamespace     string
+	k8sSelector      string
+	lockFile         string
+	cpuSetBindOutput string
 )
 
 var (
@@ -85,6 +87,7 @@ func init() {
 	flag.Float64Var(&flowControlMaxFlow, "fc-max-flow", float64((1<<20)*20), "max flow speed, unit: bytes/s")
 	flag.Float64Var(&flowControlTotalFLow, "fc-total-flow", float64((1<<20)*50), "total flow speed, unit: bytes/s")
 	flag.IntVar(&flowControlBufferSize, "fc-buffer-size", (1<<20)*2, "transfer buffer size, unit: bytes")
+	flag.StringVar(&cpuSetBindOutput, "cpu-set-bind-output", "cpusetbind.txt", "Output filepath of cpu set bind.")
 	flag.Parse()
 
 	if len(hostName) == 0 {
@@ -219,6 +222,15 @@ func startAllWatchers() {
 	backupbinlog.StartAllWatchers()
 }
 
+func startCpuSetBind() {
+	logger := zap.New(zap.UseDevMode(true))
+	manager := cpusetbind.NewManager(logger, hostName, k8sNamespace, cpuSetBindOutput)
+	err := manager.Start()
+	if err != nil {
+		logger.Error(err, "failed to start cpuset bind")
+	}
+}
+
 func main() {
 	// Grab the file lock.
 	if len(lockFile) > 0 {
@@ -247,6 +259,8 @@ func main() {
 	startAllWatchers()
 	// start file stream server
 	startFileStreamServer()
+	// start cpu bind
+	startCpuSetBind()
 	// Start hpfs.
 	startHpfs()
 }

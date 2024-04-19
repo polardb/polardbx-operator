@@ -451,11 +451,6 @@ func (b *commandCollectBuilder) StartCollect(backupContext, heartBeatName string
 	return b.end()
 }
 
-func (b *commandCollectBuilder) UploadOffset(offset, path, storageName, sink string) *CommandBuilder {
-	b.args = append(b.args, "upload_offset", "-o", offset, "-p", path, "--storage_name", storageName, "--sink", sink)
-	return b.end()
-}
-
 type commandSeekCpBuilder struct {
 	*commandBuilder
 }

@@ -34,9 +34,9 @@ type CustomMutator interface {
 	MutateOnUpdate(ctx context.Context, oldObj, newObj runtime.Object) error
 }
 
-func WithCustomMutator(obj runtime.Object, mutator CustomMutator) *admission.Webhook {
+func WithCustomMutator(obj runtime.Object, mutator CustomMutator, scheme *runtime.Scheme) *admission.Webhook {
 	return &admission.Webhook{
-		Handler: &mutatorForType{object: obj, mutator: mutator},
+		Handler: &mutatorForType{object: obj, mutator: mutator, decoder: admission.NewDecoder(scheme)},
 	}
 }
 
@@ -51,7 +51,7 @@ func (h *mutatorForType) InjectDecoder(decoder *admission.Decoder) error {
 	return nil
 }
 
-var _ admission.DecoderInjector = &mutatorForType{}
+var _ admission.Handler = &mutatorForType{}
 
 func (h *mutatorForType) Handle(ctx context.Context, req admission.Request) admission.Response {
 	if h.mutator == nil {

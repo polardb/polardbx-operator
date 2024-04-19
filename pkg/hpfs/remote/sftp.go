@@ -75,6 +75,43 @@ func (s *sftpFs) newSshConn(sftpCtx *sftpContext) (*ssh.Client, error) {
 	})
 }
 
+// recursiveDelete walks the directory tree and removes all files and directories.
+func (s *sftpFs) recursiveDelete(client *sftp.Client, directory string) error {
+	// List all files and directories within the provided path.
+	fileInfos, err := client.ReadDir(directory)
+	if err != nil {
+		return err
+	}
+
+	// Loop through all the directory entries.
+	for _, fileInfo := range fileInfos {
+		fullPath := filepath.Join(directory, fileInfo.Name())
+
+		// Check if it's a directory or a file.
+		if fileInfo.IsDir() {
+			// Recursive call to delete the contents of the subdirectory.
+			err := s.recursiveDelete(client, fullPath)
+			if err != nil {
+				return err
+			}
+			// After deleting its contents, delete the subdirectory itself.
+			err = client.RemoveDirectory(fullPath)
+			if err != nil {
+				return err
+			}
+		} else {
+			// Delete the file.
+			err = client.Remove(fullPath)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	// Finally, delete the empty directory itself.
+	return client.RemoveDirectory(directory)
+}
+
 func (s *sftpFs) DeleteFile(ctx context.Context, path string, auth, params map[string]string) error {
 	sftpCtx, err := newSftpContext(ctx, auth, params)
 	if err != nil {
@@ -93,7 +130,31 @@ func (s *sftpFs) DeleteFile(ctx context.Context, path string, auth, params map[s
 	}
 	defer client.Close()
 
-	return client.Remove(path)
+	recursive, err := strconv.ParseBool(params["recursive"])
+	if err != nil {
+		return fmt.Errorf("invalid value for param 'recursive': %w", err)
+	}
+	if !recursive {
+		// Only tend to delete a single object
+		return client.Remove(path)
+	}
+
+	// Check file info
+	fileInfo, err := client.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) { // If target path not exist, return without error like oss/s3 does
+			return nil
+		}
+		return fmt.Errorf("failed to stat file: %w", err)
+	}
+
+	// Path points to a single file
+	if !fileInfo.IsDir() {
+		return client.Remove(path)
+	}
+
+	// Path points to a directory
+	return s.recursiveDelete(client, path)
 }
 
 func (s *sftpFs) UploadFile(ctx context.Context, reader io.Reader, path string, auth, params map[string]string) (FileTask, error) {
@@ -249,7 +310,7 @@ func (s *sftpFs) ListFileWithDeadline(client *sftp.Client, path string, deadline
 			if fi.IsDir() {
 				fileQueue.Add(newFilepath)
 			} else {
-				if fi.ModTime().Unix() < deadline {
+				if fi.ModTime().Unix() <= deadline {
 					files = append(files, newFilepath)
 				}
 			}

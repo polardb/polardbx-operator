@@ -39,8 +39,8 @@ type probeConfigure struct {
 	polardbx *polardbxv1.PolarDBXCluster
 }
 
-func (p *probeConfigure) newProbeWithProber(endpoint string, probeTarget string, ports ProberPort) corev1.Handler {
-	return corev1.Handler{
+func (p *probeConfigure) newProbeWithProber(endpoint string, probeTarget string, ports ProberPort) corev1.ProbeHandler {
+	return corev1.ProbeHandler{
 		HTTPGet: &corev1.HTTPGetAction{
 			Path: endpoint,
 			Port: intstr.FromInt(ports.GetProbePort()),
@@ -59,17 +59,17 @@ func (p *probeConfigure) ConfigureForCNEngine(container *corev1.Container, ports
 		TimeoutSeconds:      10,
 		PeriodSeconds:       10,
 		FailureThreshold:    6,
-		Handler:             p.newProbeWithProber("/liveness", probe.TypePolarDBX, &ports),
+		ProbeHandler:        p.newProbeWithProber("/liveness", probe.TypePolarDBX, &ports),
 	}
 	container.LivenessProbe = &corev1.Probe{
 		TimeoutSeconds: 10,
 		PeriodSeconds:  10,
-		Handler:        p.newProbeWithProber("/liveness", probe.TypePolarDBX, &ports),
+		ProbeHandler:   p.newProbeWithProber("/liveness", probe.TypePolarDBX, &ports),
 	}
 	container.ReadinessProbe = &corev1.Probe{
 		TimeoutSeconds: 10,
 		PeriodSeconds:  10,
-		Handler:        p.newProbeWithProber("/readiness", probe.TypePolarDBX, &ports),
+		ProbeHandler:   p.newProbeWithProber("/readiness", probe.TypePolarDBX, &ports),
 	}
 }
 
@@ -77,7 +77,7 @@ func (p *probeConfigure) ConfigureForCNExporter(container *corev1.Container, por
 	container.LivenessProbe = &corev1.Probe{
 		TimeoutSeconds: 5,
 		PeriodSeconds:  20,
-		Handler: corev1.Handler{
+		ProbeHandler: corev1.ProbeHandler{
 			TCPSocket: &corev1.TCPSocketAction{
 				Port: intstr.FromInt(ports.MetricsPort),
 			},
@@ -86,7 +86,7 @@ func (p *probeConfigure) ConfigureForCNExporter(container *corev1.Container, por
 	container.ReadinessProbe = &corev1.Probe{
 		TimeoutSeconds: 5,
 		PeriodSeconds:  20,
-		Handler: corev1.Handler{
+		ProbeHandler: corev1.ProbeHandler{
 			HTTPGet: &corev1.HTTPGetAction{
 				Path: "/metrics",
 				Port: intstr.FromInt(ports.MetricsPort),
@@ -96,7 +96,7 @@ func (p *probeConfigure) ConfigureForCNExporter(container *corev1.Container, por
 }
 
 func (p *probeConfigure) ConfigureForCDCEngine(container *corev1.Container, ports CDCPorts) {
-	hanlder := corev1.Handler{
+	hanlder := corev1.ProbeHandler{
 		TCPSocket: &corev1.TCPSocketAction{
 			Port: intstr.FromInt(ports.GetAccessPort()),
 		},
@@ -106,13 +106,13 @@ func (p *probeConfigure) ConfigureForCDCEngine(container *corev1.Container, port
 		TimeoutSeconds:      10,
 		PeriodSeconds:       10,
 		FailureThreshold:    18,
-		Handler:             hanlder,
+		ProbeHandler:        hanlder,
 	}
 	container.LivenessProbe = &corev1.Probe{
 		TimeoutSeconds:   10,
 		PeriodSeconds:    10,
 		FailureThreshold: 5,
-		Handler:          hanlder,
+		ProbeHandler:     hanlder,
 	}
 }
 
@@ -120,7 +120,7 @@ func (p *probeConfigure) ConfigureForCDCExporter(container *corev1.Container, po
 	container.LivenessProbe = &corev1.Probe{
 		TimeoutSeconds: 5,
 		PeriodSeconds:  20,
-		Handler: corev1.Handler{
+		ProbeHandler: corev1.ProbeHandler{
 			TCPSocket: &corev1.TCPSocketAction{
 				Port: intstr.FromInt(ports.MetricsPort),
 			},
@@ -129,7 +129,7 @@ func (p *probeConfigure) ConfigureForCDCExporter(container *corev1.Container, po
 	container.ReadinessProbe = &corev1.Probe{
 		TimeoutSeconds: 5,
 		PeriodSeconds:  20,
-		Handler: corev1.Handler{
+		ProbeHandler: corev1.ProbeHandler{
 			HTTPGet: &corev1.HTTPGetAction{
 				Path: "/metrics",
 				Port: intstr.FromInt(ports.MetricsPort),

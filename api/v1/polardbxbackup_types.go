@@ -27,19 +27,6 @@ type PolarDBXClusterReference struct {
 	UID  types.UID `json:"uid,omitempty"`
 }
 
-type CleanPolicyType string
-
-const (
-	// CleanPolicyRetain represents that the backup files will be retained when the cluster is deleted.
-	CleanPolicyRetain CleanPolicyType = "Retain"
-
-	// CleanPolicyDelete represents that the backup files will be deleted when the cluster is deleted.
-	CleanPolicyDelete CleanPolicyType = "Delete"
-
-	// CleanPolicyOnFailure represents that the backup object will be deleted when the backup is failed.
-	CleanPolicyOnFailure CleanPolicyType = "OnFailure"
-)
-
 // PolarDBXBackupSpec defines the desired state of PolarDBXBackup
 type PolarDBXBackupSpec struct {
 	// Cluster represents the reference of target polardbx cluster to perform the backup action.
@@ -52,9 +39,10 @@ type PolarDBXBackupSpec struct {
 	// +kubebuilder:default=Retain
 	// +kubebuilder:validation:Enum=Retain;Delete;OnFailure
 
-	// CleanPolicy defines the clean policy when cluster is deleted. Default is Retain.
+	// CleanPolicy defines the clean policy for remote backup files when object of PolarDBXBackup is deleted.
+	// Default is Retain.
 	// +optional
-	CleanPolicy CleanPolicyType `json:"cleanPolicy,omitempty"`
+	CleanPolicy polardbx.CleanPolicyType `json:"cleanPolicy,omitempty"`
 
 	// StorageProvider defines the backend storage to store the backup files.
 	StorageProvider polardbx.BackupStorageProvider `json:"storageProvider,omitempty"`
@@ -80,6 +68,7 @@ const (
 	BackupFinished    PolarDBXBackupPhase = "Finished"
 	BackupFailed      PolarDBXBackupPhase = "Failed"
 	BackupDummy       PolarDBXBackupPhase = "Dummy"
+	BackupDeleting    PolarDBXBackupPhase = "Deleting"
 )
 
 // PolarDBXBackupStatus defines the observed state of PolarDBXBackup
@@ -99,6 +88,10 @@ type PolarDBXBackupStatus struct {
 	// Reason represents the reason of failure.
 	// +optional
 	Reason string `json:"reason,omitempty"`
+
+	// Message includes human-readable message related to current status.
+	// +optional
+	Message string `json:"message,omitempty"`
 
 	// Backups represents the underlying backup objects of xstore. The key is
 	// cluster name, and the value is the backup name.
@@ -127,6 +120,12 @@ type PolarDBXBackupStatus struct {
 
 	// LatestRecoverableTimestamp records the latest timestamp that can recover from current backup set
 	LatestRecoverableTimestamp *metav1.Time `json:"latestRecoverableTimestamp,omitempty"`
+
+	// CollectStartIndexMap records xstore name and the binlog index where collect should begin
+	CollectStartIndexMap map[string]string `json:"collectStartIndexMap,omitempty"`
+
+	// CollectEndIndexMap records xstore name and the binlog index where collect should begin
+	CollectEndIndexMap map[string]string `json:"collectEndIndexMap,omitempty"`
 }
 
 // +kubebuilder:object:root=true

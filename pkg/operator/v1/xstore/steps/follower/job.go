@@ -26,6 +26,7 @@ import (
 	k8shelper "github.com/alibaba/polardbx-operator/pkg/k8s/helper"
 	"github.com/alibaba/polardbx-operator/pkg/meta/core/gms/security"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/config"
+	polardbxmeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/meta"
 	polarxmeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/meta"
 	. "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/convention"
 	xstoremeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/meta"
@@ -33,6 +34,7 @@ import (
 	xstorev1reconcile "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/reconcile"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -55,6 +57,7 @@ type JobContext struct {
 var (
 	JobCommands = map[JobTask]func(JobContext) []string{
 		JobTaskBackup:              JobCommandBackupFunc,
+		JobTaskBackupKeyring:       JobCommandBackupKeyringFunc,
 		JobTaskRestorePrepare:      JobCommandPrepareRestoreFunc,
 		JobTaskBeforeRestore:       JobCommandBeforeRestoreFunc,
 		JobTaskAfterRestore:        JobCommandAfterRestoreFunc,
@@ -62,9 +65,11 @@ var (
 		JobTaskRestoreCleanDataDir: JobCommandCleanDataDirRestoreFunc,
 		JobTaskRestoreMoveBack:     JobCommandMoveRestoreFunc,
 		JobTaskInitLogger:          JobCommandInitLoggerFunc,
+		JobTaskRestoreKeyring:      JobCommandRestoreKeyringFunc,
 	}
 	JobArgs = map[JobTask]func(JobContext) []string{
 		JobTaskBackup:              JobArgBackupFunc,
+		JobTaskBackupKeyring:       JobArgBackupKeyringFunc,
 		JobTaskRestorePrepare:      JobArgPrepareRestoreFunc,
 		JobTaskBeforeRestore:       JobArgBeforeRestoreFunc,
 		JobTaskAfterRestore:        JobArgAfterRestoreFunc,
@@ -72,6 +77,10 @@ var (
 		JobTaskRestoreCleanDataDir: JobArgCleanDataDirRestoreFunc,
 		JobTaskRestoreMoveBack:     JobArgMoveRestoreFunc,
 		JobTaskInitLogger:          JobArgInitLoggerFunc,
+		JobTaskRestoreKeyring:      JobArgRestoreKeyringFunc,
+	}
+	BackupToolBinFilePaths = map[string]string{
+		galaxy.Engine: GalaxyEngineBackupBinFilepath,
 	}
 	BackupSetPrepareArgs = map[string]string{
 		galaxy.Engine: GalaxyEngineBackupSetPrepareArg,
@@ -88,6 +97,14 @@ var (
 )
 
 func JobCommandBackupFunc(ctx JobContext) []string {
+	return []string{"/usr/bin/bash"}
+}
+
+func JobCommandBackupKeyringFunc(ctx JobContext) []string {
+	return []string{"/usr/bin/bash"}
+}
+
+func JobCommandRestoreKeyringFunc(ctx JobContext) []string {
 	return []string{"/usr/bin/bash"}
 }
 
@@ -122,9 +139,18 @@ func JobCommandInitLoggerFunc(ctx JobContext) []string {
 func JobArgBackupFunc(ctx JobContext) []string {
 	return []string{
 		"-c",
-		"touch /tmp/rebuild.log && tail -f /tmp/rebuild.log & " + " `/tools/xstore/current/venv/bin/python3 /tools/xstore/current/cli.py engine xtrabackup` --defaults-file=/data/mysql/conf/my.cnf --backup " + BackupExtraArgs[ctx.engine] + " --user=root --socket='/data/mysql/run/mysql.sock' " + BackupStreamTypeArgs[ctx.engine] + " " + TargetDirArgs[ctx.engine] + "/tmp/backup 2>/tmp/rebuild.log " +
+		"touch /tmp/rebuild.log && tail -f /tmp/rebuild.log & " + " `/tools/xstore/current/venv/bin/python3 /tools/xstore/current/cli.py engine xtrabackup` --defaults-file=/data/mysql/conf/my.cnf --backup " + BackupExtraArgs[ctx.engine] + " --user=root --socket='/data/mysql/run/mysql.sock' " + " --xtrabackup-plugin-dir=`/tools/xstore/current/venv/bin/python3 /tools/xstore/current/cli.py engine xtrabackup_plugin` " + BackupStreamTypeArgs[ctx.engine] + " " + TargetDirArgs[ctx.engine] + "/tmp/backup 2>/tmp/rebuild.log " +
 			"| /tools/xstore/current/bin/polardbx-filestream-client " + BackupStreamTypeArgs[ctx.engine] + " --meta.action=uploadRemote " + fmt.Sprintf(" --meta.instanceId='%s' ", GetFileStreamInstanceId(ctx.otherPod)) +
 			fmt.Sprintf(" --meta.filename='%s' ", FileStreamBackupFilename) + fmt.Sprintf(" --destNodeName='%s' ", ctx.otherPod.Spec.NodeName) + " --hostInfoFilePath=/tools/xstore/hdfs-nodes.json && /tools/xstore/current/venv/bin/python3 /tools/xstore/current/cli.py process check_std_err_complete --filepath=/tmp/rebuild.log ",
+	}
+}
+
+func JobArgBackupKeyringFunc(ctx JobContext) []string {
+	keyringPath := ctx.parentContext.MustGetXStore().Spec.TDE.KeyringPath
+	return []string{
+		"-c",
+		" /tools/xstore/current/venv/bin/python3 /tools/xstore/current/cli.py engine filestream --action=uploadRemote" + fmt.Sprintf(" --local_file='%s' ", keyringPath) + fmt.Sprintf(" --instance_id='%s' ", GetFileStreamInstanceId(ctx.otherPod)) +
+			fmt.Sprintf(" --filename='%s' ", FileStreamKeyringFilename) + fmt.Sprintf(" --destnode_name='%s' ", ctx.otherPod.Spec.NodeName),
 	}
 }
 
@@ -151,9 +177,10 @@ func JobArgMoveRestoreFunc(ctx JobContext) []string {
 
 func JobArgPrepareRestoreFunc(ctx JobContext) []string {
 	backupDir := filepath.Join(FileStreamRootDir, GetFileStreamInstanceId(ctx.jobTargetPod), FileStreamBackupFilename)
+	keyringPath := ctx.parentContext.MustGetXStore().Spec.TDE.KeyringPath
 	return []string{
 		"-c",
-		" `/tools/xstore/current/venv/bin/python3 /tools/xstore/current/cli.py engine xtrabackup` " + fmt.Sprintf(" %s ", BackupSetPrepareArgs[ctx.engine]) + " --use-memory=1G " + TargetDirArgs[ctx.engine] + backupDir,
+		" `/tools/xstore/current/venv/bin/python3 /tools/xstore/current/cli.py engine xtrabackup` " + fmt.Sprintf(" %s ", BackupSetPrepareArgs[ctx.engine]) + " --xtrabackup-plugin-dir=/tools/xstore/current/xtrabackup/8.0-2/xcluster_xtrabackup80/lib/plugin --keyring-file-data=" + keyringPath + " --use-memory=1G " + TargetDirArgs[ctx.engine] + backupDir,
 	}
 }
 
@@ -180,6 +207,14 @@ func JobArgInitLoggerFunc(ctx JobContext) []string {
 	}
 }
 
+func JobArgRestoreKeyringFunc(ctx JobContext) []string {
+	keyringPath := filepath.Dir(ctx.parentContext.MustGetXStore().Spec.TDE.KeyringPath)
+	keyringFilepath := filepath.Join(FileStreamRootDir, GetFileStreamInstanceId(ctx.jobTargetPod), FileStreamKeyringFilename)
+	return []string{"-c",
+		fmt.Sprintf("mkdir -p %s && chown -R  mysql:mysql %s && mv %s %s", keyringPath, keyringPath, keyringFilepath, keyringPath),
+	}
+
+}
 func GetFileStreamInstanceId(pod *corev1.Pod) string {
 	return fmt.Sprintf("%s-%s", pod.Namespace, pod.Name)
 }
@@ -252,6 +287,9 @@ out:
 	engineContainer.ReadinessProbe = nil
 	engineContainer.StartupProbe = nil
 	engineContainer.LivenessProbe = nil
+	if engineContainer.Lifecycle != nil {
+		engineContainer.Lifecycle.PreStop = nil
+	}
 	// generate volume mounts
 	var jobParallelism int32 = 1
 	var completions int32 = 1
@@ -329,6 +367,46 @@ var CleanBackupJob = NewStepBinder("CleanBackupJob", func(rc *xstorev1reconcile.
 		return flow.RetryErr(err, "Failed to remove Path", "NodeName", targetPod.Spec.NodeName, "path", fileStreamDir)
 	}
 	return flow.Continue("CleanBackupJob Success.")
+})
+
+var StartBackupKeyringJob = NewStepBinder("StartBackupKeyringJob", func(rc *xstorev1reconcile.FollowerContext, flow control.Flow) (reconcile.Result, error) {
+	if checkIfJobSkip(rc, JobTaskBackupKeyring) {
+		return flow.Pass()
+	}
+	xstoreContext := rc.XStoreContext()
+	xstore := xstoreContext.MustGetXStore()
+	if xstore.Status.TdeStatus == false || xstore.Labels[polardbxmeta.LabelRole] == polardbxmeta.RoleGMS {
+		return flow.Pass()
+	}
+	fromPod, err := xstoreContext.GetXStorePod(rc.MustGetXStoreFollower().Spec.FromPodName)
+	if err != nil {
+		return flow.RetryErr(err, "GetXStorePod Failed")
+	}
+	targetPod, err := rc.GetPodByName(rc.MustGetXStoreFollower().Status.RebuildPodName)
+	if err != nil {
+		return flow.RetryErr(err, "GetXStorePod Failed")
+	}
+	jobName := newJobName(JobTaskBackupKeyring, fromPod, rc.MustGetXStoreFollower().GetName())
+	jobContext := JobContext{
+		jobName:       jobName,
+		jobTask:       JobTaskBackupKeyring,
+		jobTargetPod:  fromPod,
+		config:        rc.XStoreContext().Config(),
+		otherPod:      targetPod,
+		parentContext: rc,
+		engine:        xstoreContext.MustGetXStore().Spec.Engine,
+	}
+	job := newJob(jobContext)
+	err = rc.SetControllerRefAndCreate(job)
+	if err != nil {
+		return flow.RetryErr(err, "Create BackupJob Failed")
+	}
+	xstoreFollower := rc.MustGetXStoreFollower()
+	xstoreFollower.Status.BackupJobName = jobName
+	xstoreFollower.Status.CurrentJobName = jobName
+	xstoreFollower.Status.CurrentJobTask = string(JobTaskBackupKeyring)
+	rc.MarkChanged()
+	return flow.Continue("JobTaskBackupKeyring Success.")
 })
 
 var StartBackupJob = NewStepBinder("StartBackupJob", func(rc *xstorev1reconcile.FollowerContext, flow control.Flow) (reconcile.Result, error) {
@@ -421,7 +499,7 @@ func CreateJob(rc *xstorev1reconcile.FollowerContext, jobTask JobTask) (string, 
 	}
 	job := newJob(jobContext)
 	err = rc.SetControllerRefAndCreate(job)
-	if err != nil {
+	if err != nil && !apierrors.IsAlreadyExists(err) {
 		return "", err
 	}
 	xstoreFollower := rc.MustGetXStoreFollower()
@@ -479,6 +557,22 @@ var AfterRestoreJob = NewStepBinder("AfterRestoreJob", func(rc *xstorev1reconcil
 		return flow.RetryErr(err, "Create Job Failed")
 	}
 	return flow.Continue("AfterRestoreJob Success.")
+})
+
+var RestoreKeyringJob = NewStepBinder("RestoreKeyringJob", func(rc *xstorev1reconcile.FollowerContext, flow control.Flow) (reconcile.Result, error) {
+	if checkIfJobSkip(rc, JobTaskRestoreKeyring) {
+		return flow.Pass()
+	}
+	xstoreContext := rc.XStoreContext()
+	xstore := xstoreContext.MustGetXStore()
+	if xstore.Status.TdeStatus == false || xstore.Labels[polardbxmeta.LabelRole] == polardbxmeta.RoleGMS {
+		return flow.Pass()
+	}
+	_, err := CreateJob(rc, JobTaskRestoreKeyring)
+	if err != nil {
+		return flow.RetryErr(err, "Create Job Failed")
+	}
+	return flow.Continue("RestoreKeyringJob Success.")
 })
 
 func checkIfJobSkip(rc *xstorev1reconcile.FollowerContext, jobTask JobTask) bool {

@@ -32,7 +32,7 @@ type XStoreReference struct {
 
 // XStoreBackupSpec defines the desired state of XStoreBackup
 type XStoreBackupSpec struct {
-	// +kubebuilder:default="galaxy"
+	// +kubebuilder:default=galaxy
 
 	// Engine is the engine used by xstore. Default is "galaxy".
 	// +optional
@@ -54,6 +54,14 @@ type XStoreBackupSpec struct {
 	// PreferredBackupRole defines the role of node on which backup will happen
 	// +optional
 	PreferredBackupRole string `json:"preferredBackupRole,omitempty"`
+
+	// +kubebuilder:default=Retain
+	// +kubebuilder:validation:Enum=Retain;Delete;OnFailure
+
+	// CleanPolicy defines the clean policy for remote backup files when object of XStoreBackup is deleted.
+	// Default is Retain.
+	// +optional
+	CleanPolicy polardbx.CleanPolicyType `json:"cleanPolicy,omitempty"`
 }
 
 // XStoreBackupStatus defines the observed state of XStoreBackup
@@ -69,18 +77,25 @@ type XStoreBackupStatus struct {
 	BackupRootPath string `json:"backupRootPath,omitempty"`
 	// BackupSetTimestamp records timestamp of last event included in tailored binlog
 	BackupSetTimestamp *metav1.Time `json:"backupSetTimestamp,omitempty"`
+
+	// Message includes human-readable message related to current status.
+	// +optional
+	Message string `json:"message,omitempty"`
 }
 
 type XStoreBackupPhase string
 
 const (
-	XStoreBackupNew        XStoreBackupPhase = ""
-	XStoreFullBackuping    XStoreBackupPhase = "Backuping"
-	XStoreBackupCollecting XStoreBackupPhase = "Collecting"
-	XStoreBinlogBackuping  XStoreBackupPhase = "Binloging"
-	XStoreBinlogWaiting    XStoreBackupPhase = "Waiting"
-	XStoreBackupFinished   XStoreBackupPhase = "Finished"
-	XStoreBackupDummy      XStoreBackupPhase = "Dummy"
+	XStoreBackupNew         XStoreBackupPhase = ""
+	XStoreFullBackuping     XStoreBackupPhase = "Backuping"
+	XStoreBackupCollecting  XStoreBackupPhase = "Collecting"
+	XStoreBinlogBackuping   XStoreBackupPhase = "Binloging"
+	XStoreBinlogWaiting     XStoreBackupPhase = "Waiting"
+	XStoreMetadataBackuping XStoreBackupPhase = "MetadataBackuping"
+	XStoreBackupFinished    XStoreBackupPhase = "Finished"
+	XStoreBackupDummy       XStoreBackupPhase = "Dummy"
+	XStoreBackupDeleting    XStoreBackupPhase = "Deleting"
+	XstoreBackupFailed      XStoreBackupPhase = "Failed"
 )
 
 // +kubebuilder:object:root=true

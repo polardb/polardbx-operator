@@ -38,6 +38,7 @@ const (
 	PhaseFailed     Phase = "Failed"
 	PhaseRestarting Phase = "Restarting"
 	PhaseUnknown    Phase = "Unknown"
+	PhaseTdeOpening Phase = "TdeOpening"
 )
 
 // Stage defines the operating stage of the cluster.

@@ -14,7 +14,7 @@ import (
 )
 
 func startFileServer() *filestream.FileServer {
-	config.ConfigFilepath = "/Users/busu/tmp/filestream/config.yaml"
+	config.ConfigFilepath = "/Users/wkf/k8s/tmp/config.yaml"
 	config.InitConfig()
 	flowControl := filestream.NewFlowControl(filestream.FlowControlConfig{
 		MaxFlow:    1 << 40, // 1 byte/s
@@ -31,15 +31,49 @@ func startFileServer() *filestream.FileServer {
 	return fileServer
 }
 
+func TestSearchByTimestampAndIndex(t *testing.T) {
+	startFileServer()
+	pxcName := "quick-start"
+	pxcUid := "9e84b3b3-032a-4ba3-ba23-b244aad0dbbc"
+	xStoreName := "quick-start"
+	xStoreUid := "9e84b3b3-032a-4ba3-ba23-b244aad0dbbc"
+	podName := "quick-start-zmqh-cand-0"
+	var startIndex uint64 = 33850
+	var timestamp uint64 = 1704356960
+	var version uint64 = 1704356867
+	heartbeatSname := "pitr_sname"
+	//1678193948
+	rb := newRestoreBinlog(pxcName, pxcUid, xStoreName, xStoreUid, podName, startIndex, timestamp, version, heartbeatSname, []BinlogSource{
+		{
+			BinlogChecksum: "crc32",
+			RSource: &RemoteSource{
+				FsIp:   "127.0.0.1",
+				FsPort: 9999,
+				Sink: &config.Sink{
+					Name: "default",
+					Type: "oss",
+				},
+				MetaFilepath: "polardbx-binlogbackup/development/quick-start/9e84b3b3-032a-4ba3-ba23-b244aad0dbbc/quick-start/9e84b3b3-032a-4ba3-ba23-b244aad0dbbc/quick-start-zmqh-cand-0/1704356867/0_1000/binlog-meta/mysql_bin.000001.txt",
+				DataFilepath: "polardbx-binlogbackup/development/quick-start/9e84b3b3-032a-4ba3-ba23-b244aad0dbbc/quick-start/9e84b3b3-032a-4ba3-ba23-b244aad0dbbc/quick-start-zmqh-cand-0/1704356867/0_1000/binlog-file/mysql_bin.000001",
+			},
+		},
+	})
+	rb.SearchByTimestampAndIndex()
+	rb.SetSpillFilepath("./test.json")
+	rb.SpillResultSources()
+	rb.LoadResultSources()
+	fmt.Println("test")
+}
+
 func TestSearchByTimestamp(t *testing.T) {
 	startFileServer()
-	pxcName := "polardb-x-2"
-	pxcUid := "16bd261e-ac47-42d7-bb2f-f2ff940d6780"
-	xStoreName := "polardb-x-2-wt9x-dn-1"
-	xStoreUid := "f38bea9c-2cac-4a27-ae21-997a7e30d737"
-	podName := "polardb-x-2-wt9x-dn-1-cand-1"
-	var startIndex uint64 = 1983339
-	var timestamp uint64 = 1678193950
+	pxcName := "quick-start"
+	pxcUid := "9e84b3b3-032a-4ba3-ba23-b244aad0dbbc"
+	xStoreName := "quick-start"
+	xStoreUid := "9e84b3b3-032a-4ba3-ba23-b244aad0dbbc"
+	podName := "quick-start-zmqh-cand-0"
+	var startIndex uint64 = 33850
+	var timestamp uint64 = 1704356960
 	var version uint64 = 1678182799
 	heartbeatSname := "pitr_sname"
 	//1678193948
@@ -53,8 +87,8 @@ func TestSearchByTimestamp(t *testing.T) {
 					Name: "default",
 					Type: "oss",
 				},
-				MetaFilepath: "binlogbackup/default/polardb-x-2/16bd261e-ac47-42d7-bb2f-f2ff940d6780/polardb-x-2-wt9x-dn-1/f38bea9c-2cac-4a27-ae21-997a7e30d737/polardb-x-2-wt9x-dn-1-cand-1/1678182799/0_1000/binlog-meta/mysql_bin.000005.txt",
-				DataFilepath: "binlogbackup/default/polardb-x-2/16bd261e-ac47-42d7-bb2f-f2ff940d6780/polardb-x-2-wt9x-dn-1/f38bea9c-2cac-4a27-ae21-997a7e30d737/polardb-x-2-wt9x-dn-1-cand-1/1678182799/0_1000/binlog-file/mysql_bin.000005",
+				MetaFilepath: "polardbx-binlogbackup/development/quick-start/9e84b3b3-032a-4ba3-ba23-b244aad0dbbc/quick-start/9e84b3b3-032a-4ba3-ba23-b244aad0dbbc/quick-start-zmqh-cand-0/1704356867/0_1000/binlog-meta/mysql_bin.000001.txt",
+				DataFilepath: "polardbx-binlogbackup/development/quick-start/9e84b3b3-032a-4ba3-ba23-b244aad0dbbc/quick-start/9e84b3b3-032a-4ba3-ba23-b244aad0dbbc/quick-start-zmqh-cand-0/1704356867/0_1000/binlog-file/mysql_bin.000001",
 			},
 		},
 	})

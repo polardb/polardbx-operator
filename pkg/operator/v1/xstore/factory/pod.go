@@ -214,7 +214,7 @@ func NewPod(rc *reconcile.Context, xstore *polardbxv1.XStore, nodeSet *polardbxv
 			ImagePullSecrets:              template.Spec.ImagePullSecrets,
 			DNSPolicy:                     corev1.DNSClusterFirstWithHostNet,
 			RestartPolicy:                 corev1.RestartPolicyAlways,
-			TerminationGracePeriodSeconds: pointer.Int64Ptr(10),
+			TerminationGracePeriodSeconds: pointer.Int64Ptr(300),
 			HostNetwork:                   boolutil.IsTrue(template.Spec.HostNetwork),
 			ShareProcessNamespace:         pointer.BoolPtr(true),
 			Affinity:                      opts.NewAffinity(factoryCtx),
@@ -239,7 +239,7 @@ func NewPod(rc *reconcile.Context, xstore *polardbxv1.XStore, nodeSet *polardbxv
 					Env:             k8shelper.PatchEnvs(SystemEnvs(), envs[convention.ContainerEngine]),
 					SecurityContext: k8shelper.NewSecurityContext(rc.Config().Store().ContainerPrivileged()),
 					Lifecycle: &corev1.Lifecycle{
-						PreStop: &corev1.Handler{
+						PreStop: &corev1.LifecycleHandler{
 							Exec: &corev1.ExecAction{
 								Command: []string{
 									"/tools/xstore/current/venv/bin/python3", "/tools/xstore/current/cli.py", "engine", "shutdown",

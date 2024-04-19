@@ -131,6 +131,31 @@ var SyncNodesInfoAndKeepBlock = xstorev1reconcile.NewStepBinder("SyncNodesInfoAn
 		return flow.Continue("Global shared channel updated!")
 	})
 
+var BlockBootstrap = xstorev1reconcile.NewStepBinder("BlockBootstrap",
+	func(rc *xstorev1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+		sharedCm, err := rc.GetXStoreConfigMap(convention.ConfigMapTypeShared)
+		if err != nil {
+			return flow.Error(err, "Unable to get shared config map.")
+		}
+
+		sharedChannel, err := ParseChannelFromConfigMap(sharedCm)
+		if err != nil {
+			return flow.Error(err, "Unable to parse shared channel from config map.")
+		}
+
+		// Branch currently unblocked, just skip.
+		if sharedChannel.IsBlocked() {
+			return flow.Pass()
+		}
+		sharedChannel.Block()
+		sharedCm.Data[channel.SharedChannelKey] = sharedChannel.String()
+		err = rc.Client().Update(rc.Context(), sharedCm)
+		if err != nil {
+			return flow.Error(err, "Unable to update shared config map.")
+		}
+		return flow.Continue("Block via shared channel.")
+	})
+
 var UnblockBootstrap = xstorev1reconcile.NewStepBinder("UnblockBootstrap",
 	func(rc *xstorev1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
 		sharedCm, err := rc.GetXStoreConfigMap(convention.ConfigMapTypeShared)

@@ -92,12 +92,7 @@ var InitializePolardbxLabel = polardbxv1reconcile.NewStepBinder("InitializePolar
 				),
 			)
 		}
-		err := rc.Client().Update(rc.Context(), polardbx)
-
-		if err != nil {
-			return flow.Error(err, "Failed to init polardbx label.")
-		}
-
+		rc.MarkPolarDBXChanged()
 		return flow.Pass()
 	},
 )
@@ -137,6 +132,7 @@ func downloadMetadataBackup(rc *polardbxv1reconcile.Context) (*factory.MetadataB
 	if err != nil {
 		return nil, errors.New("failed to get filestream client, error: " + err.Error())
 	}
+	filestreamClient.InitWaitChan()
 	filestreamAction, err := polardbxv1polardbx.NewBackupStorageFilestreamAction(polardbx.Spec.Restore.StorageProvider.StorageName)
 
 	downloadActionMetadata := filestream.ActionMetadata{
@@ -173,9 +169,11 @@ var CreateDummyBackupObject = polardbxv1reconcile.NewStepBinder("CreateDummyBack
 			return flow.Continue("BackupSetPath is not specified, no need to create dummy backup object")
 		}
 
+		flow.Logger().Info("Start to download metadata backup.")
 		metadata, err := downloadMetadataBackup(rc)
 		if err != nil {
 			helper.TransferPhase(polardbx, polardbxv1polardbx.PhaseFailed)
+			polardbx.Status.Message = err.Error()
 			return flow.Error(err, "Failed to download metadata from backup set path",
 				"path", polardbx.Spec.Restore.From.BackupSetPath)
 		}
@@ -186,10 +184,14 @@ var CreateDummyBackupObject = polardbxv1reconcile.NewStepBinder("CreateDummyBack
 		if err != nil {
 			return flow.Error(err, "Failed to new dummy polardbx backup")
 		}
+		polardbxBackupStatus := polardbxBackup.Status.DeepCopy()
 		err = rc.SetControllerRefAndCreate(polardbxBackup)
 		if err != nil {
 			return flow.Error(err, "Failed to create dummy polardbx backup")
 		}
+		polardbxBackup.Status = *polardbxBackupStatus
+
+		// Create secret backup
 		polardbxSecretBackup, err := objectFactory.NewDummySecretBackup(metadata.PolarDBXClusterMetadata.Name, metadata)
 		if err != nil {
 			return flow.Error(err, "Failed to new dummy polardbx secret backup")
@@ -200,15 +202,18 @@ var CreateDummyBackupObject = polardbxv1reconcile.NewStepBinder("CreateDummyBack
 		}
 
 		// Create dummy xstore backup and update its status
+		// TODO(dengli): what if dummy object name longer than limit in k8s
 		for _, xstoreName := range metadata.GetXstoreNameList() {
 			xstoreBackup, err := objectFactory.NewDummyXstoreBackup(xstoreName, polardbxBackup, metadata)
 			if err != nil {
 				return flow.Error(err, "Failed to new dummy xstore backup", "xstore", xstoreName)
 			}
+			xstoreBackupStatus := xstoreBackup.Status.DeepCopy()
 			err = rc.SetControllerToOwnerAndCreate(polardbxBackup, xstoreBackup)
 			if err != nil {
 				return flow.Error(err, "Failed to create dummy xstore backup", "xstore", xstoreName)
 			}
+			xstoreBackup.Status = *xstoreBackupStatus
 			err = rc.Client().Status().Update(rc.Context(), xstoreBackup)
 			if err != nil {
 				return flow.Error(err, "Failed to update dummy xstore backup status", "xstore", xstoreName)
@@ -223,7 +228,7 @@ var CreateDummyBackupObject = polardbxv1reconcile.NewStepBinder("CreateDummyBack
 				return flow.Error(err, "Failed to create dummy xstore secret backup", "xstore", xstoreName)
 			}
 
-			// record xstore and its backup for restore
+			// Record xstore and its backup for restore
 			polardbxBackup.Status.Backups[xstoreName] = xstoreBackup.Name
 		}
 
@@ -235,10 +240,7 @@ var CreateDummyBackupObject = polardbxv1reconcile.NewStepBinder("CreateDummyBack
 
 		// The dummy backup object will be used in the later restore by setting it as backup set
 		polardbx.Spec.Restore.BackupSet = polardbxBackup.Name
-		err = rc.Client().Update(rc.Context(), polardbx)
-		if err != nil {
-			return flow.Error(err, "Failed to update backup set of restore spec")
-		}
+		rc.MarkPolarDBXChanged()
 
 		return flow.Continue("Dummy backup object created!")
 	})
@@ -271,10 +273,7 @@ var SyncSpecFromBackupSet = polardbxv1reconcile.NewStepBinder("SyncSpecFromBacku
 			polardbx.Spec.Topology.Nodes.DN.Replicas = pxcBackup.Status.ClusterSpecSnapshot.Topology.Nodes.DN.Replicas
 		}
 
-		err = rc.Client().Update(rc.Context(), polardbx)
-		if err != nil {
-			return flow.Error(err, "Failed to sync topology from backup set")
-		}
+		rc.MarkPolarDBXChanged()
 		return flow.Continue("Spec synced!")
 	},
 )

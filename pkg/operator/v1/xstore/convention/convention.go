@@ -202,6 +202,15 @@ const (
 	ConfigMapTypeShared  ConfigMapType = "shared"
 	ConfigMapTypeTask    ConfigMapType = "task"
 	ConfigMapTypeRestore ConfigMapType = "restore"
+	ConfigMapTypeTde     ConfigMapType = "tde"
+)
+
+const (
+	KeyringPath        = "keyringPath"
+	Keyring            = "keyring"
+	KeyringPluginKey   = "early-plugin-load"
+	KeyringPluginValue = "keyring_file.so"
+	KeyringFile        = "keyring_file_data"
 )
 
 func NewConfigMapName(xstore *polardbxv1.XStore, cmType ConfigMapType) string {
@@ -227,10 +236,11 @@ const (
 // Conventions for xStore follower
 const (
 	FileStreamBackupFilename        = "backup"
+	FileStreamKeyringFilename       = "keyring"
 	FileStreamRootDir               = "/filestream"
 	XClusterBackupBinFilepath       = "/u01/xcluster_xtrabackup/bin/innobackupex"
 	XClusterBackupSetPrepareArg     = "--apply-log"
-	GalaxyEngineBackupExtraArgs     = " --slave-info --lock-ddl "
+	GalaxyEngineBackupExtraArgs     = " --slave-info --lock-ddl"
 	XClusterBackupExtraArgs         = " --rds-execute-backup-lock-timeout=120 "
 	GalaxyEngineBackupStreamArgs    = "--stream=xbstream"
 	XClusterBackupStreamArgs        = "--stream=tar"
@@ -272,9 +282,10 @@ const AutoRebuildConfigMapName = "auto-build"
 type BackupJobType string
 
 const (
-	BackupJobTypeFullBackup   = "backup"
-	BackupJobTypeBinlogBackup = "binlog"
-	BackupJobTypeCollect      = "collect"
+	BackupJobTypeFullBackup   BackupJobType = "backup"
+	BackupJobTypeBinlogBackup BackupJobType = "binlog"
+	BackupJobTypeCollect      BackupJobType = "collect"
+	BackupJobTypeSeekcp       BackupJobType = "seekcp"
 )
 
 func NewBackupJobName(targetPod *corev1.Pod, jobType BackupJobType) string {
@@ -283,3 +294,9 @@ func NewBackupJobName(targetPod *corev1.Pod, jobType BackupJobType) string {
 		name.WithPrefix(fmt.Sprintf("%s-job", jobType)),
 	)
 }
+
+type BackupConfigMapKeyType string
+
+const (
+	BackupConfigMapKey = "backup"
+)

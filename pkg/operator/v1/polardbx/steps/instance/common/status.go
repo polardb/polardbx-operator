@@ -445,3 +445,15 @@ var SyncCnParameters = polardbxv1reconcile.NewStepBinder("SyncCnParameters",
 		return flow.Pass()
 	},
 )
+
+var UpdateTdeStatus = polardbxv1reconcile.NewStepBinder("UpdateTdeStatus",
+	func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+		polardbx := rc.MustGetPolarDBX()
+		polardbx.Status.TdeStatus = polardbx.Spec.TDE.Enable
+		err := rc.UpdatePolarDBXStatus()
+		if err != nil {
+			return flow.Error(err, "Unable to Update PolarDBX Status")
+		}
+		return flow.Pass()
+	},
+)

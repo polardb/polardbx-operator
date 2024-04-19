@@ -84,7 +84,7 @@ const (
   extras text DEFAULT NULL COMMENT 'reserve for extra info',
   PRIMARY KEY (id),
   INDEX idx_inst_id_status (inst_id, status),
-  UNIQUE KEY uk_inst_id_addr (storage_inst_id, ip, port, inst_kind)
+  UNIQUE KEY uk_inst_id_addr (storage_inst_id, ip, port, inst_kind, is_vip)
 ) engine = innodb DEFAULT charset = utf8`
 
 	createTableUserPrivIfNotExists = `CREATE TABLE if not exists user_priv (
@@ -728,7 +728,7 @@ func (meta *manager) EnableComputeNodes(computeNodes ...ComputeNodeInfo) error {
 }
 
 func (c *ComputeNodeInfo) toSelectCriteria() string {
-	return fmt.Sprintf("(ip = '%s' AND port = %d AND (extras like '%%%s%%' or  extras is null))", c.Host, c.Port, c.Extra)
+	return fmt.Sprintf("( (ip = '%s' AND port = %d and  extras is null ) OR (extras like '%%%s%%' ))", c.Host, c.Port, c.Extra)
 }
 
 func (meta *manager) DisableComputeNodes(computeNodes ...ComputeNodeInfo) error {
@@ -752,7 +752,7 @@ func (meta *manager) DisableComputeNodes(computeNodes ...ComputeNodeInfo) error 
 
 func (meta *manager) DisableAllComputeNodes(primaryPolardbxName string) error {
 	deleteStmt := fmt.Sprintf(`UPDATE server_info SET status = %d WHERE inst_id = '%s'`, PCNodeDisabled, meta.getClusterID())
-	notifyStmt := meta.newNotifyStmt(fmt.Sprintf(clStorageInfoDataIdFormat, primaryPolardbxName))
+	notifyStmt := meta.newNotifyStmt(fmt.Sprintf(clServerInfoDataIdFormat, primaryPolardbxName))
 
 	return meta.ExecuteStatementsAndNotify(deleteStmt, notifyStmt)
 }
@@ -1182,7 +1182,7 @@ func (meta *manager) newUpdateRoStorageInfoStmt(record StorageNodeInfo) string {
         update storage_info 
                     set ip = '%s', port = %d, xport = %d, gmt_modified = now() 
         where 
-              storage_inst_id = '%s' and inst_id = '%s' and inst_kind = 1 and is_vip = 0`, record.Host, record.Port, record.XProtocolPort, record.Id, record.ClusterId)
+              storage_inst_id = '%s' and inst_id = '%s' and inst_kind = 1 and is_vip = 0 limit 1`, record.Host, record.Port, record.XProtocolPort, record.Id, record.ClusterId)
 }
 
 func (meta *manager) CreateDBAccount(user, passwd string, grantOptions ...*GrantOption) error {

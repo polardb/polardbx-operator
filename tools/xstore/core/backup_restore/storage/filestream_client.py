@@ -40,6 +40,13 @@ class ClientAction(Enum):
     UploadMinio = "uploadMinio"
 
 
+class FilestreamException(Exception):
+    """
+    Exception caused by filestream
+    """
+    pass
+
+
 class FileStreamClient:
     """
     A client to perform stream transmission
@@ -69,7 +76,9 @@ class FileStreamClient:
         if logger:
             logger.info("Upload command: %s" % upload_cmd)
         with subprocess.Popen(upload_cmd, stdin=stdin, stderr=stderr, close_fds=True) as up:
-            up.wait()
+            return_code = up.wait()
+            if return_code:
+                raise FilestreamException("Failed to upload, return code: %s" % return_code)
 
     def download_to_stdout(self, remote_path, stdout, stderr=sys.stderr, logger=None):
         download_cmd = [
@@ -82,7 +91,9 @@ class FileStreamClient:
         if logger:
             logger.info("Download command: %s" % download_cmd)
         with subprocess.Popen(download_cmd, stdout=stdout, stderr=stderr, close_fds=True) as dp:
-            dp.wait()  # ensure download finished
+            return_code = dp.wait()  # ensure download finished
+            if return_code:
+                raise FilestreamException("Failed to download, return code: %s" % return_code)
 
     def upload_from_file(self, remote, local, stderr=sys.stderr, logger=None):
         """

@@ -95,9 +95,6 @@ func handleFinalizerForPods(rc *polardbxv1reconcile.Context, log logr.Logger, de
 	if role == polardbxmeta.RoleCN {
 		toDeleteInfo := make([]gms.ComputeNodeInfo, 0, len(deletedOrFailedPods))
 		for _, pod := range deletedOrFailedPods {
-			if pod.Status.PodIP == "" {
-				continue
-			}
 			toDeleteInfo = append(toDeleteInfo, gms.ComputeNodeInfo{
 				Host: pod.Status.PodIP,
 				Port: k8shelper.MustGetPortFromContainer(

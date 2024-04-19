@@ -45,8 +45,13 @@ type GalaxyReconciler struct {
 func (r *GalaxyReconciler) Reconcile(rc *xstorev1reconcile.Context, log logr.Logger, request reconcile.Request) (reconcile.Result, error) {
 	xstore := rc.MustGetXStore()
 	log = log.WithValues("phase", xstore.Status.Phase, "stage", xstore.Status.Stage)
+	isStandard, err := rc.GetXStoreIsStandard()
+	if err != nil {
+		log.Error(err, "Unable to get corresponding xstore")
+		return reconcile.Result{}, err
+	}
 
-	task, err := r.newReconcileTask(rc, xstore, log)
+	task, err := r.newReconcileTask(rc, xstore, log, isStandard)
 	if err != nil {
 		log.Error(err, "Failed to build reconcile task.")
 		return reconcile.Result{}, err
@@ -55,7 +60,7 @@ func (r *GalaxyReconciler) Reconcile(rc *xstorev1reconcile.Context, log logr.Log
 	return control.NewExecutor(log).Execute(rc, task)
 }
 
-func (r *GalaxyReconciler) newReconcileTask(rc *xstorev1reconcile.Context, xstore *polardbxv1.XStore, log logr.Logger) (*control.Task, error) {
+func (r *GalaxyReconciler) newReconcileTask(rc *xstorev1reconcile.Context, xstore *polardbxv1.XStore, log logr.Logger, isStandard bool) (*control.Task, error) {
 	task := control.NewTask()
 	readonly := xstore.Spec.Readonly
 
@@ -67,6 +72,7 @@ func (r *GalaxyReconciler) newReconcileTask(rc *xstorev1reconcile.Context, xstor
 	// Weave steps according to current status, aka. construct a huge state machine.
 	instancesteps.AbortReconcileIfHintFound(task)
 	instancesteps.MoveToPhaseDeletingIfDeleted(task)
+	instancesteps.DeleteIpInvalidPod(task)
 
 	switch xstore.Status.Phase {
 	case polardbxv1xstore.PhaseNew:
@@ -86,6 +92,9 @@ func (r *GalaxyReconciler) newReconcileTask(rc *xstorev1reconcile.Context, xstor
 		//   * Service for network in/outside cluster
 		//   * Secret for storing accounts
 		//   * ConfigMap for sharing information and templates among nodes
+		if xstore.Spec.Restore != nil {
+			instancesteps.CreateDummyBackupObject(task)
+		}
 		instancesteps.CreateSecret(task)
 		galaxyinstancesteps.CreateServices(task)
 		galaxyinstancesteps.CreateOrUpdateConfigMaps(task)
@@ -102,6 +111,10 @@ func (r *GalaxyReconciler) newReconcileTask(rc *xstorev1reconcile.Context, xstor
 			instancesteps.UpdatePhaseTemplate(polardbxv1xstore.PhaseCreating)(task)
 		} else {
 			instancesteps.CheckXStoreRestoreSpec(task)
+			instancesteps.LoadLatestBackupSetByTime(task)
+			control.When(rc.IsPitrRestore(xstore),
+				instancesteps.PreparePitrBinlogs,
+				instancesteps.WaitPreparePitrBinlogs)(task)
 			instancesteps.UpdatePhaseTemplate(polardbxv1xstore.PhaseRestoring)(task)
 		}
 	case polardbxv1xstore.PhaseCreating:
@@ -140,7 +153,7 @@ func (r *GalaxyReconciler) newReconcileTask(rc *xstorev1reconcile.Context, xstor
 			instancesteps.QueryAndUpdateEngineVersion,          // Query the engine version via command. (DEBUG)
 			instancesteps.CheckConnectivityAndSetEngineVersion, // Updates the engine version by accessing directly
 		)(task)
-
+		instancesteps.MarkFlushIpInAnnotation(task)
 		// Go to phase "Running".
 		instancesteps.UpdatePhaseTemplate(polardbxv1xstore.PhaseRunning)(task)
 	case polardbxv1xstore.PhaseRestoring:
@@ -169,21 +182,25 @@ func (r *GalaxyReconciler) newReconcileTask(rc *xstorev1reconcile.Context, xstor
 
 			instancesteps.WaitUntilLeaderElected(task)
 
-			instancesteps.StartRecoverJob(task)
-			instancesteps.WaitUntilRecoverJobFinished(task)
-
+			if !isStandard {
+				instancesteps.StartRecoverJob(task)
+				instancesteps.WaitUntilRecoverJobFinished(task)
+			}
 			// Check connectivity and set engine version into status.
 			control.Branch(debug.IsDebugEnabled(),
 				instancesteps.QueryAndUpdateEngineVersion,          // Query the engine version via command. (DEBUG)
 				instancesteps.CheckConnectivityAndSetEngineVersion, // Updates the engine version by accessing directly.
 			)(task)
-
+			instancesteps.MarkFlushIpInAnnotation(task)
 			instancesteps.UpdateStageTemplate(polardbxv1xstore.StageClean)(task)
 		case polardbxv1xstore.StageClean:
 			// clean up restore context
 			instancesteps.RemoveRestoreJob(task)
 			instancesteps.RemoveRecoverJob(task)
-
+			instancesteps.CleanDummyBackupObject(task)
+			control.When(rc.IsPitrRestore(xstore),
+				instancesteps.CleanPreparePitrBinlogJob,
+			)(task)
 			// Go to phase "Running".
 			instancesteps.UpdateStageTemplate(polardbxv1xstore.StageEmpty)(task)
 			instancesteps.UpdatePhaseTemplate(polardbxv1xstore.PhaseRunning)(task)
@@ -273,6 +290,11 @@ func (r *GalaxyReconciler) newReconcileTask(rc *xstorev1reconcile.Context, xstor
 				control.Retry("Start PhaseAdapting..."),
 			)(task)
 
+			instancesteps.WhenTdeOpen(instancesteps.UpdatePhaseTemplate(polardbxv1xstore.PhaseTdeOpening),
+				control.Retry("Start PhaseTdeOpening..."),
+			)(task)
+
+			instancesteps.UpdateTdeConfig(task)
 			// Update the observed generation at the end of running phase.
 			instancesteps.UpdateObservedGeneration(task)
 			instancesteps.UpdateObservedTopologyAndConfig(task)
@@ -301,6 +323,11 @@ func (r *GalaxyReconciler) newReconcileTask(rc *xstorev1reconcile.Context, xstor
 		// Block wait, requeue every 30 seconds.
 		control.RetryAfter(30*time.Second, "Check every 30 seconds...")(task)
 	case polardbxv1xstore.PhaseUpgrading, polardbxv1xstore.PhaseRepairing:
+		instancesteps.WhenNoPod(
+			instancesteps.CreateResetMetaIndicate,
+			xstoreplugincommonsteps.BlockBootstrap,
+			instancesteps.UpdatePhaseTemplate(polardbxv1xstore.PhaseCreating),
+		)(task)
 		selfHeal := xstore.Status.Phase == polardbxv1xstore.PhaseRepairing
 		instancesteps.PrepareHostPathVolumes(task)
 		control.Block(
@@ -360,8 +387,13 @@ func (r *GalaxyReconciler) newReconcileTask(rc *xstorev1reconcile.Context, xstor
 				instancesteps.WaitUntilLeaderElected,
 				instancesteps.SyncPaxosMeta,
 			)(task)
+			instancesteps.MarkFlushIpInAnnotation(task)
 			instancesteps.CleanFlushLocalAnnotation(task)
 			instancesteps.DeleteExecutionContext(task)
+			control.Branch(debug.IsDebugEnabled(),
+				instancesteps.QueryAndUpdateEngineVersion,          // Query the engine version via command. (DEBUG)
+				instancesteps.CheckConnectivityAndSetEngineVersion, // Updates the engine version by accessing directly.
+			)(task)
 			instancesteps.UpdatePhaseTemplate(polardbxv1xstore.PhaseRunning, true)(task)
 		case polardbxv1xstore.StageUpdate:
 			instancesteps.GetParametersRoleMap(task)
@@ -430,6 +462,18 @@ func (r *GalaxyReconciler) newReconcileTask(rc *xstorev1reconcile.Context, xstor
 			instancesteps.EnableElection(task)
 			instancesteps.UpdatePhaseTemplate(polardbxv1xstore.PhaseRunning, true)(task)
 		}
+	case polardbxv1xstore.PhaseTdeOpening:
+		instancesteps.CreateTdeConfigMap(task)
+		instancesteps.UpdateXStoreConfigMapForTde(task)
+		instancesteps.SetGlobalVariables(task)
+		// Sync my.cnf from my.cnf.override
+		instancesteps.UpdateMycnfParameters(task)
+		instancesteps.CloseXStoreUpdatePhase(task)
+		instancesteps.UpdateTdeStatus(task)
+		instancesteps.RestartingDNs(task)
+		instancesteps.GetRestartingPods(task)
+		instancesteps.UpdatePhaseTemplate(polardbxv1xstore.PhaseRestarting, true)(task)
+
 	case polardbxv1xstore.PhaseFailed:
 		log.Info("Failed.")
 	case polardbxv1xstore.PhaseUnknown:

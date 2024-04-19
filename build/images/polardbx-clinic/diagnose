@@ -1,0 +1,18 @@
+#!/bin/bash
+
+
+namespace=default
+if [ -n "$1" ];then
+  namespace=$1
+fi
+
+echo "namespace:$namespace"
+
+rm -fR /root/workspace/*
+
+sh /root/diagnose.sh -w workspace -n "$namespace" >/root/workspace/diagnose.log  2>&1 &
+
+echo "Begin to diagnose."
+echo "You can exit this terminal, and wait the pod to be ready."
+echo "Then run the following command to download the diagnose files."
+echo "kubectl -n polardbx-operator-system cp /root/workspace/polardbx-diagnose.tar.gz polardbx-diagnose.tar.gz"
