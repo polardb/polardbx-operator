@@ -317,6 +317,45 @@ func (r *RestoreBinlog) SortSources() {
 	}
 }
 
+func (r *RestoreBinlog) SearchByTimestampAndIndex() error {
+	r.SortSources()
+	result := make([]BinlogSource, 0)
+	var preBinlogSource *BinlogSource
+	for _, binlogSource := range r.Sources {
+		reader, err := binlogSource.OpenStream()
+		if reader == nil {
+			if err == nil {
+				err = errors.New("")
+			}
+			return errors.Wrap(err, fmt.Sprintf("failed to get reader, binlog sources=%s", binlogSource.String()))
+		}
+		reader.Close()
+		if r.StartIndex > binlogSource.StartIndex {
+			preBinlogSource = binlogSource.Copy()
+			continue
+		}
+		if r.Timestamp < binlogSource.Timestamp {
+			break
+		}
+		if r.StartIndex <= binlogSource.StartIndex {
+			if r.StartIndex < binlogSource.StartIndex && len(result) == 0 {
+				if preBinlogSource == nil && len(result) == 0 {
+					return errors.New("startIndex is smaller than binlog start index")
+				}
+				result = append(result, *preBinlogSource)
+			}
+			result = append(result, binlogSource)
+			preBinlogSource = nil
+		}
+	}
+
+	if len(result) == 0 && preBinlogSource != nil && preBinlogSource.StartIndex <= r.StartIndex {
+		result = append(result, *preBinlogSource)
+	}
+	r.ResultSources = result
+	return nil
+
+}
 func (r *RestoreBinlog) SearchByTimestamp() error {
 	r.SortSources()
 	result := make([]BinlogSource, 0)

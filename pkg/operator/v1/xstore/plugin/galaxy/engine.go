@@ -25,4 +25,5 @@ import (
 func init() {
 	plugin.RegisterXStoreReconciler(galaxy.Engine, &reconcilers.GalaxyReconciler{})
 	plugin.RegisterXStoreBackupReconciler(galaxy.Engine, &reconcilers.GalaxyBackupReconciler{})
+	plugin.RegisterXStoreBackupBinlogReconciler(galaxy.Engine, &reconcilers.GalaxyBackupBinlogReconciler{})
 }

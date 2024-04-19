@@ -102,10 +102,6 @@ type WatchDriverOptions struct {
 }
 
 func NewConfigWatchDriver(loader loader.Loader, parser ParseFunc, opts WatchDriverOptions) WatchDriver {
-	if opts.Logger == nil {
-		opts.Logger = logr.DiscardLogger{}
-	}
-
 	return &watchDriver{
 		logger:   opts.Logger,
 		loader:   loader,

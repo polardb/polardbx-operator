@@ -16,7 +16,7 @@ Please refer to the [CHANGELOG](./CHANGELOG.md) for the notable changes for each
 Refer to the documentations for more details, such as CRD definitions and operation guides.
 
 + [简体中文](https://doc.polardbx.com/quickstart/topics/quickstart-k8s.html)
-+ English(TODO)
++ [English](https://doc.polardbx.com/en/quickstart/topics/quickstart-k8s.html)
 
 如对文档有疑问，可提Issue或者Pull Request到[文档仓库](https://github.com/polardb/polardbx-operator-docs)
 

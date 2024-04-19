@@ -11,4 +11,7 @@ data:
       rootDirectories:
         - {{ .Values.node.volumes.data }}/xstore
         - {{ .Values.node.volumes.log }}/xstore
+    cGroupControlConfig:
+      cpu_set_strategy: {{ .Values.hostPathFileService.cpuBind.strategy }}
+      
 

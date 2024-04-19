@@ -353,7 +353,7 @@ func transformIntoStorageInfos(rc *polardbxreconcile.Context, polardbx *polardbx
 		})
 
 		// Add readonly pod cluster ip service, since CN will not fetch it
-		if readonly && polardbx.Status.ReadonlyStorageInfoHash == "" {
+		if readonly {
 			nodeSets := xstore.Spec.Topology.NodeSets
 			for index, nodeSet := range nodeSets {
 				podName := xstoreconvention.NewPodName(xstore, &nodeSet, index)
@@ -415,7 +415,6 @@ var EnableDNs = polardbxreconcile.NewStepBinder("EnableDNs",
 		if err != nil {
 			return flow.Error(err, "Unable to get GMS manager.")
 		}
-
 		err = mgr.EnableStorageNodes(storageInfos...)
 		if err != nil {
 			return flow.Error(err, "Unable to enable storage nodes in GMS.")

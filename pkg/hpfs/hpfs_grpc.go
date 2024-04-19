@@ -24,6 +24,7 @@ import (
 	"github.com/alibaba/polardbx-operator/pkg/hpfs/backupbinlog"
 	"github.com/alibaba/polardbx-operator/pkg/hpfs/common"
 	"github.com/alibaba/polardbx-operator/pkg/hpfs/config"
+	"math"
 	"os"
 	"os/exec"
 	"os/user"
@@ -43,6 +44,7 @@ import (
 	"github.com/alibaba/polardbx-operator/pkg/hpfs/proto"
 	"github.com/alibaba/polardbx-operator/pkg/hpfs/remote"
 	"github.com/alibaba/polardbx-operator/pkg/hpfs/task"
+	polarxMap "github.com/alibaba/polardbx-operator/pkg/util/map"
 )
 
 const (
@@ -392,6 +394,26 @@ func (r *rpcService) UploadFiles(ctx context.Context, request *proto.UploadReque
 }
 
 func (r *rpcService) DeleteRemoteFile(ctx context.Context, request *proto.DeleteRemoteFileRequest) (*proto.DeleteRemoteFileResponse, error) {
+	// Target file path must be provided.
+	if request.Target.Path == "" {
+		return &proto.DeleteRemoteFileResponse{Status: r.invalid("target path can not be empty")}, nil
+	}
+
+	// If both sink type and name provided, target info will be overwritten.
+	if request.SinkType != "" && request.SinkName != "" {
+		err, params, auth, fileServiceName, sink := GetFileServiceParam(request.SinkName, request.SinkType)
+		if err != nil {
+			return &proto.DeleteRemoteFileResponse{Status: r.invalid(err.Error())}, nil
+		}
+
+		request.Target = &proto.RemoteFsEndpoint{
+			Protocol: fileServiceName,
+			Path:     path.Join(sink.RootPath, request.Target.Path), // Empty rootPath has no side effects
+			Auth:     auth,
+			Other:    polarxMap.MergeMap(request.Target.Other, params, true).(map[string]string),
+		}
+	}
+
 	fs, err := remote.GetFileService(request.Target.Protocol)
 	if err != nil {
 		return &proto.DeleteRemoteFileResponse{Status: r.fail(err)}, nil
@@ -931,7 +953,7 @@ func (r *rpcService) ListRemoteBinlogList(ctx context.Context, request *proto.Li
 	if sink.RootPath != "" && !strings.HasPrefix(xstoreBinlogDir, "/") {
 		xstoreBinlogDir = filepath.Join(sink.RootPath, xstoreBinlogDir)
 	}
-	params["deadline"] = strconv.FormatInt(time.Now().Unix()+3600, 10)
+	params["deadline"] = strconv.FormatInt(math.MaxInt64, 10)
 	ft, err := fileService.ListAllFiles(ctx, xstoreBinlogDir, auth, params)
 	if err == nil {
 		err = ft.Wait()

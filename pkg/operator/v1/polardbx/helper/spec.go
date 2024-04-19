@@ -85,3 +85,10 @@ func IsParameterChanged(polardbxParameter *polardbxv1.PolarDBXParameter) bool {
 
 	return parameterChanges || clusterChanges || templateChanges
 }
+
+func IsTdeOpen(polardbx *polardbxv1.PolarDBXCluster) bool {
+	if polardbx.Spec.TDE.Enable && !polardbx.Status.TdeStatus {
+		return true
+	}
+	return false
+}

@@ -60,3 +60,9 @@ type Condition struct {
 	// +optional
 	Message string `json:"message,omitempty"`
 }
+
+// PitrStatus represents the status ot pitr restore
+type PitrStatus struct {
+	PrepareJobEndpoint string `json:"prepareJobEndpoint,omitempty"`
+	Job                string `json:"job,omitempty"`
+}

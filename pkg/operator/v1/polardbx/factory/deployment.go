@@ -18,6 +18,7 @@ package factory
 
 import (
 	"fmt"
+	"github.com/alibaba/polardbx-operator/pkg/k8s/helper/selector"
 	dictutil "github.com/alibaba/polardbx-operator/pkg/util/dict"
 	maputil "github.com/alibaba/polardbx-operator/pkg/util/map"
 	"github.com/alibaba/polardbx-operator/pkg/util/math"
@@ -323,8 +324,13 @@ do
 done
 `
 
+	columnarServerPostStartScript = `if [[ ! -f /usr/bin/mya ]]; then 
+	echo '%s "$@"' > /usr/bin/mya && chmod +x /usr/bin/mya && ln -sf /usr/bin/mya /usr/bin/ctmeta;
+fi
+`
+
 	columnarStartCmd = `
-sh /home/admin/entrypoint.sh
+sh /home/admin/app.sh
 while [ "debug" == $(cat /etc/podinfo/runmode) ]
 do
 	echo "debug mode"
@@ -360,6 +366,7 @@ func (f *objectFactory) newDeployment4CN(group string, mr *matchingRule, mustSta
 			return nil, err
 		}
 	}
+	nodeSelector = f.updateNodeSelectorForExclusive(nodeSelector, polardbx.Spec.Exclusive)
 	affinity := f.tryScatterAffinityForStatelessDeployment(
 		convention.ConstLabelsWithRole(polardbx, polardbxmeta.RoleCN),
 		nodeSelector,
@@ -422,7 +429,7 @@ func (f *objectFactory) newDeployment4CN(group string, mr *matchingRule, mustSta
 		Args:         []string{cnStartCmd},
 		VolumeMounts: volumeFactory.NewVolumeMountsForCNEngine(),
 		Lifecycle: &corev1.Lifecycle{
-			PostStart: &corev1.Handler{
+			PostStart: &corev1.LifecycleHandler{
 				Exec: &corev1.ExecAction{
 					Command: []string{"sudo", "/bin/bash", "-c", fmt.Sprintf(cnServerPostStartScript,
 						ports.AccessPort,
@@ -461,7 +468,7 @@ func (f *objectFactory) newDeployment4CN(group string, mr *matchingRule, mustSta
 			{Protocol: corev1.ProtocolTCP, Name: "probe", ContainerPort: int32(ports.ProbePort)},
 		},
 		LivenessProbe: &corev1.Probe{
-			Handler: corev1.Handler{
+			ProbeHandler: corev1.ProbeHandler{
 				HTTPGet: &corev1.HTTPGetAction{
 					Path: "/liveness",
 					Port: intstr.FromString("probe"),
@@ -642,6 +649,7 @@ func (f *objectFactory) newDeployment4CDC(group string, mr *matchingRule, mustSt
 			return nil, err
 		}
 	}
+	nodeSelector = f.updateNodeSelectorForExclusive(nodeSelector, polardbx.Spec.Exclusive)
 	affinity := f.tryScatterAffinityForStatelessDeployment(
 		convention.ConstLabelsWithRole(polardbx, polardbxmeta.RoleCDC),
 		nodeSelector,
@@ -675,7 +683,7 @@ func (f *objectFactory) newDeployment4CDC(group string, mr *matchingRule, mustSt
 		},
 		VolumeMounts: volumeFactory.NewVolumeMountsForCDCEngine(),
 		Lifecycle: &corev1.Lifecycle{
-			PostStart: &corev1.Handler{
+			PostStart: &corev1.LifecycleHandler{
 				Exec: &corev1.ExecAction{
 					Command: []string{"sudo", "bash", "-c", cdcServerPostStartScript},
 				},
@@ -697,7 +705,7 @@ func (f *objectFactory) newDeployment4CDC(group string, mr *matchingRule, mustSt
 			{Protocol: corev1.ProtocolTCP, Name: "probe", ContainerPort: int32(ports.GetProbePort())},
 		},
 		LivenessProbe: &corev1.Probe{
-			Handler: corev1.Handler{
+			ProbeHandler: corev1.ProbeHandler{
 				HTTPGet: &corev1.HTTPGetAction{
 					Path: "/liveness",
 					Port: intstr.FromString("probe"),
@@ -866,6 +874,7 @@ func (f *objectFactory) newDeployment4Columnar(group string, mr *matchingRule, m
 			return nil, err
 		}
 	}
+	nodeSelector = f.updateNodeSelectorForExclusive(nodeSelector, polardbx.Spec.Exclusive)
 	affinity := f.tryScatterAffinityForStatelessDeployment(
 		convention.ConstLabelsWithRole(polardbx, polardbxmeta.RoleColumnar),
 		nodeSelector,
@@ -895,6 +904,15 @@ func (f *objectFactory) newDeployment4Columnar(group string, mr *matchingRule, m
 		Resources:       *template.Resources.DeepCopy(),
 		VolumeMounts:    volumeFactory.NewVolumeMountsForColumnarEngine(),
 		SecurityContext: k8shelper.NewSecurityContext(config.Cluster().ContainerPrivileged()),
+		Lifecycle: &corev1.Lifecycle{
+			PostStart: &corev1.LifecycleHandler{
+				Exec: &corev1.ExecAction{
+					Command: []string{"sudo", "/bin/bash", "-c", fmt.Sprintf(columnarServerPostStartScript,
+						fmt.Sprintf("mysql -h%s -P%d -u%s -p%s -D%s", gmsConn.Host, gmsConn.Port, gmsConn.User, gmsConn.Passwd, gms.MetaDBName),
+					)},
+				},
+			},
+		},
 	}
 
 	containers := []corev1.Container{engineContainer}
@@ -1082,4 +1100,20 @@ func SplitMatchRules(matchRules map[string]matchingRule, replicasGroups ...int) 
 		}
 	}
 	return
+}
+func (f *objectFactory) updateNodeSelectorForExclusive(nodeSelector *corev1.NodeSelector, exclusive bool) *corev1.NodeSelector {
+	if nodeSelector == nil {
+		nodeSelector = &corev1.NodeSelector{}
+	}
+	nodeSelectorOp := corev1.NodeSelectorOpNotIn
+	if exclusive {
+		nodeSelectorOp = corev1.NodeSelectorOpIn
+	}
+	isolateCpuNodeSelectorRequirement := corev1.NodeSelectorRequirement{
+		Key:      polardbxmeta.LabelIsolateCpu,
+		Operator: nodeSelectorOp,
+		Values:   []string{"true"},
+	}
+	nodeSelector = selector.AddNodeSelectorMatchExpressionRequirement(nodeSelector, isolateCpuNodeSelectorRequirement)
+	return nodeSelector
 }

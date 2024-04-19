@@ -28,6 +28,8 @@ rules:
   - secrets
   - pods
   - pods/exec
+  - pods/log
+  - events
   verbs:
   - "*"
 - apiGroups:
@@ -101,6 +103,8 @@ rules:
   - secrets
   - pods
   - pods/exec
+  - pods/log
+  - events
   verbs:
   - "*"
 - apiGroups:

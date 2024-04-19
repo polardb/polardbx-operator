@@ -63,6 +63,10 @@ func (sc *SharedChannel) Unblock() {
 	sc.Status = ChannelOpen
 }
 
+func (sc *SharedChannel) Block() {
+	sc.Status = ChannelBlocked
+}
+
 func (sc *SharedChannel) UpdateLastBackupBinlogIndex(commitIndex *int64) {
 	sc.LastBackupBinlogIndex = commitIndex
 }

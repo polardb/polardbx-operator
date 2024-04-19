@@ -63,7 +63,55 @@ func (o *aliyunOssFs) DeleteFile(ctx context.Context, path string, auth, params 
 	if err != nil {
 		return fmt.Errorf("failed to open oss bucket: %w", err)
 	}
-	return bucket.DeleteObject(path)
+
+	recursive, err := strconv.ParseBool(params["recursive"])
+	if err != nil {
+		return fmt.Errorf("invalid value for param 'recursive': %w", err)
+	}
+	if !recursive {
+		// Only tend to delete a single object
+		return bucket.DeleteObject(path)
+	}
+
+	// Path points to a single object
+	isFile, err := bucket.IsObjectExist(path)
+	if err != nil {
+		return fmt.Errorf("failed to check object: %w", err)
+	}
+	if isFile {
+		return bucket.DeleteObject(path)
+	}
+
+	// Path may point to a directory (or does not exist)
+	if path != "" && path[len(path)-1] != '/' { // The path may be trimmed
+		path += "/"
+	}
+	marker := oss.Marker("")
+	prefix := oss.Prefix(path)
+	for {
+		result, err := bucket.ListObjects(prefix, marker)
+		if err != nil {
+			return fmt.Errorf("failed to list object with prefix '%s', error: '%v'", path, err)
+		}
+
+		objectKeys := make([]string, 0, len(result.Objects))
+		for _, object := range result.Objects {
+			objectKeys = append(objectKeys, object.Key)
+		}
+
+		if len(objectKeys) > 0 { // Check to avoid 404 error
+			_, err := bucket.DeleteObjects(objectKeys)
+			if err != nil {
+				return fmt.Errorf("failed to delete objects '%s', error: '%v'", objectKeys, err)
+			}
+		}
+
+		if !result.IsTruncated { // Finish listing
+			break
+		}
+		marker = oss.Marker(result.NextMarker)
+	}
+	return nil
 }
 
 func (o aliyunOssFs) DeleteExpiredFile(ctx context.Context, path string, auth, params map[string]string) (FileTask, error) {

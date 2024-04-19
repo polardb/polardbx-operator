@@ -17,19 +17,28 @@ limitations under the License.
 package instance
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	polardbxv1 "github.com/alibaba/polardbx-operator/api/v1"
 	"github.com/alibaba/polardbx-operator/api/v1/polardbx"
+	polardbxv1polardbx "github.com/alibaba/polardbx-operator/api/v1/polardbx"
+	polardbxv1xstore "github.com/alibaba/polardbx-operator/api/v1/xstore"
 	xstorev1 "github.com/alibaba/polardbx-operator/api/v1/xstore"
+	"github.com/alibaba/polardbx-operator/pkg/hpfs/filestream"
 	"github.com/alibaba/polardbx-operator/pkg/k8s/control"
 	k8shelper "github.com/alibaba/polardbx-operator/pkg/k8s/helper"
+	"github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/factory"
 	polardbxmeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/meta"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/convention"
+	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/meta"
 	xstoremeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/meta"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/plugin/common/channel"
 	xstorev1reconcile "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/reconcile"
 	"github.com/alibaba/polardbx-operator/pkg/util/name"
+	polarxPath "github.com/alibaba/polardbx-operator/pkg/util/path"
+	"github.com/google/uuid"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -50,7 +59,154 @@ type RestoreJobContext struct {
 	Sink                string                 `json:"sink,omitempty"`
 	PitrEndpoint        string                 `json:"pitrEndpoint,omitempty"`
 	PitrXStore          string                 `json:"pitrXStore,omitempty"`
+	PxcXStore           *bool                  `json:"pxcXStore,omitempty"`
+	KeyringPath         string                 `json:"keyringPath,omitempty"`
+	KeyringFilePath     string                 `json:"keyringFilePath,omitempty"`
 }
+
+// helper function to download metadata backup from remote storage
+func downloadMetadataBackup(rc *xstorev1reconcile.Context) (*factory.MetadataBackup, error) {
+	xstore := rc.MustGetXStore()
+	filestreamClient, err := rc.GetFilestreamClient()
+	filestreamClient.InitWaitChan()
+	if err != nil {
+		return nil, errors.New("failed to get filestream client, error: " + err.Error())
+	}
+	filestreamAction, err := polardbxv1polardbx.NewBackupStorageFilestreamAction(xstore.Spec.Restore.StorageProvider.StorageName)
+
+	downloadActionMetadata := filestream.ActionMetadata{
+		Action:    filestreamAction.Download,
+		Sink:      xstore.Spec.Restore.StorageProvider.Sink,
+		RequestId: uuid.New().String(),
+		Filename:  polarxPath.NewPathFromStringSequence(xstore.Spec.Restore.From.BackupSetPath, "metadata"),
+	}
+	var downloadBuffer bytes.Buffer
+	recvBytes, err := filestreamClient.Download(&downloadBuffer, downloadActionMetadata)
+	if err != nil {
+		return nil, errors.New("download metadata failed, error: " + err.Error())
+	}
+	if recvBytes == 0 {
+		return nil, errors.New("no byte received, please check storage config and target path")
+	}
+	metadata := &factory.MetadataBackup{}
+	err = json.Unmarshal(downloadBuffer.Bytes(), &metadata)
+	if err != nil {
+		return nil, errors.New("failed to parse metadata, error: " + err.Error())
+	}
+	return metadata, nil
+}
+
+func NewDummyXstoreBackup(rc *xstorev1reconcile.Context, metadata *factory.MetadataBackup) (*polardbxv1.XStoreBackup, error) {
+	xstore := rc.MustGetXStore()
+
+	if metadata == nil {
+		return nil, errors.New("not enough information to create dummy xstore backup")
+	}
+	xstoreMetadata := metadata.XstoreMetadataList[0]
+	xstoreBackup := &polardbxv1.XStoreBackup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name.NewSplicedName(
+				name.WithTokens(metadata.BackupSetName, "dummy"),
+				name.WithPrefix("dummy-xstore-backup"),
+			),
+			Namespace: xstore.Namespace,
+			Annotations: map[string]string{
+				meta.AnnotationDummyBackup: "true",
+			},
+		},
+		Spec: polardbxv1.XStoreBackupSpec{
+			XStore: polardbxv1.XStoreReference{
+				Name: xstoreMetadata.Name,
+				UID:  xstoreMetadata.UID,
+			},
+			StorageProvider: *xstore.Spec.Restore.StorageProvider,
+		},
+		Status: polardbxv1.XStoreBackupStatus{
+			Phase:          polardbxv1.XStoreBackupDummy,
+			CommitIndex:    xstoreMetadata.LastCommitIndex,
+			BackupRootPath: metadata.BackupRootPath,
+			TargetPod:      xstoreMetadata.TargetPod,
+		},
+	}
+	return xstoreBackup, nil
+}
+
+func NewDummySecretBackup(rc *xstorev1reconcile.Context, metadata *factory.MetadataBackup) (*corev1.Secret, error) {
+	xstore := rc.MustGetXStore()
+	var dummySecretName string
+	var sourceSecrets *[]polardbxv1polardbx.PrivilegeItem
+	accounts := make(map[string]string)
+	dummySecretName = name.NewSplicedName(
+		name.WithTokens(metadata.BackupSetName, "dummy"),
+		name.WithPrefix("dummy-xstore-secret"),
+	)
+	xstoreMetadata := metadata.XstoreMetadataList[0]
+	sourceSecrets = &xstoreMetadata.Secrets
+	for _, item := range *sourceSecrets {
+		accounts[item.Username] = item.Password
+	}
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      dummySecretName,
+			Namespace: xstore.Namespace,
+			Labels:    convention.ConstLabels(xstore),
+		},
+		StringData: accounts,
+	}, nil
+
+}
+
+var CreateDummyBackupObject = xstorev1reconcile.NewStepBinder("CreateDummyBackupObject",
+	func(rc *xstorev1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+		xstore := rc.MustGetXStore()
+		if xstore.Spec.Restore.BackupSet != "" {
+			return flow.Continue("Backup set is specified, no need to create dummy backup object")
+		}
+		if xstore.Spec.Restore.From.BackupSetPath == "" {
+			return flow.Continue("BackupSetPath is not specified, no need to create dummy backup object")
+		}
+
+		metadata, err := downloadMetadataBackup(rc)
+
+		if err != nil {
+			UpdatePhaseTemplate(polardbxv1xstore.PhaseFailed)
+			return flow.Error(err, "Failed to download metadata from backup set path",
+				"path", xstore.Spec.Restore.From.BackupSetPath)
+		}
+
+		// Create dummy xstore backup
+		xstorebackup, err := NewDummyXstoreBackup(rc, metadata)
+		if err != nil {
+			return flow.Error(err, "Failed to create dummy xstore backup")
+		}
+		xstorebackupStatus := xstorebackup.Status.DeepCopy()
+		err = rc.SetControllerRefAndCreate(xstorebackup)
+		if err != nil {
+			return flow.Error(err, "Failed to create dummy xstore backup")
+		}
+		xstorebackup.Status = *xstorebackupStatus
+
+		xstoreSecretBackup, err := NewDummySecretBackup(rc, metadata)
+		if err != nil {
+			return flow.Error(err, "Failed to new dummy xstore secret backup", "xstore", xstore.Name)
+		}
+		err = rc.SetControllerToOwnerAndCreate(xstorebackup, xstoreSecretBackup)
+		if err != nil {
+			return flow.Error(err, "Failed to create dummy xstore secret backup", "xstore", xstore.Name)
+		}
+
+		// Update status of xstore backup
+		err = rc.Client().Status().Update(rc.Context(), xstorebackup)
+		if err != nil {
+			return flow.Error(err, "Failed to update dummy xstore backup status")
+		}
+
+		// The dummy backup object will be used in the later restore by setting it as backup set
+		xstore.Spec.Restore.BackupSet = xstorebackup.Name
+		xstore.Spec.Restore.From.XStoreName = xstorebackup.Spec.XStore.Name
+		rc.MarkXStoreChanged()
+		return flow.Continue("Dummy backup object created!")
+	})
 
 var CheckXStoreRestoreSpec = xstorev1reconcile.NewStepBinder("CheckXStoreRestoreSpec",
 	func(rc *xstorev1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
@@ -75,6 +231,22 @@ var CheckXStoreRestoreSpec = xstorev1reconcile.NewStepBinder("CheckXStoreRestore
 			}
 		}
 		return flow.Pass()
+	})
+
+var LoadLatestBackupSetByTime = xstorev1reconcile.NewStepBinder("LoadLatestBackupSetByTime",
+	func(rc *xstorev1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+		xstore := rc.MustGetXStore()
+		if xstore.Spec.Restore.BackupSet == "" || len(xstore.Spec.Restore.BackupSet) == 0 {
+			backup, err := rc.GetLastCompletedXStoreBackup(map[string]string{
+				xstoremeta.LabelName: xstore.Spec.Restore.From.XStoreName,
+			}, rc.MustParseRestoreTime())
+			if err != nil {
+				return flow.Error(err, "failed to get last completed xstore backup")
+			}
+			xstore.Spec.Restore.BackupSet = backup.Name
+			rc.MarkXStoreChanged()
+		}
+		return flow.Continue("LoadLatestBackupSetByTime continue")
 	})
 
 var StartRestoreJob = xstorev1reconcile.NewStepBinder("StartRestoreJob",
@@ -221,7 +393,20 @@ var PrepareRestoreJobContext = xstorev1reconcile.NewStepBinder("PrepareRestoreJo
 			backupRootPath, polardbxmeta.BinlogBackupPath, fromXStoreName)
 		cpFilePath := fmt.Sprintf("%s/%s/%s",
 			backupRootPath, polardbxmeta.BinlogOffsetPath, polardbxmeta.SeekCpName)
+		_, pxcXStore := xstore.Labels[polardbxmeta.LabelName]
+		keyringPath := ""
+		keyringFilePath := ""
 
+		//DN或标准版 且TDE开启恢复的时候下载keyring
+		if xstore.Status.TdeStatus == true && xstore.Labels[polardbxmeta.LabelRole] != polardbxmeta.RoleGMS {
+			tdeCm, err := rc.GetXStoreConfigMap(convention.ConfigMapTypeTde)
+			if err != nil {
+				return flow.Error(err, "Unable to get tde config map.")
+			}
+			keyringPath = fmt.Sprintf("%s/%s/%s",
+				backupRootPath, polardbxmeta.KeyringPath, backup.Spec.XStore.Name)
+			keyringFilePath = tdeCm.Data[convention.KeyringPath]
+		}
 		// Save.
 		if err := rc.SaveTaskContext(restoreJobKey, &RestoreJobContext{
 			BackupFilePath:      fullBackupPath,
@@ -234,6 +419,9 @@ var PrepareRestoreJobContext = xstorev1reconcile.NewStepBinder("PrepareRestoreJo
 			Sink:                backup.Spec.StorageProvider.Sink,
 			PitrEndpoint:        xstore.Spec.Restore.PitrEndpoint,
 			PitrXStore:          xstore.Spec.Restore.From.XStoreName,
+			PxcXStore:           &pxcXStore,
+			KeyringPath:         keyringPath,
+			KeyringFilePath:     keyringFilePath,
 		}); err != nil {
 			return flow.Error(err, "Unable to save job context for restore!")
 		}
@@ -369,3 +557,20 @@ var RemoveRecoverJob = xstorev1reconcile.NewStepBinder("RemoveRecoverJob",
 		}
 		return flow.Continue("Recover job removed!")
 	})
+
+var CleanDummyBackupObject = xstorev1reconcile.NewStepBinder("CleanDummyBackupObject",
+	func(rc *xstorev1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+		xstore := rc.MustGetXStore()
+		xstoreBackup, err := rc.GetXStoreBackupByName(xstore.Spec.Restore.BackupSet)
+		if client.IgnoreNotFound(err) != nil {
+			return flow.Error(err, "Failed to get polardbx backup", "backup set", xstoreBackup.Name)
+		}
+		if xstoreBackup == nil || xstoreBackup.Annotations[xstoremeta.AnnotationDummyBackup] != "true" {
+			return flow.Continue("Dummy backup object not exists, just skip")
+		}
+		if err := rc.Client().Delete(rc.Context(), xstoreBackup); err != nil {
+			return flow.Error(err, "Failed to delete dummy backup object")
+		}
+		return flow.Continue("Dummy backup object cleaned!")
+	},
+)

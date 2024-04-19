@@ -86,6 +86,7 @@ func (r *XStoreFollowerReconciler) Reconcile(ctx context.Context, request reconc
 func (r *XStoreFollowerReconciler) newReconcileTask(rc *xstorev1reconcile.FollowerContext, log logr.Logger) (*control.Task, error) {
 	task := control.NewTask()
 	xstoreFollower := rc.MustGetXStoreFollower()
+	xStore := rc.MustGetXStore()
 	defer followersteps.PersistentXStoreFollower(task, true)
 	followersteps.CheckDeletionStatusAndRedirect(task)
 	switch xstoreFollower.Status.Phase {
@@ -108,6 +109,9 @@ func (r *XStoreFollowerReconciler) newReconcileTask(rc *xstorev1reconcile.Follow
 		followersteps.CleanBackupJob(task)
 		followersteps.UpdatePhaseTemplate(xstore.FollowerPhaseBackupStart)(task)
 	case xstore.FollowerPhaseBackupStart:
+		control.When(followersteps.IsTdeOpen(xStore),
+			followersteps.StartBackupKeyringJob,
+			followersteps.MonitorCurrentJob)(task)
 		followersteps.StartBackupJob(task)
 		followersteps.UpdatePhaseTemplate(xstore.FollowerPhaseMonitorBackup)(task)
 	case xstore.FollowerPhaseMonitorBackup:
@@ -122,6 +126,9 @@ func (r *XStoreFollowerReconciler) newReconcileTask(rc *xstorev1reconcile.Follow
 		control.When(followersteps.IsNotLogger(xstoreFollower), followersteps.UpdatePhaseTemplate(xstore.FollowerPhaseRestore))(task)
 		control.When(!followersteps.IsNotLogger(xstoreFollower), followersteps.UpdatePhaseTemplate(xstore.FollowerPhaseLoggerRebuild))(task)
 	case xstore.FollowerPhaseRestore:
+		control.When(followersteps.IsTdeOpen(xStore),
+			followersteps.RestoreKeyringJob,
+			followersteps.MonitorCurrentJob)(task)
 		followersteps.PrepareRestoreJob(task)
 		followersteps.MonitorCurrentJob(task)
 		followersteps.MoveRestoreJob(task)

@@ -25,20 +25,6 @@ import (
 
 	"github.com/alibaba/polardbx-operator/pkg/operator/hint"
 
-	"github.com/go-logr/logr"
-	"golang.org/x/time/rate"
-	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/util/workqueue"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
-
 	polardbxv1 "github.com/alibaba/polardbx-operator/api/v1"
 	polardbxv1polardbx "github.com/alibaba/polardbx-operator/api/v1/polardbx"
 	"github.com/alibaba/polardbx-operator/pkg/debug"
@@ -55,6 +41,19 @@ import (
 	guidesteps "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/steps/instance/guide"
 	rebalancesteps "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/steps/instance/rebalance"
 	restartsteps "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/steps/instance/restart"
+	tdesteps "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/steps/instance/tde"
+	"github.com/go-logr/logr"
+	"golang.org/x/time/rate"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/workqueue"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 type PolarDBXReconciler struct {
@@ -150,78 +149,87 @@ func (r *PolarDBXReconciler) newReconcileTask(rc *polardbxreconcile.Context, pol
 		instancesteps.CreateServicesIfNotFound(task)
 		instancesteps.CreateConfigMapsIfNotFound(task)
 		commonsteps.InitializeParameterTemplate(task)
-
 		control.Branch(polardbx.Spec.Restore != nil,
 			commonsteps.TransferPhaseTo(polardbxv1polardbx.PhaseRestoring, true),
 			commonsteps.TransferPhaseTo(polardbxv1polardbx.PhaseCreating, true),
 		)(task)
 
 	case polardbxv1polardbx.PhaseCreating, polardbxv1polardbx.PhaseRestoring:
-		// Update every time.
-		commonsteps.UpdateSnapshotAndObservedGeneration(task)
-		instancesteps.SyncDnReplicasAndCheckControllerRef(task)
+		switch polardbx.Status.Stage {
+		case polardbxv1polardbx.StageEmpty:
+			commonsteps.UpdateTdeStatus(task)
 
-		// Create readonly polardbx in InitReadonly list
-		instancesteps.CreateOrReconcileReadonlyPolardbx(task)
+			instancesteps.SyncDnReplicasAndCheckControllerRef(task)
+			// Update every time.
+			commonsteps.UpdateSnapshotAndObservedGeneration(task)
 
-		control.When(pitr.IsPitrRestore(polardbx),
-			pitr.PreparePitrBinlogs,
-			pitr.WaitPreparePitrBinlogs)(task)
+			// Create readonly polardbx in InitReadonly list
+			instancesteps.CreateOrReconcileReadonlyPolardbx(task)
 
-		// Create GMS and DNs.
-		instancesteps.CreateOrReconcileGMS(task)
-		instancesteps.CreateOrReconcileDNs(task)
+			control.When(pitr.IsPitrRestore(polardbx),
+				pitr.PreparePitrBinlogs,
+				pitr.WaitPreparePitrBinlogs)(task)
 
-		// After GMS' ready, do initialization.
-		control.Block(
-			instancesteps.WaitUntilGMSReady,
-			control.Branch(helper.IsPhaseIn(polardbx, polardbxv1polardbx.PhaseCreating),
-				gmssteps.InitializeSchemas,
-				gmssteps.RestoreSchemas,
-			),
-			control.When(!readonly,
-				gmssteps.CreateAccounts,
-				gmssteps.SyncDynamicConfigs(true),
-			),
-		)(task)
+			// Create GMS and DNs.
+			instancesteps.CreateOrReconcileGMS(task)
+			instancesteps.CreateOrReconcileDNs(task)
 
-		// When all DNs' are ready, enable them in GMS.
-		control.Block(
-			instancesteps.WaitUntilDNsReady,
-			gmssteps.EnableDNs,
-		)(task)
+			// After GMS' ready, do initialization.
+			control.Block(
+				instancesteps.WaitUntilGMSReady,
+				control.Branch(helper.IsPhaseIn(polardbx, polardbxv1polardbx.PhaseCreating),
+					gmssteps.InitializeSchemas,
+					gmssteps.RestoreSchemas,
+				),
+				control.When(!readonly,
+					gmssteps.CreateAccounts,
+					gmssteps.SyncDynamicConfigs(true),
+				),
+			)(task)
 
-		// If DN's replicas changed, we must remove the trailing DNs and disable them.
-		control.Block(
-			gmssteps.DisableTrailingDNs,
-			instancesteps.RemoveTrailingDNs,
-		)(task)
+			// When all DNs' are ready, enable them in GMS.
+			control.Block(
+				instancesteps.WaitUntilDNsReady,
+				gmssteps.EnableDNs,
+			)(task)
 
-		// Then all the stateless components.
-		control.Block(
-			control.When(readonly,
-				instancesteps.WaitUntilPrimaryCNDeploymentsRolledOut,
-			),
-			instancesteps.CreateOrReconcileCNs,
-			instancesteps.CreateOrReconcileCDCs,
-			instancesteps.WaitUntilCNCDCPodsReady,
-			instancesteps.CreateOrReconcileColumnars,
-			instancesteps.WaitUntilCNDeploymentsRolledOut,
-			instancesteps.WaitUntilCDCDeploymentsRolledOut,
-			instancesteps.WaitUntilColumnarDeploymentsRolledOut,
-			instancesteps.CreateFileStorage,
-		)(task)
+			// If DN's replicas changed, we must remove the trailing DNs and disable them.
+			control.Block(
+				gmssteps.DisableTrailingDNs,
+				instancesteps.RemoveTrailingDNs,
+			)(task)
 
-		// Go to clean works.
-		control.Block(
-			control.When(!debug.IsDebugEnabled(), commonsteps.UpdateDisplayDetailedVersion),
-			control.When(polardbx.Status.Phase == polardbxv1polardbx.PhaseRestoring, commonsteps.CleanDummyBackupObject),
-			commonsteps.UpdateDisplayStorageSize,
-			control.When(pitr.IsPitrRestore(polardbx), pitr.CleanPreparePitrBinlogJob),
-		)(task)
+			// Then all the stateless components.
+			control.Block(
+				control.When(readonly,
+					instancesteps.WaitUntilPrimaryCNDeploymentsRolledOut,
+				),
+				instancesteps.CreateOrReconcileCNs,
+				instancesteps.CreateOrReconcileCDCs,
+				instancesteps.WaitUntilCNCDCPodsReady,
+				instancesteps.CreateOrReconcileColumnars,
+				instancesteps.WaitUntilCNDeploymentsRolledOut,
+				instancesteps.WaitUntilCDCDeploymentsRolledOut,
+				instancesteps.WaitUntilColumnarDeploymentsRolledOut,
+				instancesteps.CreateFileStorage,
+			)(task)
 
-		commonsteps.TransferPhaseTo(polardbxv1polardbx.PhaseRunning, true)(task)
+			// Go to clean works.
+			control.Block(
+				control.When(!debug.IsDebugEnabled(), commonsteps.UpdateDisplayDetailedVersion),
+				commonsteps.UpdateDisplayStorageSize,
+			)(task)
 
+			commonsteps.TransferStageTo(polardbxv1polardbx.StageClean, true)(task)
+		case polardbxv1polardbx.StageClean:
+			// Clean temp object related to restore
+			control.Block(
+				control.When(polardbx.Status.Phase == polardbxv1polardbx.PhaseRestoring, commonsteps.CleanDummyBackupObject),
+				control.When(pitr.IsPitrRestore(polardbx), pitr.CleanPreparePitrBinlogJob),
+			)(task)
+
+			commonsteps.TransferPhaseTo(polardbxv1polardbx.PhaseRunning, true)(task)
+		}
 	case polardbxv1polardbx.PhaseRunning, polardbxv1polardbx.PhaseLocked:
 		// Schedule after 10 seconds.
 		defer control.ScheduleAfter(10*time.Second)(task, true)
@@ -255,6 +263,9 @@ func (r *PolarDBXReconciler) newReconcileTask(rc *polardbxreconcile.Context, pol
 			commonsteps.TransferPhaseTo(polardbxv1polardbx.PhaseUpgrading, true),
 		)(task)
 
+		control.When(helper.IsTdeOpen(polardbx),
+			commonsteps.TransferPhaseTo(polardbxv1polardbx.PhaseTdeOpening, true),
+		)(task)
 		// Always reconcile the stateless components (mainly for rebuilt).
 		instancesteps.CreateOrReconcileCNs(task)
 		instancesteps.CreateOrReconcileCDCs(task)
@@ -376,8 +387,15 @@ func (r *PolarDBXReconciler) newReconcileTask(rc *polardbxreconcile.Context, pol
 			restartsteps.RollingRestartPods,
 			restartsteps.RestartingPods,
 		)(task)
-
 		restartsteps.ClosePolarDBXRestartPhase(task)
+		commonsteps.TransferPhaseTo(polardbxv1polardbx.PhaseRunning, true)(task)
+	case polardbxv1polardbx.PhaseTdeOpening:
+		commonsteps.UpdateSnapshotAndObservedGeneration(task)
+		tdesteps.UpdateDNsTdeOpen(task)
+		control.Block(
+			instancesteps.WaitUntilDNsTdeReady,
+		)(task)
+		commonsteps.UpdateTdeStatus(task)
 		commonsteps.TransferPhaseTo(polardbxv1polardbx.PhaseRunning, true)(task)
 	case polardbxv1polardbx.PhaseFailed:
 	case polardbxv1polardbx.PhaseUnknown:
@@ -394,7 +412,7 @@ func (r *PolarDBXReconciler) reconcile(rc *polardbxreconcile.Context, polardbx *
 	return control.NewExecutor(log).Execute(rc, task)
 }
 
-func mapRequestsWhenStatelessPodDeletedOrFailed(object client.Object) []reconcile.Request {
+func mapRequestsWhenStatelessPodDeletedOrFailed(ctx context.Context, object client.Object) []reconcile.Request {
 	if polardbxName, ok := object.GetLabels()[polardbxmeta.LabelName]; ok {
 		pod := object.(*corev1.Pod)
 
@@ -439,7 +457,7 @@ func (r *PolarDBXReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&polardbxv1.PolarDBXParameter{}).
 		// Watches deleted or failed CN/CDC/Columnar Pods.
 		Watches(
-			&source.Kind{Type: &corev1.Pod{}},
+			&corev1.Pod{},
 			handler.EnqueueRequestsFromMapFunc(mapRequestsWhenStatelessPodDeletedOrFailed),
 		).
 		Complete(r)

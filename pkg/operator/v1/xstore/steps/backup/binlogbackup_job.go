@@ -50,6 +50,9 @@ func newBinlogBackupJob(xstoreBackup *xstorev1.XStoreBackup, targetPod *corev1.P
 	podSpec.Containers[0].Resources.Limits = nil
 	podSpec.Containers[0].Resources.Requests = nil
 	podSpec.Containers[0].Ports = nil
+	if podSpec.Containers[0].Lifecycle != nil {
+		podSpec.Containers[0].Lifecycle.PreStop = nil
+	}
 
 	// Replace system envs
 	replaceSystemEnvs(podSpec, targetPod)

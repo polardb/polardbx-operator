@@ -35,12 +35,12 @@ func SetupWebhooks(ctx context.Context, mgr ctrl.Manager, apiPath string) error 
 
 	// Mutate.
 	mgr.GetWebhookServer().Register(extension.GenerateMutatePath(apiPath, gvk),
-		extension.WithCustomMutator(&polardbxv1.PolarDBXClusterKnobs{}, NewSync(mgr.GetAPIReader(), mgr.GetLogger().WithName("webhook.mutate.polardbxclusterknobs"))),
+		extension.WithCustomMutator(&polardbxv1.PolarDBXClusterKnobs{}, NewSync(mgr.GetAPIReader(), mgr.GetLogger().WithName("webhook.mutate.polardbxclusterknobs")), mgr.GetScheme()),
 	)
 
 	// Validate.
 	mgr.GetWebhookServer().Register(extension.GenerateValidatePath(apiPath, gvk),
-		extension.WithCustomValidator(&polardbxv1.PolarDBXClusterKnobs{}, NewValidator()))
+		extension.WithCustomValidator(&polardbxv1.PolarDBXClusterKnobs{}, NewValidator(), mgr.GetScheme()))
 
 	return nil
 }

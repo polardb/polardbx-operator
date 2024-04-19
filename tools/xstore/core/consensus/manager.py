@@ -412,3 +412,9 @@ class AbstractConsensusManager(AbstractContextManager):
         """
          set readonly
         """
+
+    @abstractmethod
+    def start_xpaxos_replication(self):
+        """
+        Follower only. Start xpaxos replication.
+        """

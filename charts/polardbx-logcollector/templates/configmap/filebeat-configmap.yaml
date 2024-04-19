@@ -36,7 +36,7 @@ data:
                     pod_name: ${data.kubernetes.pod.name}
                     node_name: ${data.kubernetes.node.name}
                   paths:
-                    - {{ .Values.filebeat.hostEmplyDirPathPrefix }}/${data.kubernetes.pod.uid}/volumes/kubernetes.io~empty-dir/polardbx-log/*/slow.log
+                    - {{ .Values.filebeat.hostEmplyDirPathPrefix }}/${data.kubernetes.pod.uid}/volumes/kubernetes.io~empty-dir/polardbx-log/*/slow_detail.log
                 - type: log
                   fields:
                     log_type: cn_tddl_log

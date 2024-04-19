@@ -44,7 +44,7 @@ func (v *Validator) validateObject(ctx context.Context, obj *polardbxv1.PolarDBX
 	}
 
 	for _, p := range polarDBXParameterList.Items {
-		if p.Name != obj.Name && p.Labels[polardbxmeta.LabelName] == obj.ClusterName && p.Spec.TemplateName == obj.Spec.TemplateName {
+		if p.Name != obj.Name && p.Labels[polardbxmeta.LabelName] == obj.Spec.ClusterName && p.Spec.TemplateName == obj.Spec.TemplateName {
 			errList = append(errList, field.Required(field.NewPath("spec", "templateName"), "same cluster and parameter template only have one dynamic parameter."))
 		}
 	}

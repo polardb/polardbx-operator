@@ -36,9 +36,9 @@ type CustomValidator interface {
 }
 
 // WithCustomValidator creates a new Webhook for validating the provided type.
-func WithCustomValidator(obj runtime.Object, validator CustomValidator) *admission.Webhook {
+func WithCustomValidator(obj runtime.Object, validator CustomValidator, scheme *runtime.Scheme) *admission.Webhook {
 	return &admission.Webhook{
-		Handler: &validatorForType{object: obj, validator: validator},
+		Handler: &validatorForType{object: obj, validator: validator, decoder: admission.NewDecoder(scheme)},
 	}
 }
 
@@ -48,7 +48,7 @@ type validatorForType struct {
 	decoder   *admission.Decoder
 }
 
-var _ admission.DecoderInjector = &validatorForType{}
+var _ admission.Handler = &validatorForType{}
 
 // InjectDecoder injects the decoder into a validatingHandler.
 func (h *validatorForType) InjectDecoder(d *admission.Decoder) error {

@@ -101,7 +101,7 @@ func (f *flow) Logger() logr.Logger {
 }
 
 func (f *flow) logger() logr.Logger {
-	return logr.WithCallDepth(f.loggerF(), 1)
+	return f.loggerF().WithCallDepth(1)
 }
 
 func (f *flow) markBreak() {

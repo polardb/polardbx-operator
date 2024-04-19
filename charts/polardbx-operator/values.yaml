@@ -12,12 +12,13 @@ images:
   polardbxExporter: polardbx-exporter
   polardbxInit: polardbx-init
   polardbxJob: polardbx-job
+  polardbxClinic: polardbx-clinic
 
 # Default image tag. Use app version if not specified or 'latest' if useLatestImage is true.
-imageTag: v1.5.0
+imageTag: v1.6.0-beta
 
 # version will be written to pxc and xstore annotation 
-version: v1.5.0
+version: v1.6.0-beta
 
 # Uses the latest images for operator components.
 useLatestImage: false
@@ -27,6 +28,7 @@ imagePullPolicy: IfNotPresent
 
 # Image pull secrets of operator pods.
 imagePullSecrets:
+  - name: regcred
 
 # Default settings for PolarDB-X Cluster.
 clusterDefaults:
@@ -87,6 +89,9 @@ controllerManager:
       cpu: 100m
       memory: 50Mi
 
+  # Denote whether to use the same time zone as the host machine for the operator
+  useHostTimeZone: true
+
 # Settings for host path file service.
 hostPathFileService:
   name: polardbx-hpfs
@@ -103,10 +108,10 @@ hostPathFileService:
   sinks:
     - name: default
       type: s3
-      minioEndpoint: xxx
-      minioAccessKey: xxx
-      minioSecretKey: xxxxx
-      minioBucket: xxx
+      endpoint: xxx
+      accessKey: xxx
+      accessSecret: xxxxx
+      bucket: xxx
       useSSL: false
     - name: default
       type: oss
@@ -121,8 +126,8 @@ hostPathFileService:
       user: admin
       password: xxxx
       rootPath: /xxx
-
-
+  cpuBind:
+    strategy: auto
 
   resources:
     requests:
@@ -152,3 +157,12 @@ extension:
     images:
       store:
     security:
+      
+clinic:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 50Mi
+    limits:
+      cpu: 1
+      memory: 1Gi

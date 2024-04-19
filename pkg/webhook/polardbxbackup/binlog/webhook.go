@@ -21,6 +21,6 @@ func SetupWebhooks(ctx context.Context, mgr ctrl.Manager, apiPath string, config
 		extension.WithCustomValidator(&polardbxv1.PolarDBXBackupBinlog{},
 			polardbxbackup.NewPolarDBXBackupValidator(mgr.GetAPIReader(),
 				mgr.GetLogger().WithName("webhook.validate.polardbxbackupbinlog"),
-				configLoader)))
+				configLoader), mgr.GetScheme()))
 	return nil
 }

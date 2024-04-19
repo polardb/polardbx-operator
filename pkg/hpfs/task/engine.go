@@ -42,10 +42,11 @@ type runTask struct {
 }
 
 // Task status FSM:
-//     Pending -> Running -> Complete
-//                        -> Error
-//                        -> Canceling -> Cancel
-//             -> Cancel
+//
+//	Pending -> Running -> Complete
+//	                   -> Error
+//	                   -> Canceling -> Cancel
+//	        -> Cancel
 type Engine interface {
 	Recover() error
 	Get(traceId string) (*Task, error)

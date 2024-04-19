@@ -37,7 +37,7 @@ COPY tools/xstore .
 RUN ./venv/bin/python3 -m compileall . && LC_LANG=en_US.utf8 LC_ALL=en_US.utf8 ENGINE=mock ./venv/bin/python3 cli.py
 
 
-FROM golang:1.18 as gobuilder
+FROM golang:1.21.1 as gobuilder
 
 WORKDIR /workspace
 
@@ -65,7 +65,7 @@ RUN CGO_ENABLED=0 GOOS=linux GO111MODULE=on go build -tags polardbx -o polardbx-
 
 
 # Build the image with scripts
-FROM polardbx/xstore-tools-base:ts20231018152345
+FROM polardbx/xstore-tools-base:ts20240417185353
 
 ARG VERSION=test
 

@@ -342,6 +342,10 @@ class LegacyConsensusManager(AbstractConsensusManager):
             cur.execute("FLUSH TABLES WITH READ LOCK")
             cur.execute("SET GLOBAL read_only = 1")
 
+    def start_xpaxos_replication(self):
+        with self._conn.cursor() as cur:
+            cur.execute("START XPAXOS_REPLICATION")
+
 
 class ConsensusManager(AbstractConsensusManager):
     """
@@ -631,3 +635,7 @@ class ConsensusManager(AbstractConsensusManager):
         with self._conn.cursor() as cur:
             cur.execute("FLUSH TABLES WITH READ LOCK")
             cur.execute("SET GLOBAL read_only = 1")
+
+    def start_xpaxos_replication(self):
+        with self._conn.cursor() as cur:
+            cur.execute("START XPAXOS_REPLICATION")

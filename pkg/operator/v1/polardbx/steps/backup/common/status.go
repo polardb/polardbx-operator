@@ -20,6 +20,7 @@ import (
 	polardbxv1 "github.com/alibaba/polardbx-operator/api/v1"
 	"github.com/alibaba/polardbx-operator/pkg/k8s/control"
 	polardbxv1reconcile "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/reconcile"
+	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/util/rand"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"strings"
@@ -36,6 +37,19 @@ func TransferPhaseTo(phase polardbxv1.PolarDBXBackupPhase, requeue ...bool) cont
 				return flow.Retry("Phase updated!", "target-phase", phase)
 			}
 		},
+	)
+}
+
+func WhenDeletedAndNotDeleting(binders ...control.BindFunc) control.BindFunc {
+	return polardbxv1reconcile.NewStepIfBinder("Deleted",
+		func(rc *polardbxv1reconcile.Context, log logr.Logger) (bool, error) {
+			backup := rc.MustGetPolarDBXBackup()
+			if backup.Status.Phase == polardbxv1.BackupDeleting {
+				return false, nil
+			}
+			return !backup.DeletionTimestamp.IsZero(), nil
+		},
+		binders...,
 	)
 }
 

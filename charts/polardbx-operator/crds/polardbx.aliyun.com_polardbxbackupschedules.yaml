@@ -54,8 +54,8 @@ spec:
                 properties:
                   cleanPolicy:
                     default: Retain
-                    description: CleanPolicy defines the clean policy when cluster
-                      is deleted. Default is Retain.
+                    description: CleanPolicy defines the clean policy for remote backup
+                      files when object of PolarDBXBackup is deleted. Default is Retain.
                     enum:
                     - Retain
                     - Delete

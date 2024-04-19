@@ -98,6 +98,9 @@ func newBackupJob(xstoreBackup *xstorev1.XStoreBackup, targetPod *corev1.Pod, jo
 	podSpec.Containers[0].StartupProbe = nil
 	podSpec.Containers[0].LivenessProbe = nil
 	podSpec.Containers[0].ReadinessProbe = nil
+	if podSpec.Containers[0].Lifecycle != nil {
+		podSpec.Containers[0].Lifecycle.PreStop = nil
+	}
 
 	// Replace system envs
 	replaceSystemEnvs(podSpec, targetPod)

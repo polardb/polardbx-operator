@@ -59,6 +59,15 @@ spec:
           spec:
             description: XStoreBackupSpec defines the desired state of XStoreBackup
             properties:
+              cleanPolicy:
+                default: Retain
+                description: CleanPolicy defines the clean policy for remote backup
+                  files when object of XStoreBackup is deleted. Default is Retain.
+                enum:
+                - Retain
+                - Delete
+                - OnFailure
+                type: string
               engine:
                 default: galaxy
                 description: Engine is the engine used by xstore. Default is "galaxy".
@@ -117,6 +126,10 @@ spec:
                 type: integer
               endTime:
                 format: date-time
+                type: string
+              message:
+                description: Message includes human-readable message related to current
+                  status.
                 type: string
               phase:
                 type: string

@@ -23,6 +23,7 @@ import (
 	"github.com/alibaba/polardbx-operator/pkg/operator/hint"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/config"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/meta"
+	xstoremeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/meta"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/plugin"
 	xstorev1reconcile "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/reconcile"
 	"github.com/go-logr/logr"
@@ -34,7 +35,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 	"time"
 )
 
@@ -93,7 +93,7 @@ func (r *XStoreBackupReconciler) Reconcile(ctx context.Context, request reconcil
 	}
 
 	// check whether backup is dummy
-	if xstoreBackup.Annotations[meta.AnnotationDummyBackup] == "true" {
+	if xstoreBackup.Annotations[meta.AnnotationDummyBackup] == "true" || xstoreBackup.Annotations[xstoremeta.AnnotationDummyBackup] == "true" {
 		log.Info("Dummy xstore backup, skip")
 		return reconcile.Result{}, nil
 	}
@@ -112,7 +112,7 @@ func (r *XStoreBackupReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			),
 		}).
 		For(&xstorev1.XStoreBackup{}).
-		Watches(&source.Kind{Type: &xstorev1.PolarDBXBackup{}}, &handler.EnqueueRequestForObject{}).
+		Watches(&xstorev1.PolarDBXBackup{}, &handler.EnqueueRequestForObject{}).
 		Owns(&batchv1.Job{}).
 		Complete(r)
 }

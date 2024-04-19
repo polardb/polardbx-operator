@@ -39,7 +39,7 @@ func SetLocalFilestreamSeverPort(port int) {
 	filestreamPort = port
 }
 
-//BeforeUpload print some info. set RequestId
+// BeforeUpload print some info. set RequestId
 func BeforeUpload(w *Watcher, binlogFile *BinlogFile) bool {
 	w.uploadLogger = w.logger.WithValues("trace", uuid.New().String(), "filepath", binlogFile.Filepath)
 	infoJson, _ := json.Marshal(binlogFile)
@@ -54,13 +54,12 @@ func BeforeUpload(w *Watcher, binlogFile *BinlogFile) bool {
 	return true
 }
 
-//AfterUpload print some info. set RequestId
+// AfterUpload print some info. set RequestId
 func AfterUpload(w *Watcher, binlogFile *BinlogFile) bool {
-	w.uploadLogger = nil
 	return true
 }
 
-//FetchStartIndex parse start index from the beginning of the binlog file
+// FetchStartIndex parse start index from the beginning of the binlog file
 func FetchStartIndex(w *Watcher, binlogFile *BinlogFile) bool {
 	logger := w.uploadLogger.WithValues("action", "FetchStartIndex")
 	logger.Info("begin")
@@ -173,7 +172,7 @@ func Upload(w *Watcher, binlogFile *BinlogFile) bool {
 	return true
 }
 
-//UploadRemote by filestream client
+// UploadRemote by filestream client
 func uploadBinlogFile(reader io.Reader, binlogFile *BinlogFile) error {
 	//upload binlogfile meta
 	client := filestream.NewFileClient(FilestreamIp, filestreamPort, nil)

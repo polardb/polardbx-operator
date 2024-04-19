@@ -42,7 +42,6 @@ type UpdateExec struct {
 func (exec *UpdateExec) Execute(rc *xstorev1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
 	step := exec.Step()
 	target := exec.Step().Target
-
 	pod, err := rc.GetXStorePod(target)
 	if client.IgnoreNotFound(err) != nil {
 		return flow.Error(err, "Failed to get pod", "pod", target)
@@ -56,10 +55,10 @@ func (exec *UpdateExec) Execute(rc *xstorev1reconcile.Context, flow control.Flow
 
 		if generation == step.TargetGeneration {
 			if !k8shelper.IsPodReady(pod) {
-				return flow.Wait("Pod's not ready, wait next try.")
+				return flow.Retry("Pod's not ready, wait next try.")
 			}
 			exec.MarkDone()
-			return flow.Pass()
+			return flow.Retry("Step is done,try again")
 		}
 
 		//exec.baseExec.ec.Running
@@ -111,7 +110,7 @@ func (exec *UpdateExec) Execute(rc *xstorev1reconcile.Context, flow control.Flow
 				return flow.Error(err, "Unable to delete the pod", "pod", target)
 			}
 		}
-		return flow.Wait("Pod's deleting, wait next try.")
+		return flow.Retry("Pod's deleting, wait next try.")
 	} else {
 		// Create a new pod on the last host.
 		xstore := rc.MustGetXStore()
@@ -135,6 +134,9 @@ func (exec *UpdateExec) Execute(rc *xstorev1reconcile.Context, flow control.Flow
 		pod.Spec.NodeName = exec.ec.Volumes[pod.Name].Host
 		val, ok := rc.IsPodSvcMeta(pod.Name)
 		if (ok && !val) || !ok {
+			if pod.Annotations == nil {
+				pod.Annotations = make(map[string]string)
+			}
 			pod.Annotations[xstoremeta.AnnotationFlushLocal] = "true"
 		}
 		if err := rc.SetControllerRefAndCreate(pod); err != nil {

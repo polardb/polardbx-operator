@@ -244,6 +244,62 @@ var _ = ginkgo.Describe("[PolarDBXCluster] [Lifecycle:Upgrade]", func() {
 		pxcframework.NewExpectation(f, obj).ExpectCDCDeploymentsOk()
 	})
 
+	ginkgo.It("should columnar numbers 0 to 1 be as expected", func() {
+		resources := corev1.ResourceRequirements{
+			Limits: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("2"),
+				corev1.ResourceMemory: resource.MustParse("2Gi"),
+			},
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("100m"),
+				corev1.ResourceMemory: resource.MustParse("100Mi"),
+			},
+		}
+		obj := pxcframework.NewPolarDBXCluster(
+			"e2e-test-upgrade-columnar-number-0-1",
+			f.Namespace,
+			pxcframework.ProtocolVersion(5),
+			pxcframework.TopologyNode("cn", 2, "", "", false, resources),
+			pxcframework.TopologyNode("dn", 2, "", "", false, resources),
+			pxcframework.TopologyNode("cdc", 2, "", "", false, resources),
+		)
+
+		// Always run clean up to make sure objects are cleaned.
+		defer DeletePolarDBXClusterAndWaitUntilItDisappear(f, obj, 1*time.Minute)
+
+		// Do create and verify.
+		CreatePolarDBXClusterAndWaitUntilRunningOrFail(f, obj, 10*time.Minute)
+
+		// Update object.
+		framework.ExpectNoError(f.Client.Get(f.Ctx, types.NamespacedName{
+			Name: obj.Name, Namespace: f.Namespace,
+		}, obj))
+
+		// Expect sub-resources (especially deployments and xstores ok)
+		exp := pxcframework.NewExpectation(f, obj)
+		exp.ExpectDeploymentsOk()
+		exp.ExpectXStoresOk()
+
+		obj.Spec.Topology.Nodes.Columnar = &polardbxv1polardbx.TopologyNodeColumnar{
+			Replicas: 1,
+			Template: polardbxv1polardbx.ColumnarTemplate{
+				Image: "registry.cn-zhangjiakou.aliyuncs.com/drds_pre/polardbx-columnar:v1",
+			},
+		}
+		err := f.Client.Update(f.Ctx, obj)
+		framework.ExpectNoError(err)
+
+		framework.ExpectNoError(f.Client.Get(f.Ctx, types.NamespacedName{
+			Name: obj.Name, Namespace: f.Namespace,
+		}, obj))
+
+		obj, err = pxcframework.WaitUntilPolarDBXClusterUpgradeCompleteOrFail(f.Client, obj.Name, obj.Namespace, 10*time.Minute)
+		framework.ExpectNoError(err)
+		pxcframework.ExpectBeInPhase(obj, polardbxv1polardbx.PhaseRunning)
+
+		pxcframework.NewExpectation(f, obj).ExpectColumnarDeploymentsOk()
+	})
+
 	ginkgo.It("should cn resource upgrade as expected", func() {
 		resources := corev1.ResourceRequirements{
 			Limits: corev1.ResourceList{

@@ -17,6 +17,7 @@ limitations under the License.
 package v1
 
 import (
+	"github.com/alibaba/polardbx-operator/api/v1/polardbx"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -33,6 +34,9 @@ type XStoreRestoreFrom struct {
 	// BackupSelector defines the selector for the backups to be selected. Optional.
 	// +optional
 	BackupSelector map[string]string `json:"backupSelector,omitempty"`
+
+	// BackupSetPath defines the location of backup set in remote storage
+	BackupSetPath string `json:"backupSetPath,omitempty"`
 }
 
 // XStoreRestoreSpec defines the specification for restore a xstore with desired state.
@@ -43,6 +47,10 @@ type XStoreRestoreSpec struct {
 	// From defines the source information, either backup sets, snapshot or an running cluster.
 	From XStoreRestoreFrom `json:"from,omitempty"`
 
+	// StorageProvider defines storage used to perform backup
+	// +optional
+	StorageProvider *polardbx.BackupStorageProvider `json:"storageProvider,omitempty"`
+
 	// Time defines the specified time of the restored data, in the format of 'yyyy-MM-dd HH:mm:ss'. Required.
 	Time string `json:"time,omitempty"`
 
@@ -51,10 +59,34 @@ type XStoreRestoreSpec struct {
 	TimeZone string `json:"timezone,omitempty"`
 
 	PitrEndpoint string `json:"pitrEndpoiint,omitempty"`
+
+	// BinlogSource defines the binlog datasource
+	// +optional
+	BinlogSource *RestoreBinlogSource `json:"binlogSource,omitempty"`
+}
+
+type TDE struct {
+	// +kubebuilder:default=false
+	// +optional
+	Enable bool `json:"enable,omitempty"`
+
+	// +kubebuilder:default=/data/mysql/mysql-keyring/keyring
+	// +optional
+	KeyringPath string `json:"keyringPath,omitempty"`
+}
+
+// RestoreBinlogSource defines the binlog datasource
+type RestoreBinlogSource struct {
+	//Namespace defines the source binlog namespace
+	Namespace string `json:"namespace,omitempty"`
+	//Checksum defines the binlog file checksum.
+	Checksum string `json:"checksum,omitempty"`
+	//StorageProvider defines the source binlog sink
+	StorageProvider *polardbx.BackupStorageProvider `json:"storageProvider,omitempty"`
 }
 
 type XStoreSpec struct {
-	// +kubebuilder:default="galaxy"
+	// +kubebuilder:default=galaxy
 
 	// Engine is the engine used by xstore. Default is "galaxy".
 	// +optional
@@ -112,6 +144,14 @@ type XStoreSpec struct {
 	// Restore defines the spec of restore.
 	// +optional
 	Restore *XStoreRestoreSpec `json:"restore,omitempty"`
+
+	// TDE defines the transparent data encryption of clusters
+	// +optional
+	TDE TDE `json:"tde,omitempty"`
+
+	// Exclusive if true, it means more resource isolation.
+	// +optional
+	Exclusive bool `json:"exclusive,omitempty"`
 }
 
 type XStoreStatus struct {
@@ -183,6 +223,13 @@ type XStoreStatus struct {
 
 	// RestartingPods represents pods need to restart
 	RestartingPods xstore.RestartingPods `json:"restartingPods,omitempty"`
+
+	//PitrStatus represents the status of the pitr restore
+	PitrStatus *xstore.PitrStatus `json:"pitrStatus,omitempty"`
+
+	// +kubebuilder:default=false
+	// TdeStatus represents if tde open
+	TdeStatus bool `json:"tdeStatus,omitempty"`
 }
 
 // +kubebuilder:object:root=true

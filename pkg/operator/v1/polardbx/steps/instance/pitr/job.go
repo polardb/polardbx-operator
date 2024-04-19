@@ -93,7 +93,7 @@ func CreateTaskConfig(rc *polardbxv1reconcile.Context, pxcBackup *polarxv1.Polar
 	if err != nil {
 		return nil, errors.Wrap(err, fmt.Sprintf("failed to get xstore backup list, polardbx name = %s, backup name = %s", pxcBackup.Spec.Cluster.Name, pxcBackup.Name))
 	}
-	xstoreConfigs := generateXStoreTaskConfigs(xstoreBackups.Items)
+	xstoreConfigs := generateXStoreTaskConfigs(xstoreBackups.Items, rc.Config().Backup().GetRestorePodSuffix())
 
 	var currentXStores polarxv1.XStoreList
 	err = rc.Client().List(rc.Context(), &currentXStores, client.InNamespace(namespace), client.MatchingLabels{
@@ -134,7 +134,7 @@ func CreateTaskConfig(rc *polardbxv1reconcile.Context, pxcBackup *polarxv1.Polar
 	return &taskConfig, nil
 }
 
-func generateXStoreTaskConfigs(dnBackups []polarxv1.XStoreBackup) map[string]*pitr.XStoreConfig {
+func generateXStoreTaskConfigs(dnBackups []polarxv1.XStoreBackup, restorePodSuffix string) map[string]*pitr.XStoreConfig {
 	dnConfigs := make(map[string]*pitr.XStoreConfig, len(dnBackups))
 	for _, backup := range dnBackups {
 		xstoreName := backup.Spec.XStore.Name
@@ -144,7 +144,7 @@ func generateXStoreTaskConfigs(dnBackups []polarxv1.XStoreBackup) map[string]*pi
 		}
 		podName := backup.Status.TargetPod
 		if podName == "" {
-			podName = backup.Spec.XStore.Name + "-cand-0"
+			podName = backup.Spec.XStore.Name + restorePodSuffix
 		}
 		dnConfig := pitr.XStoreConfig{
 			GlobalConsistent:    globalConsistent,
@@ -253,7 +253,7 @@ func CreatePrepareBinlogJob(rc *polardbxv1reconcile.Context, config *pitr.TaskCo
 		ReadinessProbe: &corev1.Probe{
 			InitialDelaySeconds: 20,
 			TimeoutSeconds:      5,
-			Handler: corev1.Handler{
+			ProbeHandler: corev1.ProbeHandler{
 				HTTPGet: &corev1.HTTPGetAction{
 					Port: intstr.FromString(PortName),
 					Path: "/status",

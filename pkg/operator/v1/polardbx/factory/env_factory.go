@@ -18,6 +18,7 @@ package factory
 
 import (
 	"fmt"
+	"github.com/alibaba/polardbx-operator/api/v1/polardbx"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"strconv"
 	"strings"
@@ -354,6 +355,7 @@ func (e *envFactory) newBasicEnvVarsForCDCEngine(gmsConn *StorageConnection) []c
 
 	// FIXME CDC currently doesn't support host network, so ports are hard coded.
 	envs := []corev1.EnvVar{
+		{Name: "polardbx_instance_id", Value: e.polardbx.Name},
 		{Name: "switchCloud", Value: "aliyun"},
 		{Name: "cluster_id", Value: clusterId},
 		{Name: "cluster_type", Value: clusterType},
@@ -416,8 +418,12 @@ func (e *envFactory) newBasicEnvVarsForColumnarEngine(gmsConn *StorageConnection
 		pxcServiceName = e.polardbx.Name
 	}
 
+	clusterType := "COLUMNAR"
+	clusterId := e.polardbx.Name + "-" + clusterType
+
 	// FIXME CDC currently doesn't support host network, so ports are hard coded.
 	envs := []corev1.EnvVar{
+		{Name: "polardbx_instance_id", Value: e.polardbx.Name},
 		{Name: "switchCloud", Value: "aliyun"},
 		{Name: "ins_id", ValueFrom: e.newValueFromObjectFiled("metadata.uid")},
 		{Name: "ins_ip", ValueFrom: e.newValueFromObjectFiled("status.podIP")},
@@ -426,12 +432,21 @@ func (e *envFactory) newBasicEnvVarsForColumnarEngine(gmsConn *StorageConnection
 		{Name: "metaDbAddr", Value: fmt.Sprintf("%s:%d", gmsConn.Host, gmsConn.Port)},
 		{Name: "metaDbName", Value: fmt.Sprintf(gms.MetaDBName)},
 		{Name: "metaDbUser", Value: gmsConn.User},
+		{Name: "metaDb_url", Value: fmt.Sprintf("jdbc:mysql://%s:%d/polardbx_meta_db?useSSL=false", gmsConn.Host, gmsConn.Port)},
+		{Name: "polarx_url", Value: fmt.Sprintf("jdbc:mysql://%s:%d/__cdc__?useSSL=false", pxcServiceName, 3306)},
 		{Name: "metaDbPasswd", Value: e.cipher.Encrypt(gmsConn.Passwd)},
+		{Name: "metaDb_username", Value: gmsConn.User},
+		{Name: "metaDb_password", Value: gmsConn.Passwd},
 		{Name: "metaDbXprotoPort", Value: strconv.Itoa(31306)},
 		{Name: "storageDbXprotoPort", Value: strconv.Itoa(0)},
 		{Name: "polarx_username", Value: "polardbx_root"},
 		{Name: "polarx_password", ValueFrom: e.newValueFromSecretKey(e.polardbx.Name, "polardbx_root")},
 		{Name: "dnPasswordKey", Value: e.cipher.Key()},
+		{Name: "columnar_ports", Value: `{"columnar_port":"3070"}`},
+		{Name: "cluster_id", Value: clusterId},
+		{Name: "cluster_type", Value: clusterType},
+		{Name: "daemon_port", Value: "3007"},
+		{Name: "columnarPort", Value: "3070"},
 	}
 	configEnvs := e.polardbx.Spec.Config.Columnar.Envs
 	if configEnvs != nil {
@@ -442,6 +457,16 @@ func (e *envFactory) newBasicEnvVarsForColumnarEngine(gmsConn *StorageConnection
 			})
 		}
 	}
+
+	for _, info := range e.polardbx.Spec.Config.Columnar.ColumnarDataFileStorage {
+		if info.GetEngineType() == polardbx.EngineTypeExternalDisk {
+			envs = append(envs, corev1.EnvVar{
+				Name:  "columnar_engine",
+				Value: "EXTERNAL_DISK",
+			})
+		}
+	}
+
 	return envs
 }
 

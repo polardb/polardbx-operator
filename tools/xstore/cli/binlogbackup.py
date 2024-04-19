@@ -40,7 +40,7 @@ def start_binlogbackup(backup_context,  start_index, gms_label, xstore_name):
 
     with open(backup_context, 'r') as f:
         params = json.load(f)
-        remote_binlog_end_offset_path = params["binlogEndOffsetPath"]
+        collect_end_index = params["collectEndIndex"]
         indexes_path = params["indexesPath"]
         remote_binlog_backup_dir = params["binlogBackupDir"]
         storage_name = params["storageName"]
@@ -63,8 +63,7 @@ def start_binlogbackup(backup_context,  start_index, gms_label, xstore_name):
     logger.info("min_log_name:%s" % min_log_name)
     if gms_label == "true":
         # Todo： optimization cut gms binlog
-        max_log_name, max_log_index = get_max_log_from_offset_gms(filestream_client, remote_binlog_end_offset_path,
-                                                                  local_binlog_backup_dir, logger)
+        max_log_name, max_log_index = collect_end_index.split(':')
     else:
         max_log_name, max_log_index = get_max_log_from_cp(filestream_client, indexes_path, local_binlog_backup_dir,
                                                           xstore_name, logger)
@@ -106,17 +105,6 @@ def get_min_log_name(context, log_dir, start_index, logger):
                 return ""
         else:
             continue
-
-
-def get_max_log_from_offset_gms(filestream_client, binlog_end_offset_path, binlog_backup_dir, logger):
-    local_end_offset_file_path = os.path.join(binlog_backup_dir, "binlogOffsetEnd")
-    filestream_client.download_to_file(remote=binlog_end_offset_path, local=local_end_offset_file_path, logger=logger)
-    with open(local_end_offset_file_path) as f:
-        end = f.readline().rstrip('\n')
-        max_log_name = end.split(':')[0]
-        max_index_name = end.split(':')[1]
-    logger.info("end_offset: %s;max_log_name:%s;max_log_index:%s" % (str(end), max_log_name, str(max_index_name)))
-    return max_log_name, max_index_name
 
 
 # noinspection DuplicatedCode

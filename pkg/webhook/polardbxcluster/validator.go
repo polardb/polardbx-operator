@@ -640,7 +640,7 @@ func (v *PolarDBXClusterV1Validator) validate(ctx context.Context, polardbx *pol
 		case "1", "2", "":
 		default:
 			errList = append(errList, field.NotSupported(
-				field.NewPath("spec", "RPCProtocolVersion"),
+				field.NewPath("spec", "config", "cn", "static", "RPCProtocolVersion"),
 				spec.Config.CN.Static.RPCProtocolVersion,
 				[]string{
 					"1", "2",
@@ -694,6 +694,25 @@ func (v *PolarDBXClusterV1Validator) validate(ctx context.Context, polardbx *pol
 		}
 	}
 
+	if spec.Exclusive {
+		topologyNodes := spec.Topology.Nodes
+		if topologyNodes.CDC != nil && !v.checkCpuResourceGuaranteed(topologyNodes.CDC.Template.Resources) {
+			errList = append(errList, field.Forbidden(field.NewPath("spec.Topology.Nodes.CDC.Template.Resources"), "cpu request and limit must be equal"))
+		}
+		if topologyNodes.Columnar != nil && !v.checkCpuResourceGuaranteed(topologyNodes.Columnar.Template.Resources) {
+			errList = append(errList, field.Forbidden(field.NewPath("spec.Topology.Nodes.Columnar.Template.Resources"), "cpu request and limit must be equal"))
+		}
+		if !v.checkCpuResourceGuaranteed(topologyNodes.CN.Template.Resources) {
+			errList = append(errList, field.Forbidden(field.NewPath("spec.Topology.Nodes.CN.Template.Resources"), "cpu request and limit must be equal"))
+		}
+		if !v.checkCpuResourceGuaranteed(topologyNodes.DN.Template.Resources.ResourceRequirements) {
+			errList = append(errList, field.Forbidden(field.NewPath("spec.Topology.Nodes.DN.Template.Resources"), "cpu request and limit must be equal"))
+		}
+		if topologyNodes.GMS.Template != nil && !v.checkCpuResourceGuaranteed(topologyNodes.GMS.Template.Resources.ResourceRequirements) {
+			errList = append(errList, field.Forbidden(field.NewPath("spec.Topology.Nodes.GMS.Template.Resources"), "cpu request and limit must be equal"))
+		}
+	}
+
 	if len(errList) > 0 {
 		return apierrors.NewInvalid(
 			polardbx.GroupVersionKind().GroupKind(),
@@ -701,6 +720,13 @@ func (v *PolarDBXClusterV1Validator) validate(ctx context.Context, polardbx *pol
 			errList)
 	}
 	return nil
+}
+
+func (v *PolarDBXClusterV1Validator) checkCpuResourceGuaranteed(resources corev1.ResourceRequirements) bool {
+	if resources.Requests != nil && resources.Requests.Cpu() != nil && resources.Limits != nil && resources.Limits.Cpu() != nil {
+		return equality.Semantic.DeepEqual(resources.Requests.Cpu(), resources.Limits.Cpu())
+	}
+	return true
 }
 
 func (v *PolarDBXClusterV1Validator) ValidateCreate(ctx context.Context, obj runtime.Object) error {
@@ -744,6 +770,28 @@ func (v *PolarDBXClusterV1Validator) ValidateUpdate(ctx context.Context, oldObj,
 			},
 			new.Name,
 			field.Forbidden(field.NewPath("spec").Child("primaryCluster"), "field is immutable"),
+		)
+	}
+
+	if oldSpec.TDE.Enable == true && oldSpec.TDE.Enable != newSpec.TDE.Enable {
+		return apierrors.NewForbidden(
+			schema.GroupResource{
+				Group:    gvk.Group,
+				Resource: gvk.Kind,
+			},
+			new.Name,
+			field.Forbidden(field.NewPath("spec").Child("tde").Child("enable"), "tde can not be closed"),
+		)
+	}
+
+	if oldSpec.TDE.Enable == true && oldSpec.TDE.KeyringPath != newSpec.TDE.KeyringPath {
+		return apierrors.NewForbidden(
+			schema.GroupResource{
+				Group:    gvk.Group,
+				Resource: gvk.Kind,
+			},
+			new.Name,
+			field.Forbidden(field.NewPath("spec").Child("tde").Child("keyringPath"), "keyringPath can not be changed when tde open"),
 		)
 	}
 
@@ -829,6 +877,20 @@ func (v *PolarDBXClusterV1Validator) ValidateUpdate(ctx context.Context, oldObj,
 			field.Forbidden(
 				field.NewPath("spec", "config", "cn", "coldDataFileStorage"),
 				"coldDataFileStorage is immutable",
+			),
+		)
+	}
+
+	if !equality.Semantic.DeepEqual(oldSpec.Exclusive, newSpec.Exclusive) {
+		return apierrors.NewForbidden(
+			schema.GroupResource{
+				Group:    gvk.Group,
+				Resource: gvk.Kind,
+			},
+			new.Name,
+			field.Forbidden(
+				field.NewPath("spec", "exclusive"),
+				"Exclusive is immutable",
 			),
 		)
 	}

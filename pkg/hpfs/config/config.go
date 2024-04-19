@@ -72,6 +72,15 @@ type BackupBinlogConfig struct {
 	MaxLocalBinlogCount *int64   `json:"maxLocalBinlogCount,omitempty"`
 }
 
+type CpuSetStrategy string
+
+// Normal : cpu set is distributed among cpu socket and cores.
+const (
+	Auto           CpuSetStrategy = "auto"
+	Normal         CpuSetStrategy = "normal"
+	NumaNodePrefer CpuSetStrategy = "numaNodePrefer"
+)
+
 func (bbc *BackupBinlogConfig) GetExpireLogHours() float64 {
 	if bbc.LocalExpireLogHours == nil {
 		return DefaultLocalExpireLogHours
@@ -86,9 +95,16 @@ func (bbc *BackupBinlogConfig) GetMaxLocalBinlogCount() int64 {
 	return *bbc.MaxLocalBinlogCount
 }
 
+type CGroupControlConfig struct {
+	ReservedCpus   string          `json:"reserved_cpus,omitempty"`
+	CriEndpoint    string          `json:"cri_endpoint,omitempty"`
+	CpuSetStrategy *CpuSetStrategy `json:"cpu_set_strategy,omitempty"`
+}
+
 type Config struct {
-	Sinks              []Sink              `json:"sinks,omitempty"`
-	BackupBinlogConfig *BackupBinlogConfig `json:"backupBinlogConfig,omitempty"`
+	Sinks               []Sink               `json:"sinks,omitempty"`
+	BackupBinlogConfig  *BackupBinlogConfig  `json:"backupBinlogConfig,omitempty"`
+	CGroupControlConfig *CGroupControlConfig `json:"cGroupControlConfig,omitempty"`
 }
 
 var configValue atomic.Value

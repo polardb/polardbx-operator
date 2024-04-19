@@ -19,7 +19,7 @@ package polardbx
 import "strings"
 
 type FileStorageInfo struct {
-	// +kubebuilder:validation:Pattern=`^(?i)innodb|mrg_myisam|blackhole|myisam|csv|archive|performance_schema|federated|local_disk|s3|oss$`
+	// +kubebuilder:validation:Pattern=`^(?i)innodb|mrg_myisam|blackhole|myisam|csv|archive|performance_schema|federated|local_disk|external_disk|s3|oss$`
 	// +kubebuilder:validation:Required
 
 	// Engine describes the engine type of file storage
@@ -38,6 +38,7 @@ const (
 	EngineTypePerformanceSchema EngineType = "PERFORMANCE_SCHEMA"
 	EngineTypeFederated         EngineType = "FEDERATED"
 	EngineTypeLocalDisk         EngineType = "LOCAL_DISK"
+	EngineTypeExternalDisk      EngineType = "EXTERNAL_DISK"
 	EngineTypeS3                EngineType = "S3"
 	EngineTypeOss               EngineType = "OSS"
 )

@@ -281,3 +281,23 @@ func DoesNodeSelectorCoversAnother(s, t *corev1.NodeSelector) bool {
 	}
 	return true
 }
+
+func AddNodeSelectorMatchExpressionRequirement(nodeSelector *corev1.NodeSelector, requirement corev1.NodeSelectorRequirement) *corev1.NodeSelector {
+	if nodeSelector == nil {
+		nodeSelector = &corev1.NodeSelector{}
+	}
+	if nodeSelector.NodeSelectorTerms == nil {
+		nodeSelector.NodeSelectorTerms = []corev1.NodeSelectorTerm{
+			{
+				MatchExpressions: []corev1.NodeSelectorRequirement{
+					requirement,
+				},
+			},
+		}
+		return nodeSelector
+	}
+	for i := range nodeSelector.NodeSelectorTerms {
+		nodeSelector.NodeSelectorTerms[i].MatchExpressions = append(nodeSelector.NodeSelectorTerms[i].MatchExpressions, requirement)
+	}
+	return nodeSelector
+}

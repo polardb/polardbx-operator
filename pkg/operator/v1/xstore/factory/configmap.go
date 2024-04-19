@@ -22,6 +22,7 @@ import (
 
 	"github.com/alibaba/polardbx-operator/pkg/util/formula"
 
+	xstoreconvention "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/convention"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	polardbxmeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/meta"
@@ -77,17 +78,13 @@ func fakeIniWithDefaultSectionIfNoSectionAtStart(s string, section string) strin
 	return "[" + section + "]\n" + s
 }
 
-func setValueTemplate(param polardbxv1.TemplateParams, mycnfOverrride *ini.File, xstore *polardbxv1.XStore) error {
+func setValueTemplate(param polardbxv1.TemplateParams, mycnfOverrride *ini.File, xstore *polardbxv1.XStore) {
 	if len(param.DefaultValue) > 0 && param.DefaultValue[0] == '{' {
-		calculateValue, err := formula.FormulaComputingXStore(param.DefaultValue, xstore)
-		if err != nil {
-			return err
-		}
+		calculateValue, _ := formula.FormulaComputingXStore(param.DefaultValue, xstore)
 		mycnfOverrride.Section("mysqld").Key(param.Name).SetValue(strconv.Itoa(calculateValue))
 	} else {
 		mycnfOverrride.Section("mysqld").Key(param.Name).SetValue(param.DefaultValue)
 	}
-	return nil
 }
 
 func setValue(param polardbxv1.Params, mycnfOverrride *ini.File, xstore *polardbxv1.XStore) {
@@ -99,26 +96,23 @@ func setValue(param polardbxv1.Params, mycnfOverrride *ini.File, xstore *polardb
 	}
 }
 
+func setTDEValue(mycnfOverrride *ini.File, xstore *polardbxv1.XStore) {
+	mycnfOverrride.Section("mysqld").Key(convention.KeyringPluginKey).SetValue(convention.KeyringPluginValue)
+	//todo: filepath from restore
+	mycnfOverrride.Section("mysqld").Key(convention.KeyringFile).SetValue(xstore.Spec.TDE.KeyringPath)
+}
+
 func setMycnfTemplate(keys []*ini.Key, templateParamList []polardbxv1.TemplateParams, paramList []polardbxv1.Params,
 	mycnfOverrride *ini.File, paramsRoleMap map[string]map[string]polardbxv1.Params, role string, xstore *polardbxv1.XStore) {
 	// template parameters
 	for _, param := range templateParamList {
-		exists := false
-		for _, key := range keys {
-			if key.Name() == param.Name {
-				exists = true
-				break
+		if role == polardbxmeta.RoleDN {
+			if _, ok := paramsRoleMap[polardbxv1.DNReadOnly][param.Name]; !ok {
+				setValueTemplate(param, mycnfOverrride, xstore)
 			}
-		}
-		if !exists {
-			if role == polardbxmeta.RoleDN {
-				if _, ok := paramsRoleMap[polardbxv1.DNReadOnly][param.Name]; !ok {
-					setValueTemplate(param, mycnfOverrride, xstore)
-				}
-			} else {
-				if _, ok := paramsRoleMap[polardbxv1.GMSReadOnly][param.Name]; !ok {
-					setValueTemplate(param, mycnfOverrride, xstore)
-				}
+		} else {
+			if _, ok := paramsRoleMap[polardbxv1.GMSReadOnly][param.Name]; !ok {
+				setValueTemplate(param, mycnfOverrride, xstore)
 			}
 		}
 	}
@@ -164,8 +158,13 @@ func syncParameterToConfigMap(rc *reconcile.Context, xstore *polardbxv1.XStore, 
 	parameterTemplateName := rc.GetPolarDBXTemplateName()
 	parameterTemplateNameSpace := rc.GetPolarDBXTemplateNameSpace()
 
+	// TDE parameters,only DN, parameter include early_plugin_load and keyring_file_data
+	if IsXStoreTdeEnable(xstore) {
+		setTDEValue(mycnfTemplate, xstore)
+	}
+
 	if parameterTemplateName == "" {
-		return overrideVal, nil
+		return iniutil.ToString(mycnfTemplate), nil
 	}
 
 	pt, err := rc.GetPolarDBXParameterTemplate(parameterTemplateNameSpace, parameterTemplateName)
@@ -220,7 +219,7 @@ func newConfigDataMap(rc *reconcile.Context, xstore *polardbxv1.XStore) (map[str
 		data[convention.ConfigMyCnfTemplate] = fakeIniWithDefaultSectionIfNoSectionAtStart(templateVal, "mysqld")
 	}
 
-	if len(overrideVal) > 0 {
+	if len(overrideVal) > 0 || IsXStoreTdeEnable(xstore) {
 		overrideVal = fakeIniWithDefaultSectionIfNoSectionAtStart(overrideVal, "mysqld")
 		data[convention.ConfigMyCnfOverride], err = syncParameterToConfigMap(rc, xstore, overrideVal)
 		if err != nil {
@@ -263,4 +262,47 @@ func NewTaskConfigMap(xstore *polardbxv1.XStore) *corev1.ConfigMap {
 		},
 		Immutable: pointer.Bool(false),
 	}
+}
+
+func newTdeDataMap(xstore *polardbxv1.XStore) map[string]string {
+	data := make(map[string]string)
+	data[convention.KeyringPath] = xstore.Spec.TDE.KeyringPath
+	return data
+}
+
+func newTdeBinaryData(rc *reconcile.Context, xstore *polardbxv1.XStore) (map[string][]byte, error) {
+	binaryData := make(map[string][]byte)
+	pods, err := rc.GetXStorePods()
+	if err != nil {
+		return binaryData, err
+	}
+	for _, pod := range pods {
+		binaryData[xstore.Namespace+"-"+pod.Name+"-"+xstoreconvention.Keyring] = []byte("")
+	}
+	return binaryData, nil
+}
+
+func NewTaskTdeMap(rc *reconcile.Context, xstore *polardbxv1.XStore) (*corev1.ConfigMap, error) {
+	binaryData, err := newTdeBinaryData(rc, xstore)
+	if err != nil {
+		return nil, err
+	}
+	return &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      convention.NewConfigMapName(xstore, convention.ConfigMapTypeTde),
+			Namespace: xstore.Namespace,
+			Labels:    k8shelper.PatchLabels(convention.ConstLabels(xstore), convention.LabelGeneration(xstore)),
+		},
+		Immutable:  pointer.Bool(false),
+		Data:       newTdeDataMap(xstore),
+		BinaryData: binaryData,
+	}, nil
+}
+
+func IsXStoreTdeEnable(xstore *polardbxv1.XStore) bool {
+	role := xstore.Labels[polardbxmeta.LabelRole]
+	if role != polardbxmeta.RoleGMS && xstore.Spec.TDE.Enable {
+		return true
+	}
+	return false
 }

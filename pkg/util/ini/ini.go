@@ -146,12 +146,14 @@ func ParseMyCnfOverlayFile(r io.Reader) (*ini.File, error) {
 // try to delete the key without "-" in the original file. For example,
 //
 // origin:
-// 	 [mysqld]
-// 	 core-file
+//
+//	[mysqld]
+//	core-file
 //
 // patch:
-// 	 [mysqld]
-// 	 core-file-
+//
+//	[mysqld]
+//	core-file-
 //
 // After the Patch, the 'core-file' in origin will be removed.
 func Patch(origin, patch *ini.File) (*ini.File, error) {

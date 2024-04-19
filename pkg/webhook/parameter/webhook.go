@@ -21,6 +21,7 @@ func SetupWebhooks(ctx context.Context, mgr ctrl.Manager, apiPath string) error 
 		extension.WithCustomValidator(
 			&polardbxv1.PolarDBXParameter{},
 			NewParameterValidator(mgr.GetAPIReader(), mgr.GetLogger().WithName("webhook.validate.polardbxparameter")),
+			mgr.GetScheme(),
 		),
 	)
 

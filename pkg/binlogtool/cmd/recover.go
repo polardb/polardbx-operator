@@ -170,14 +170,6 @@ var recoverCmd = &cobra.Command{
 				if err != nil {
 					return fmt.Errorf("failed to commit XA transaction: %w", err)
 				}
-			} else {
-				rollbackSQL := fmt.Sprintf("XA ROLLBACK '%s','%s',%d",
-					xaTrans.gtrid, xaTrans.bqual, xaTrans.formatId)
-				fmt.Printf("Rollback SQL : %s\n", rollbackSQL)
-				_, err := db.Exec(rollbackSQL)
-				if err != nil {
-					return fmt.Errorf("failed to rollback XA transaction: %w", err)
-				}
 			}
 		}
 

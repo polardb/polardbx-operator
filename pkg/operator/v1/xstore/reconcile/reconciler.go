@@ -29,3 +29,7 @@ type Reconciler interface {
 type BackupReconciler interface {
 	Reconcile(rc *BackupContext, log logr.Logger, request reconcile.Request) (reconcile.Result, error)
 }
+
+type BackupBinlogReconciler interface {
+	Reconcile(rc *BackupBinlogContext, log logr.Logger, request reconcile.Request) (reconcile.Result, error)
+}

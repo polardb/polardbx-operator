@@ -82,4 +82,5 @@ type BackupConfig interface {
 	CheckBinlogExpiredFileInterval() (time.Duration, error)
 	GetHeartbeatJobNamePrefix() string
 	GetHeartbeatInterval() (time.Duration, error)
+	GetRestorePodSuffix() string
 }

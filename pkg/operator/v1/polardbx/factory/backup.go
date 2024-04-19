@@ -41,6 +41,9 @@ type XstoreMetadata struct {
 
 	// Secrets records account and password for xstore
 	Secrets []polardbxv1polardbx.PrivilegeItem `json:"secrets,omitempty"`
+
+	// TargetPod denotes the pod where backup was performed
+	TargetPod string `json:"targetPod,omitempty"`
 }
 
 // MetadataBackup defines metadata to be uploaded during backup
@@ -213,6 +216,7 @@ func (f *objectFactory) NewDummyXstoreBackup(xstoreName string, polardbxBackup *
 			Phase:          polardbxv1.XStoreBackupDummy,
 			CommitIndex:    xstoreMetadata.LastCommitIndex,
 			BackupRootPath: metadata.BackupRootPath,
+			TargetPod:      xstoreMetadata.TargetPod,
 		},
 	}
 	return xstoreBackup, nil

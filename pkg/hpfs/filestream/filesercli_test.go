@@ -20,6 +20,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"encoding/base64"
+	"fmt"
 	"github.com/alibaba/polardbx-operator/pkg/hpfs/config"
 	"github.com/google/uuid"
 	. "github.com/onsi/gomega"
@@ -142,6 +143,27 @@ func TestUploadAndDownloadOss(t *testing.T) {
 		checkFile(g)
 		os.RemoveAll("./busuinstanceid/")
 	}
+}
+
+func TestListFileOss(t *testing.T) {
+	config.ConfigFilepath = "/tmp/config.yaml"
+	g := NewWithT(t)
+	config.InitConfig()
+	fileServer := startFileServer()
+	defer fileServer.Stop()
+	client := NewFileClient("127.0.0.1", 22222, nil)
+	client.InitWaitChan()
+
+	actionMetadata := ActionMetadata{
+		Action:   ListOss,
+		Filename: "polardbx-backup",
+		Sink:     "list-test",
+	}
+	var listBuffer bytes.Buffer
+	recvBytes, err := client.List(&listBuffer, actionMetadata)
+	g.Expect(err).Should(BeNil())
+	g.Expect(recvBytes).Should(BeNumerically(">", 0))
+	fmt.Print(listBuffer.String())
 }
 
 func TestUploadLocal(t *testing.T) {

@@ -17,6 +17,8 @@ limitations under the License.
 package factory
 
 import (
+	"github.com/alibaba/polardbx-operator/pkg/k8s/helper/selector"
+	polardbxmeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/meta"
 	"path"
 	"strconv"
 	"strings"
@@ -86,55 +88,35 @@ func (f *DefaultExtraPodFactory) NewAffinity(ctx *PodFactoryContext) *corev1.Aff
 	// Patch with template's affinity.
 	affinity = k8shelper.PatchAffinity(affinity, template.Spec.Affinity)
 
-	// Set the master restriction, disallow scheduling to master.
-	if !ctx.rc.Config().Scheduler().AllowScheduleToMasterNode() {
-		nodeSelectorTermNotOnMaster := corev1.NodeSelectorTerm{
-			MatchExpressions: []corev1.NodeSelectorRequirement{
-				{
-					Key:      k8shelper.LabelNodeRole,
-					Operator: corev1.NodeSelectorOpNotIn,
-					Values:   []string{k8shelper.NodeRoleMaster},
-				},
-			},
-		}
-
-		if affinity.NodeAffinity != nil {
-			if affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution != nil {
-				if affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms == nil {
-					affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms = []corev1.NodeSelectorTerm{
-						nodeSelectorTermNotOnMaster,
-					}
-				} else {
-					for i := range affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms {
-						term := &affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[i]
-						// Nil slice can be appended
-						term.MatchExpressions = append(term.MatchExpressions, nodeSelectorTermNotOnMaster.MatchExpressions...)
-					}
-				}
-			} else {
-				affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution = &corev1.NodeSelector{
-					NodeSelectorTerms: []corev1.NodeSelectorTerm{
-						nodeSelectorTermNotOnMaster,
-					},
-				}
-			}
-		} else {
-			affinity.NodeAffinity = &corev1.NodeAffinity{
-				RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
-					NodeSelectorTerms: []corev1.NodeSelectorTerm{
-						nodeSelectorTermNotOnMaster,
-					},
-				},
-			}
-		}
+	if affinity.NodeAffinity == nil {
+		affinity.NodeAffinity = &corev1.NodeAffinity{}
 	}
 
+	// Set the master restriction, disallow scheduling to master.
+	if !ctx.rc.Config().Scheduler().AllowScheduleToMasterNode() {
+		affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution = selector.AddNodeSelectorMatchExpressionRequirement(affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution, corev1.NodeSelectorRequirement{
+			Key:      k8shelper.LabelNodeRole,
+			Operator: corev1.NodeSelectorOpNotIn,
+			Values:   []string{k8shelper.NodeRoleMaster},
+		})
+	}
+
+	isolateCpuNodeSelectorOp := corev1.NodeSelectorOpNotIn
+	if xstore.Spec.Exclusive {
+		isolateCpuNodeSelectorOp = corev1.NodeSelectorOpIn
+	}
+	affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution = selector.AddNodeSelectorMatchExpressionRequirement(affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution, corev1.NodeSelectorRequirement{
+		Key:      polardbxmeta.LabelIsolateCpu,
+		Operator: isolateCpuNodeSelectorOp,
+		Values:   []string{"true"},
+	})
 	return affinity
 }
 
 func (f *DefaultExtraPodFactory) NewPorts(ctx *PodFactoryContext, allocated map[string]int) (map[string][]corev1.ContainerPort, error) {
 	if boolutil.IsTrue(ctx.template.Spec.HostNetwork) {
 		// Default service node port range is 30000-32767, avoid if host network.
+		offset := rand.IntnRange(0, 5000)
 		return map[string][]corev1.ContainerPort{
 			convention.ContainerEngine: {
 				{
@@ -142,7 +124,7 @@ func (f *DefaultExtraPodFactory) NewPorts(ctx *PodFactoryContext, allocated map[
 					ContainerPort: int32(defaults.GetIntOrDefault(
 						allocated,
 						convention.PortAccess,
-						rand.IntnRange(14000, 18000),
+						15000+offset,
 					)),
 				},
 			},
@@ -152,7 +134,7 @@ func (f *DefaultExtraPodFactory) NewPorts(ctx *PodFactoryContext, allocated map[
 					ContainerPort: int32(defaults.GetIntOrDefault(
 						allocated,
 						convention.PortMetrics,
-						rand.IntnRange(20000, 22000),
+						55000+offset,
 					)),
 				},
 			},
@@ -162,7 +144,7 @@ func (f *DefaultExtraPodFactory) NewPorts(ctx *PodFactoryContext, allocated map[
 					ContainerPort: int32(defaults.GetIntOrDefault(
 						allocated,
 						convention.PortProbe,
-						rand.IntnRange(22000, 24000),
+						60000+offset,
 					)),
 				},
 			},
@@ -394,8 +376,8 @@ func (f *DefaultExtraPodFactory) Command(ctx *PodFactoryContext, container strin
 	}
 }
 
-func (f *DefaultExtraPodFactory) newProbeHandlerViaProber(endpoint, target string, serverPort, mysqlPort int, extra string) corev1.Handler {
-	return corev1.Handler{
+func (f *DefaultExtraPodFactory) newProbeHandlerViaProber(endpoint, target string, serverPort, mysqlPort int, extra string) corev1.ProbeHandler {
+	return corev1.ProbeHandler{
 		HTTPGet: &corev1.HTTPGetAction{
 			Path: endpoint,
 			Port: intstr.FromInt(serverPort),
@@ -426,7 +408,7 @@ func (f *DefaultExtraPodFactory) NewProbes(ctx *PodFactoryContext, container str
 	case convention.ContainerEngine:
 		return &ProbeSpec{
 			StartupProbe: &corev1.Probe{
-				Handler: f.newProbeHandlerViaProber("/liveness", probe.TypeXStore,
+				ProbeHandler: f.newProbeHandlerViaProber("/liveness", probe.TypeXStore,
 					ctx.portMap[convention.PortProbe], ctx.portMap[convention.PortAccess], ctx.engine),
 				InitialDelaySeconds: 5,
 				TimeoutSeconds:      10,
@@ -434,13 +416,13 @@ func (f *DefaultExtraPodFactory) NewProbes(ctx *PodFactoryContext, container str
 				FailureThreshold:    360,
 			},
 			LivenessProbe: &corev1.Probe{
-				Handler: f.newProbeHandlerViaProber("/liveness", probe.TypeXStore,
+				ProbeHandler: f.newProbeHandlerViaProber("/liveness", probe.TypeXStore,
 					ctx.portMap[convention.PortProbe], ctx.portMap[convention.PortAccess], ctx.engine),
 				TimeoutSeconds: 10,
 				PeriodSeconds:  10,
 			},
 			ReadinessProbe: &corev1.Probe{
-				Handler: f.newProbeHandlerViaProber("/readiness", probe.TypeXStore,
+				ProbeHandler: f.newProbeHandlerViaProber("/readiness", probe.TypeXStore,
 					ctx.portMap[convention.PortProbe], ctx.portMap[convention.PortAccess], ctx.engine),
 				TimeoutSeconds: 10,
 				PeriodSeconds:  10,
@@ -449,7 +431,7 @@ func (f *DefaultExtraPodFactory) NewProbes(ctx *PodFactoryContext, container str
 	case convention.ContainerExporter:
 		return &ProbeSpec{
 			StartupProbe: &corev1.Probe{
-				Handler: corev1.Handler{
+				ProbeHandler: corev1.ProbeHandler{
 					TCPSocket: &corev1.TCPSocketAction{
 						Port: intstr.FromString(convention.PortMetrics),
 					},
@@ -460,7 +442,7 @@ func (f *DefaultExtraPodFactory) NewProbes(ctx *PodFactoryContext, container str
 				FailureThreshold:    360,
 			},
 			LivenessProbe: &corev1.Probe{
-				Handler: corev1.Handler{
+				ProbeHandler: corev1.ProbeHandler{
 					TCPSocket: &corev1.TCPSocketAction{
 						Port: intstr.FromString(convention.PortMetrics),
 					},
@@ -469,7 +451,7 @@ func (f *DefaultExtraPodFactory) NewProbes(ctx *PodFactoryContext, container str
 				PeriodSeconds:  30,
 			},
 			ReadinessProbe: &corev1.Probe{
-				Handler: corev1.Handler{
+				ProbeHandler: corev1.ProbeHandler{
 					HTTPGet: &corev1.HTTPGetAction{
 						Path: "/metrics",
 						Port: intstr.FromString(convention.PortMetrics),
@@ -482,7 +464,7 @@ func (f *DefaultExtraPodFactory) NewProbes(ctx *PodFactoryContext, container str
 	case convention.ContainerProber:
 		return &ProbeSpec{
 			LivenessProbe: &corev1.Probe{
-				Handler: f.newProbeHandlerViaProber("/liveness", probe.TypeSelf,
+				ProbeHandler: f.newProbeHandlerViaProber("/liveness", probe.TypeSelf,
 					ctx.portMap[convention.PortProbe], 0, ctx.engine),
 				TimeoutSeconds: 5,
 				PeriodSeconds:  30,

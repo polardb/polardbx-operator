@@ -19,15 +19,17 @@ package polardbxcluster
 import (
 	"context"
 	"github.com/alibaba/polardbx-operator/api/v1/common"
-	"k8s.io/apimachinery/pkg/util/rand"
-
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/rand"
+	"strings"
 
 	polardbxv1 "github.com/alibaba/polardbx-operator/api/v1"
 	polardbxv1polardbx "github.com/alibaba/polardbx-operator/api/v1/polardbx"
 	"github.com/alibaba/polardbx-operator/pkg/webhook/extension"
+
+	"github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/meta"
 )
 
 type PolarDBXClusterV1Defaulter struct {
@@ -56,8 +58,15 @@ func (d *PolarDBXClusterV1Defaulter) Default(ctx context.Context, obj runtime.Ob
 		polardbx.Annotations[common.AnnotationOperatorCreateVersion] = d.configLoader().OperatorVersion
 	}
 
-	if polardbx.Spec.Config.CN.Static != nil {
-		if polardbx.Spec.Config.CN.Static.RPCProtocolVersion.String() == "" {
+	if polardbx.Spec.Config.CN.Static == nil {
+		polardbx.Spec.Config.CN.Static = &polardbxv1polardbx.CNStaticConfig{
+			EnableCoroutine: true,
+		}
+	}
+	if polardbx.Spec.Config.CN.Static.RPCProtocolVersion.IntValue() == 0 {
+		if polardbx.CreationTimestamp.IsZero() {
+			polardbx.Spec.Config.CN.Static.RPCProtocolVersion = intstr.FromString("2")
+		} else {
 			polardbx.Spec.Config.CN.Static.RPCProtocolVersion = intstr.FromString("1")
 		}
 	}
@@ -103,6 +112,15 @@ func (d *PolarDBXClusterV1Defaulter) Default(ctx context.Context, obj runtime.Ob
 			if readonlyParam.Name == "" {
 				polardbx.Spec.InitReadonly[i].Name = "ro-" + rand.String(4)
 			}
+		}
+	}
+
+	// mutate spec related to restore
+	if polardbx.Spec.Restore != nil && polardbx.Spec.Restore.From.BackupSetPath != "" {
+		// only perform mutation if backupSetPath mutable
+		if val, _ := polardbx.Annotations[meta.AnnotationImmutableBackupSetPath]; val != "true" {
+			polardbx.Spec.Restore.From.BackupSetPath = strings.Trim(
+				polardbx.Spec.Restore.From.BackupSetPath, "/")
 		}
 	}
 

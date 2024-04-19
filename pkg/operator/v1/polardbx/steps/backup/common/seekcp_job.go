@@ -25,7 +25,6 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/utils/pointer"
 )
 
@@ -95,13 +94,16 @@ func newSeekCpJob(pxcBackup *polardbxv1.PolarDBXBackup, targetPod *corev1.Pod) (
 	podSpec.Containers[0].Resources.Limits = nil
 	podSpec.Containers[0].Resources.Requests = nil
 	podSpec.Containers[0].Ports = nil
+	if podSpec.Containers[0].Lifecycle != nil {
+		podSpec.Containers[0].Lifecycle.PreStop = nil
+	}
 
 	// Replace system envs
 	replaceSystemEnvs(podSpec, targetPod)
 	patchTaskConfigMapVolumeAndVolumeMounts(pxcBackup, podSpec)
 
 	jobName := name.NewSplicedName(
-		name.WithTokens("seekcp", "job", pxcBackup.Name, rand.String(4)),
+		name.WithTokens("seekcp", "job", pxcBackup.Name),
 		name.WithPrefix("seekcp-job"),
 	)
 	job := &batchv1.Job{

@@ -38,6 +38,7 @@ const (
 	LabelBackupSchedule  = "polardbx/backup-schedule"
 	LabelBackupBinlog    = "polardbx/backupBinlog"
 	LabelJobType         = "polardbx/jobType"
+	LabelIsolateCpu      = "polardbx/isolate-cpu"
 )
 
 const (
@@ -63,6 +64,7 @@ const (
 	BinlogBackupPath  = "binlogbackup"
 	SeekCpName        = "set.cp"
 	BinlogIndexesName = "indexes"
+	KeyringPath       = "keyring"
 )
 
 func AssertRoleIn(role string, candidates ...string) {

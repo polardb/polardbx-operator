@@ -26,6 +26,7 @@ import (
 
 const (
 	LabelName         = "xstore/name"
+	LabelUid          = "xstore/uid"
 	LabelRand         = "xstore/rand"
 	LabelRole         = "xstore/role"
 	LabelPod          = "xstore/pod"
@@ -42,6 +43,8 @@ const (
 	LabelTargetXStore = "xstore/target-name"
 	LabelTmp          = "xstore/tmp"
 	LabelAutoRebuild  = "xstore/auto-rebuild"
+	LabelJobType      = "xstore/jobType"
+	LabelBackupBinlog = "xstore/backupBinlog"
 )
 
 const (
@@ -63,6 +66,10 @@ const (
 	RoleCandidate = "candidate" // Only appears in voting progress
 	RoleLogger    = "logger"
 	RoleLearner   = "learner"
+)
+
+const (
+	XStoreBackupPath = "xstore-backup"
 )
 
 func PodRole2DefaultRole(nodeRole polardbxv1xstore.NodeRole) string {
@@ -140,4 +147,10 @@ const (
 	ServiceTypeMetrics         = "metrics"
 	ServiceTypeClusterIp       = "clusterIp"
 	ServiceTypeStaticClusterIp = "staticClusterIp"
+)
+
+type XStoreJobType string
+
+const (
+	PitrPrepareBinlogForXStoreJobType XStoreJobType = "PitrPrepareBinlogsForXStore"
 )

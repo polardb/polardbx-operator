@@ -341,7 +341,7 @@ class EngineCommon(Engine, ABC):
         self._log_command(cmd, cwd=cwd, message='start command')
         return subprocess.Popen(cmd, cwd=cwd, stdout=stdout, stderr=stderr, env=self.context.subprocess_envs())
 
-    def exec_cmd(self, cmd: Sequence[AnyStr], *, cwd=None, stdout=None, stderr=None, interval=10):
+    def exec_cmd(self, cmd: Sequence[AnyStr], *, cwd=None, stdout=None, stderr=None, interval=300):
         p = self.start_process(cmd, cwd=cwd, stdout=stdout, stderr=stderr)
         try:
             ret = p.wait(timeout=interval)

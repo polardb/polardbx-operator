@@ -49,9 +49,12 @@ func LoadAllBinlog(pCtx *Context) error {
 	if taskConfig == nil {
 		return errors.New("taskConfig must not be nil")
 	}
-	hpfsClient, err := NewHpfsClient(taskConfig.HpfsEndpoint)
+	hpfsClient, conn, err := NewHpfsClient(taskConfig.HpfsEndpoint)
 	if err != nil {
 		return pkgErrors.Wrap(err, fmt.Sprintf("failed to get hpfs client, endpoint=%s", taskConfig.HpfsEndpoint))
+	}
+	if conn != nil {
+		defer conn.Close()
 	}
 	filestreamIp, filestreamPort := common.ParseNetAddr(taskConfig.FsEndpoint)
 	restoreBinlogs := make([]RestoreBinlog, 0)
@@ -219,14 +222,50 @@ func groupBinlogSources(sources []BinlogSource) map[string][]BinlogSource {
 	return result
 }
 
-func NewHpfsClient(endpoint string) (hpfs.HpfsServiceClient, error) {
+func NewHpfsClient(endpoint string) (hpfs.HpfsServiceClient, *grpc.ClientConn, error) {
 	hpfsConn, err := grpc.Dial(endpoint, grpc.WithInsecure())
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return hpfs.NewHpfsServiceClient(hpfsConn), nil
+	return hpfs.NewHpfsServiceClient(hpfsConn), hpfsConn, nil
 }
 
+func SelectBinlogForStandard(pCtx *Context) error {
+	pCtx.Logger.Info("SelectBinlogForStandard...")
+	flags := map[string]bool{}
+	newRestoreBinlogs := make([]RestoreBinlog, 0, len(pCtx.RestoreBinlogs)/2)
+	for _, restoreBinlog := range pCtx.RestoreBinlogs {
+		_, ok := flags[restoreBinlog.XStoreName]
+		if !ok {
+			err := restoreBinlog.SearchByTimestampAndIndex()
+			if err != nil {
+				pCtx.Logger.Error(err, "failed to SearchByTimestamp", "pxcName", restoreBinlog.PxcName, "xStoreName", restoreBinlog.XStoreName, "podName", restoreBinlog.PodName, "version", restoreBinlog.Version)
+				return err
+			}
+			newRestoreBinlogs = append(newRestoreBinlogs, restoreBinlog)
+			flags[restoreBinlog.XStoreName] = true
+		}
+	}
+	pCtx.RestoreBinlogs = newRestoreBinlogs
+	if len(pCtx.RestoreBinlogs) != len(pCtx.TaskConfig.XStores) {
+		// failed. some xStore binlog does not exist between the backup set start index and the timestamp
+		restoreBinlogXstores := make([]string, 0, len(pCtx.RestoreBinlogs))
+		for _, restoreBinlog := range pCtx.RestoreBinlogs {
+			restoreBinlogXstores = append(restoreBinlogXstores, restoreBinlog.XStoreName)
+		}
+		slices.Sort(restoreBinlogXstores)
+		configXStores := make([]string, 0, len(pCtx.TaskConfig.XStores))
+		for xStoreName, _ := range pCtx.TaskConfig.XStores {
+			configXStores = append(configXStores, xStoreName)
+		}
+		slices.Sort(configXStores)
+		err := errors.New("failed get proper binlogs")
+		pCtx.Logger.Error(err, "", "expect", configXStores, "actual", restoreBinlogXstores)
+		return err
+	}
+	return nil
+
+}
 func PrepareBinlogMeta(pCtx *Context) error {
 	pCtx.Logger.Info("PrepareBinlogMeta...")
 	flags := map[string]bool{}
@@ -474,6 +513,10 @@ func FinishAndStartHttpServer(pCtx *Context) error {
 
 	mux.HandleFunc("/context", func(writer http.ResponseWriter, request *http.Request) {
 		writer.Write([]byte(MustMarshalJSON(pCtx)))
+	})
+
+	mux.HandleFunc("/config", func(writer http.ResponseWriter, request *http.Request) {
+		writer.Write([]byte(MustMarshalJSON(pCtx.TaskConfig)))
 	})
 
 	mux.HandleFunc("/binlogs", func(writer http.ResponseWriter, request *http.Request) {

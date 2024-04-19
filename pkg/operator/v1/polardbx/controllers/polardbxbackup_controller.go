@@ -50,7 +50,7 @@ func (r *PolarDBXBackupReconciler) Reconcile(ctx context.Context, request reconc
 
 	if hint.IsNamespacePaused(request.Namespace) {
 		log.Info("Reconciling is paused, skip")
-		return reconcile.Result{}, nil
+		return reconcile.Result{Requeue: true}, nil
 	}
 
 	rc := polardbxreconcile.NewContext(
@@ -90,9 +90,15 @@ func (r *PolarDBXBackupReconciler) newReconcileTask(rc *polardbxreconcile.Contex
 
 	task := control.NewTask()
 	defer commonsteps.PersistentStatusChanges(task, true)
+	defer commonsteps.PersistentPolarDBXBackup(task, true)
+
+	commonsteps.WhenDeletedAndNotDeleting(
+		commonsteps.TransferPhaseTo(polardbxv1.BackupDeleting, true),
+	)(task)
 
 	switch backup.Status.Phase {
 	case polardbxv1.BackupNew:
+		commonsteps.AddFinalizer(task)
 		commonsteps.UpdateBackupStartInfo(task)
 		//locked binlog purge
 		commonsteps.LockXStoreBinlogPurge(task)
@@ -106,11 +112,15 @@ func (r *PolarDBXBackupReconciler) newReconcileTask(rc *polardbxreconcile.Contex
 			commonsteps.TransferPhaseTo(polardbxv1.BackupCollecting, false)(task)
 		}
 	case polardbxv1.BackupCollecting:
-		commonsteps.CollectBinlogStartIndex(task)
-		commonsteps.DrainCommittingTrans(task)
-		commonsteps.SendHeartBeat(task)
-		commonsteps.WaitHeartbeatSentToFollower(task)
-		commonsteps.CollectBinlogEndIndex(task)
+		pxcBackup := rc.MustGetPolarDBXBackup()
+		control.When(
+			len(pxcBackup.Status.CollectEndIndexMap) != len(pxcBackup.Status.Backups),
+			commonsteps.CollectBinlogStartIndex,
+			commonsteps.DrainCommittingTrans,
+			commonsteps.SendHeartBeat,
+			commonsteps.WaitHeartbeatSentToFollower,
+			commonsteps.CollectBinlogEndIndex,
+		)(task)
 		commonsteps.TransferPhaseTo(polardbxv1.BackupCalculating, false)(task)
 	case polardbxv1.BackupCalculating:
 		commonsteps.WaitAllCollectBinlogJobFinished(task)
@@ -133,9 +143,12 @@ func (r *PolarDBXBackupReconciler) newReconcileTask(rc *polardbxreconcile.Contex
 		commonsteps.RemoveSeekCpJob(task)
 		commonsteps.RemoveBackupOverRetention(task)
 		log.Info("Finished phase.")
+	case polardbxv1.BackupDeleting:
+		commonsteps.UnLockXStoreBinlogPurge(task)
+		commonsteps.CleanRemoteBackupFiles(task)
+		commonsteps.RemoveFinalizer(task)
 	case polardbxv1.BackupFailed:
 		commonsteps.UnLockXStoreBinlogPurge(task)
-		commonsteps.DeleteBackupJobsOnFailure(task)
 		log.Info("Failed phase.")
 	default:
 		log.Info("Unrecognized phase for pxc backup")

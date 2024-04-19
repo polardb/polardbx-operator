@@ -339,8 +339,9 @@ message RemoteFsEndpoint {
   //     1. ftp, File Transfer Protocol.
   //     2. sftp, SSH File Transfer Protocol.
   //     3. http(s), Hypertext Transfer Protocol.
-  //     4. oss (aliyun), Object Storage Service of Aliyun.
+  //     4. aliyun-oss (aliyun), Object Storage Service of Aliyun.
   //     5. hdfs, Hadoop Distributed File System.
+  //     6. s3, Simple Storage Service.
   string protocol = 1;
 
   // Path in protocol specified format.
@@ -499,6 +500,12 @@ message UploadResponse {
 message DeleteRemoteFileRequest {
   // Target.
   RemoteFsEndpoint target = 1;
+
+  // SinkType in hpfs config
+  string sink_type = 2;
+
+  // SinkName in hpfs config
+  string sink_name = 3;
 }
 
 message DeleteRemoteFileResponse {

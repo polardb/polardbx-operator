@@ -26,6 +26,16 @@ spec:
       serviceAccount: {{ .Values.serviceAccount }}
       {{- end }}
       volumes:
+      {{- if .Values.controllerManager.useHostTimeZone }}
+      - name: etclocaltime
+        hostPath:
+          path: /etc/localtime
+          type: File
+      - name: zoneinfo
+        hostPath:
+          path: /usr/share/zoneinfo
+          type: Directory
+      {{- end }}
       - name: config
         configMap:
           name: {{ .Values.controllerManager.name }}-config
@@ -70,6 +80,12 @@ spec:
           name: config
         - mountPath: /etc/operator/hints
           name: hints
+        {{- if .Values.controllerManager.useHostTimeZone }}
+        - mountPath: /etc/localtime
+          name: etclocaltime
+        - mountPath: /usr/share/zoneinfo
+          name: zoneinfo
+        {{- end }}
         command:
         - /polardbx-operator
         args:
