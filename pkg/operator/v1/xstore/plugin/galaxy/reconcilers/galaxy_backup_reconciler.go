@@ -33,10 +33,14 @@ func (r *GalaxyBackupReconciler) Reconcile(rc *xstorev1reconcile.BackupContext, 
 	backup := rc.MustGetXStoreBackup()
 	log = log.WithValues("phase", backup.Status.Phase)
 
-	isStandard, err := rc.GetXStoreIsStandard()
-	if err != nil {
-		log.Error(err, "Unable to get corresponding xstore")
-		return reconcile.Result{}, err
+	isStandard := true
+	var err error
+	if backup.GetDeletionTimestamp().IsZero() {
+		isStandard, err = rc.GetXStoreIsStandard()
+		if err != nil {
+			log.Error(err, "Unable to get corresponding xstore")
+			return reconcile.Result{}, err
+		}
 	}
 	task, err := r.newReconcileTask(rc, backup, log, isStandard)
 	if err != nil {

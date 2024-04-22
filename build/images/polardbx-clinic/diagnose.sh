@@ -114,11 +114,10 @@ dump_obj(){
           kubectl -n "$current_ns" logs "$line"  "$container" --since=24h > $base_dir/"$line"_"$container".log
       done
       if [ "$log_type" == "cn" ]; then
-#        echo "collect /home/drds-server/logs/tddl/ logs ... for "$line
         kubectl -n "$current_ns" exec -it "$line" -- bash -c "cd /home/admin/drds-server/logs/tddl && tar zcvf tddllog.tar.gz *.log"
         kubectl -n "$current_ns" cp "$line":/home/admin/drds-server/logs/tddl/tddllog.tar.gz $base_dir/"$line"-tddlog.tar.gz
         kubectl -n "$current_ns" exec -it "$line" -- rm -f /home/admin/drds-server/logs/tddl/tddllog.tar.gz
-        if ! [ -f cn.sql ]; then
+        if ! [ -f diagnose_cn.sql ]; then
           echo "
                 select 'select version()';
                 select version();
@@ -130,11 +129,11 @@ dump_obj(){
                 show full processlist;
                 select 'show variables';
                 show variables;
-                " > cn.sql
+                " > diagnose_cn.sql
         fi
-        echo "exec cn.sql in "$line
-        kubectl -n "$current_ns" cp cn.sql "$line":cn.sql
-        kubectl -n "$current_ns" exec -it "$line" -- bash -c "myc -e 'source cn.sql'" >  $base_dir/"$line"-cmdresponse.log
+        echo "exec diagnose_cn.sql in "$line
+        kubectl -n "$current_ns" cp diagnose_cn.sql "$line":diagnose_cn.sql
+        kubectl -n "$current_ns" exec -it "$line" -- bash -c "myc -e 'source diagnose_cn.sql'" >  $base_dir/"$line"-cmdresponse.log
         common_dump "$current_ns" "$line" $base_dir/"$line"-cmdresponse.log
       fi
       if [ "$log_type" == "dn" ]; then
@@ -145,7 +144,7 @@ dump_obj(){
             echo "exec mysql -V in "$line
             echo "mysql -V" >> $base_dir/"$line"-cmdresponse.log
             kubectl -n "$current_ns" exec -it $line -- mysqld -V >> $base_dir/"$line"-cmdresponse.log
-            if ! [ -f dn.sql ]; then
+            if ! [ -f diagnose_dn.sql ]; then
               echo "
                    select version();
                    select 'show processlist';
@@ -162,11 +161,11 @@ dump_obj(){
                    show consensus logs \G;
                    select 'show slave status';
                    show slave status \G;
-                   " > dn.sql
+                   " > diagnose_dn.sql
             fi
-            echo "exec dn.sql in ""$line"
-            kubectl -n "$current_ns" cp dn.sql "$line":dn.sql
-            kubectl -n "$current_ns" exec -it "$line" -- myc -e 'source dn.sql' >> $base_dir/"$line"-cmdresponse.log
+            echo "exec diagnose_dn.sql in ""$line"
+            kubectl -n "$current_ns" cp diagnose_dn.sql "$line":diagnose_dn.sql
+            kubectl -n "$current_ns" exec -it "$line" -- myc -e 'source diagnose_dn.sql' >> $base_dir/"$line"-cmdresponse.log
             common_dump "$current_ns" "$line" $base_dir/"$line"-cmdresponse.log
       fi
       if [ "$log_type" == "cdc" ]; then
@@ -191,37 +190,37 @@ dump_obj(){
 
 
 desensitize(){
-  sed -i -E 's/(password: ).*/\1******/' $operator_ns/configmap/*.yaml
-  sed -i -E 's/(minioAccessKey: ).*/\1******/' $operator_ns/configmap/*.yaml
-  sed -i -E 's/(minioSecretKey: ).*/\1******/' $operator_ns/configmap/*.yaml
-  sed -i -E 's/(accessKey: ).*/\1******/' $operator_ns/configmap/*.yaml
-  sed -i -E 's/(accessSecret: ).*/\1******/' $operator_ns/configmap/*.yaml
-  sed -i -E 's/(oss_access_key: ).*/\1******/' $operator_ns/configmap/*.yaml
-  sed -i -E 's/(oss_access_secret: ).*/\1******/' $operator_ns/configmap/*.yaml
+  sed -i -E 's/(password: ).*/\1******/' $operator_ns/ConfigMap/*.yaml
+  sed -i -E 's/(minioAccessKey: ).*/\1******/' $operator_ns/ConfigMap/*.yaml
+  sed -i -E 's/(minioSecretKey: ).*/\1******/' $operator_ns/ConfigMap/*.yaml
+  sed -i -E 's/(accessKey: ).*/\1******/' $operator_ns/ConfigMap/*.yaml
+  sed -i -E 's/(accessSecret: ).*/\1******/' $operator_ns/ConfigMap/*.yaml
+  sed -i -E 's/(oss_access_key: ).*/\1******/' $operator_ns/ConfigMap/*.yaml
+  sed -i -E 's/(oss_access_secret: ).*/\1******/' $operator_ns/ConfigMap/*.yaml
 }
 
 
 main(){
-  res_types=("pxc" "xstore" "pxcblog" "pxb" "pbs" "pxcknobs" "pxlc" "pxm" "pxp" "pxpt" "st" "xsblog" "xsbackup" "xf" "deployment" "node")
+  res_types=("PolarDBXCluster" "XStore" "PolarDBXBackupBinlog" "PolarDBXBackup" "PolarDBXBackupSchedule" "PolarDBXLogCollector" "PolarDBXMonitor" "PolarDBXParameter" "PolarDBXParameterTemplate" "SystemTask" "XStoreBackupBinlog" "XStoreBackup" "XStoreFollower" "Deployment" "Node")
   for res_type in "${res_types[@]}"
   do
       dump_obj $namespace $res_type &
   done
   wait
-  dump_obj "$namespace" pod "polardbx/role=cn" 1 1 cn &
-  dump_obj "$namespace" pod "xstore/node-role" 1 1 dn &
-  dump_obj "$namespace" pod "polardbx/role=cdc" 1 1 cdc &
-  dump_obj "$namespace" configmap "polardbx/name" && dump_obj "$namespace" configmap "xstore/name" &
+  dump_obj "$namespace" Pod "polardbx/role=cn" 1 1 cn &
+  dump_obj "$namespace" Pod "xstore/node-role" 1 1 dn &
+  dump_obj "$namespace" Pod "polardbx/role=cdc" 1 1 cdc &
+  dump_obj "$namespace" ConfigMap "polardbx/name" && dump_obj "$namespace" ConfigMap "xstore/name" &
   wait
   
   
-  res_types_for_operator=("deployment" "ds")
+  res_types_for_operator=("Deployment" "DaemonSet")
   for res_type_for_operator in "${res_types_for_operator[@]}"
   do
       dump_obj $operator_ns $res_type_for_operator  &
   done
-  dump_obj $operator_ns configmap "" 0 0 "" polardbx &
-  dump_obj $operator_ns pod "" 1 1 "" &
+  dump_obj $operator_ns ConfigMap "" 0 0 "" polardbx &
+  dump_obj $operator_ns Pod "" 1 1 "" &
   wait
   kubectl get nodes -o custom-columns=NAME:.metadata.name,CPU:.status.capacity.cpu,MEMORY:.status.capacity.memory,ALLOCATABLE_CPU:.status.allocatable.cpu,ALLOCATABLE_MEMORY:.status.allocatable.memory > noderesourcelist.txt
   desensitize
