@@ -70,13 +70,15 @@ func (r *XStoreBackupReconciler) Reconcile(ctx context.Context, request reconcil
 	}
 
 	// Record the context of the corresponding xstore
-	xstore, err := rc.GetXStore()
-	if err != nil {
-		log.Error(err, "Unable to get corresponding xstore")
-		return reconcile.Result{}, err
-	}
 	xstoreRequest := request
-	xstoreRequest.Name = xstore.Name
+	if xstoreBackup.GetDeletionTimestamp().IsZero() { // If request to delete, no need to care about xstore
+		xstore, err := rc.GetXStore()
+		if err != nil {
+			log.Error(err, "Unable to get corresponding xstore")
+			return reconcile.Result{}, err
+		}
+		xstoreRequest.Name = xstore.Name
+	}
 	xstoreRc := xstorev1reconcile.NewContext(
 		control.NewBaseReconcileContextFrom(r.BaseRc, ctx, xstoreRequest),
 		r.LoaderFactory(),

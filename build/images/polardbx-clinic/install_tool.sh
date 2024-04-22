@@ -25,3 +25,4 @@ EOF
 
 yum install -y kubectl
 yum install -y which
+yum install -y tree
