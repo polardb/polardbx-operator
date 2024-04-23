@@ -27,7 +27,7 @@ jobs:
       - name: Setup go environment
         uses: actions/setup-go@v3
         with:
-          go-version: '1.18'
+          go-version: '1.21'
 
       # 2 Set ACK context
       - name: Set K8s context
@@ -49,9 +49,6 @@ jobs:
       # 4 Build images and push to registry
       - name: Build and push images
         run: |-
-          echo "public ip"
-          curl -L ifconfig.me
-          curl -L ifconfig.me
           make push REPO=$REGISTRY/$NAMESPACE TAG=$TAG
 
       # 5 Generate helm chart
