@@ -49,6 +49,9 @@ jobs:
       # 4 Build images and push to registry
       - name: Build and push images
         run: |-
+          echo "public ip"
+          curl -L ifconfig.me
+          curl -L ifconfig.me
           make push REPO=$REGISTRY/$NAMESPACE TAG=$TAG
 
       # 5 Generate helm chart
