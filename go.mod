@@ -1,6 +1,6 @@
 module github.com/alibaba/polardbx-operator
 
-go 1.21.1
+go 1.21
 
 require (
 	github.com/aliyun/aliyun-oss-go-sdk v2.1.10+incompatible
