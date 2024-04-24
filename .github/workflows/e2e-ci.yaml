@@ -11,7 +11,7 @@ on:
 # Environment variables available to all jobs and steps in this workflow.
 env:
   REGION_ID: cn-zhangjiakou
-  REGISTRY: registry.cn-zhangjiakou.aliyuncs.com
+  REGISTRY: polardbx-ci-registry.cn-zhangjiakou.cr.aliyuncs.com
   NAMESPACE: polardbx-ci
   TAG: ${{ github.sha }}
   ACK_CLUSTER_ID: c5ef7e2fffca74f4286bd91d6a9a47b2f
@@ -41,7 +41,7 @@ jobs:
       - name: Login to ACR with the AccessKey pair
         uses: aliyun/acr-login@v1
         with:
-          login-server: https://registry.cn-zhangjiakou.aliyuncs.com
+          login-server: https://polardbx-ci-registry.cn-zhangjiakou.cr.aliyuncs.com
           username: "${{ secrets.ACR_USERNAME }}"
           password: "${{ secrets.ACR_PASSWORD }}"
           region-id: "${{ env.REGION_ID }}"
