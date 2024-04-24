@@ -283,7 +283,7 @@ var _ = ginkgo.Describe("[PolarDBXCluster] [Lifecycle:Upgrade]", func() {
 		obj.Spec.Topology.Nodes.Columnar = &polardbxv1polardbx.TopologyNodeColumnar{
 			Replicas: 1,
 			Template: polardbxv1polardbx.ColumnarTemplate{
-				Image: "registry.cn-zhangjiakou.aliyuncs.com/drds_pre/polardbx-columnar:v1",
+				Image: "pxc-registry.cn-shanghai.cr.aliyuncs.com/polardbx/polardbx-columnar:v1test",
 			},
 		}
 		err := f.Client.Update(f.Ctx, obj)

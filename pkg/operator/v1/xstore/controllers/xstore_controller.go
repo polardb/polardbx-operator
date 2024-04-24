@@ -38,6 +38,7 @@ import (
 	"github.com/alibaba/polardbx-operator/pkg/k8s/control"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/config"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/plugin"
+	_ "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/plugin/engines"
 	xstorev1reconcile "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/reconcile"
 )
 
