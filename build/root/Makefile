@@ -15,6 +15,17 @@
 PRINT_HELP ?=
 CURRENT_YEAR=$(shell date +"%Y")
 
+## Location to install dependencies to
+LOCALBIN ?= $(shell pwd)/bin
+$(LOCALBIN):
+	mkdir -p $(LOCALBIN)
+
+## Tool Binaries
+CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
+
+## Tool Versions
+CONTROLLER_TOOLS_VERSION ?= v0.9.0
+
 define ALL_HELP_INFO
 # Build code.
 #
@@ -120,8 +131,8 @@ plugin-gen:
 	@go generate ./pkg/operator/v1/xstore/plugin
 
 .PHONY: controller-gen
-controller-gen:
-	@controller-gen object:headerFile="hack/boilerplates/boilerplate.go.txt",year=$(CURRENT_YEAR) paths="./api/..."
+controller-gen: download-controller-gen
+	$(CONTROLLER_GEN) object:headerFile="hack/boilerplates/boilerplate.go.txt",year=$(CURRENT_YEAR) paths="./api/..."
 	@go fmt ./api/...
 
 define UPDATE_VENDOR_LICENSES_HELP_INFO
@@ -171,8 +182,8 @@ e2e-test:
 endif
 
 .PHONY: manifests
-manifests:
-	@controller-gen crd:crdVersions=v1 rbac:roleName=manager-role webhook paths="./api/..." output:crd:artifacts:config=charts/polardbx-operator/crds
+manifests: download-controller-gen
+	$(CONTROLLER_GEN) crd:crdVersions=v1 rbac:roleName=manager-role webhook paths="./api/..." output:crd:artifacts:config=charts/polardbx-operator/crds
 
 .PHONY: generate-notice
 generate-notice:
@@ -190,3 +201,14 @@ helm-package:
 	@helm package charts/polardbx-operator -d target/charts
 	@helm package charts/polardbx-monitor -d target/charts
 	@helm package charts/polardbx-logcollector -d target/charts
+
+.PHONY: download-controller-gen
+download-controller-gen: $(LOCALBIN) ## Download controller-gen locally if necessary.
+	@{ \
+	set -e ;\
+	if [ ! -f "$(CONTROLLER_GEN)" ] || [ "$$($(CONTROLLER_GEN) --version 2>&1 | awk '{print $$NF}')" != "$(CONTROLLER_TOOLS_VERSION)" ]; then \
+        echo 'Installing controller-gen@$(CONTROLLER_TOOLS_VERSION)...' ;\
+        GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_TOOLS_VERSION) ;\
+        echo 'Successfully installed' ;\
+    fi \
+	}
