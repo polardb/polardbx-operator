@@ -339,6 +339,10 @@ done
 `
 )
 
+func (f *objectFactory) getTolerationsFrom(polardbx *polardbxv1.PolarDBXCluster) []corev1.Toleration {
+	return polardbx.Spec.Tolerations
+}
+
 func (f *objectFactory) newDeployment4CN(group string, mr *matchingRule, mustStaticPorts bool) (*appsv1.Deployment, error) {
 	polardbx := f.rc.MustGetPolarDBX()
 	topology := polardbx.Status.SpecSnapshot.Topology
@@ -371,6 +375,8 @@ func (f *objectFactory) newDeployment4CN(group string, mr *matchingRule, mustSta
 		convention.ConstLabelsWithRole(polardbx, polardbxmeta.RoleCN),
 		nodeSelector,
 	)
+
+	tolerations := f.getTolerationsFrom(polardbx)
 
 	// Name & Labels & Annotations
 	deployName := convention.NewDeploymentName(polardbx, polardbxmeta.RoleCN, group)
@@ -580,6 +586,7 @@ func (f *objectFactory) newDeployment4CN(group string, mr *matchingRule, mustSta
 					HostNetwork:                   template.HostNetwork,
 					ShareProcessNamespace:         pointer.Bool(true),
 					Affinity:                      affinity,
+					Tolerations:                   tolerations,
 				},
 			},
 		},
@@ -654,6 +661,8 @@ func (f *objectFactory) newDeployment4CDC(group string, mr *matchingRule, mustSt
 		convention.ConstLabelsWithRole(polardbx, polardbxmeta.RoleCDC),
 		nodeSelector,
 	)
+
+	tolerations := f.getTolerationsFrom(polardbx)
 
 	// Name & Labels
 	deployName := convention.NewDeploymentName(polardbx, polardbxmeta.RoleCDC, group)
@@ -802,6 +811,7 @@ func (f *objectFactory) newDeployment4CDC(group string, mr *matchingRule, mustSt
 					DNSPolicy:                     dnsPolicy,
 					ShareProcessNamespace:         pointer.Bool(true),
 					Affinity:                      affinity,
+					Tolerations:                   tolerations,
 					// FIXME host network for CDC isn't supported
 					// HostNetwork:                   template.HostNetwork,
 				},
@@ -880,6 +890,8 @@ func (f *objectFactory) newDeployment4Columnar(group string, mr *matchingRule, m
 		nodeSelector,
 	)
 
+	tolerations := f.getTolerationsFrom(polardbx)
+
 	// Name & Labels
 	deployName := convention.NewDeploymentName(polardbx, polardbxmeta.RoleColumnar, group)
 
@@ -956,6 +968,7 @@ func (f *objectFactory) newDeployment4Columnar(group string, mr *matchingRule, m
 					DNSPolicy:                     dnsPolicy,
 					ShareProcessNamespace:         pointer.Bool(true),
 					Affinity:                      affinity,
+					Tolerations:                   tolerations,
 					HostNetwork:                   template.HostNetwork,
 				},
 			},
