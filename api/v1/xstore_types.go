@@ -152,6 +152,10 @@ type XStoreSpec struct {
 	// Exclusive if true, it means more resource isolation.
 	// +optional
 	Exclusive bool `json:"exclusive,omitempty"`
+
+	// Tolerations specifies the tolerations of the Pods of the xstore.
+	// +optional
+	Tolerations []corev1.Toleration `json:"tolerations,omitempty"`
 }
 
 type XStoreStatus struct {
