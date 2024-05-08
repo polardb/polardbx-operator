@@ -386,6 +386,7 @@ func (f *objectFactory) newXStore(
 
 	// Build
 	affinity := f.newXStoreNodeSetAffinity(polardbx, nil)
+	tolerations := f.getTolerationsFrom(polardbx)
 	nodeTemplate := &polardbxv1xstore.NodeTemplate{
 		ObjectMeta: polardbxv1common.PartialObjectMeta{
 			Labels:      labels,
@@ -468,7 +469,8 @@ func (f *objectFactory) newXStore(
 				Enable:      polardbx.Spec.TDE.Enable,
 				KeyringPath: polardbx.Spec.TDE.KeyringPath,
 			},
-			Exclusive: polardbx.Spec.Exclusive,
+			Exclusive:   polardbx.Spec.Exclusive,
+			Tolerations: tolerations,
 		},
 	}
 	restoreOpt := polardbx.Spec.Restore
