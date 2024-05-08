@@ -218,6 +218,7 @@ func NewPod(rc *reconcile.Context, xstore *polardbxv1.XStore, nodeSet *polardbxv
 			HostNetwork:                   boolutil.IsTrue(template.Spec.HostNetwork),
 			ShareProcessNamespace:         pointer.BoolPtr(true),
 			Affinity:                      opts.NewAffinity(factoryCtx),
+			Tolerations:                   xstore.Spec.Tolerations,
 			NodeName:                      hostPathVolume.Host, // If already bound, then assign to the same host.
 			Containers: []corev1.Container{
 				{
