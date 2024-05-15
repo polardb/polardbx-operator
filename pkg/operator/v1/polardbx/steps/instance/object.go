@@ -18,6 +18,7 @@ package instance
 
 import (
 	"fmt"
+	"k8s.io/apimachinery/pkg/api/equality"
 	"sort"
 	"strconv"
 	"strings"
@@ -541,6 +542,24 @@ var RemoveTrailingDNs = polardbxv1reconcile.NewStepBinder("RemoveTrailingDNs",
 	},
 )
 
+func isDeployPodSpecChanged(oldDeploy *appsv1.Deployment, newDeploy *appsv1.Deployment) bool {
+	// engine container
+	oldPodSpec := oldDeploy.Spec.Template.Spec
+	oldContainer := rebuildFromContainer(k8shelper.GetContainerFromPodSpec(&oldPodSpec, convention.ContainerEngine))
+	newPodSpec := newDeploy.Spec.Template.Spec
+	newContainer := rebuildFromContainer(k8shelper.GetContainerFromPodSpec(&newPodSpec, convention.ContainerEngine))
+	return !equality.Semantic.DeepEqual(oldContainer, newContainer)
+}
+
+func rebuildFromContainer(container *corev1.Container) *corev1.Container {
+	return &corev1.Container{
+		Image:   container.Image,
+		Ports:   container.Ports,
+		EnvFrom: container.EnvFrom,
+		Env:     container.Env,
+	}
+}
+
 func reconcileGroupedDeployments(rc *polardbxv1reconcile.Context, flow control.Flow, role string) (reconcile.Result, error) {
 	polardbxmeta.AssertRoleIn(role, polardbxmeta.RoleCN, polardbxmeta.RoleCDC, polardbxmeta.RoleColumnar)
 
@@ -593,11 +612,19 @@ func reconcileGroupedDeployments(rc *polardbxv1reconcile.Context, flow control.F
 				}
 				anyChanged = true
 			} else {
-				newDeploymentLabelHash := newDeployment.Labels[polardbxmeta.LabelHash]
-				if newDeploymentLabelHash != observedDeployment.Labels[polardbxmeta.LabelHash] {
+				if *(newDeployment.Spec.Replicas) != *(observedDeployment.Spec.Replicas) {
+					observedDeployment.Spec.Replicas = newDeployment.Spec.Replicas
+					err := rc.Client().Update(rc.Context(), observedDeployment)
+					if err != nil {
+						return flow.Error(err, "Unable to update deployment.",
+							"deployment", observedDeployment.Name)
+					}
+
+				} else if isDeployPodSpecChanged(observedDeployment, &newDeployment) {
+					newDeployHash := newDeployment.Labels[polardbxmeta.LabelHash]
 					convention.CopyMetadataForUpdate(&newDeployment.ObjectMeta, &observedDeployment.ObjectMeta, observedGeneration)
 					newDeployment.SetLabels(k8shelper.PatchLabels(newDeployment.Labels, map[string]string{
-						polardbxmeta.LabelHash: newDeploymentLabelHash,
+						polardbxmeta.LabelHash: newDeployHash,
 					}))
 					err := rc.Client().Update(rc.Context(), &newDeployment)
 					if err != nil {

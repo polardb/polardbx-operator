@@ -16,9 +16,9 @@
 
 
 SOURCE_REPO=polarximages-registry.cn-zhangjiakou.cr.aliyuncs.com/daixingpolarximages
-SOURCE_VERSION=v1.6.0
+SOURCE_VERSION=v1.6.1
 DEST_REPO=polardbx
-DEST_VERSION=v1.6.0
+DEST_VERSION=v1.6.1
 TARGETS="xstore-tools polardbx-operator probe-proxy polardbx-exporter polardbx-init polardbx-hpfs polardbx-job polardbx-clinic polardbx-logstash"
 
 #pull from source image and tag it

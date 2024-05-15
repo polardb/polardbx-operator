@@ -45,6 +45,8 @@ const (
 	ServiceTypeStaticClusterIp ServiceType = "staticClusterIp"
 )
 
+const PodGracePeriodSeconds = 300
+
 func GetXStoreServiceName(xstore *polardbxv1.XStore) string {
 	if xstore.Spec.ServiceName == "" {
 		return xstore.Name

@@ -214,7 +214,7 @@ func NewPod(rc *reconcile.Context, xstore *polardbxv1.XStore, nodeSet *polardbxv
 			ImagePullSecrets:              template.Spec.ImagePullSecrets,
 			DNSPolicy:                     corev1.DNSClusterFirstWithHostNet,
 			RestartPolicy:                 corev1.RestartPolicyAlways,
-			TerminationGracePeriodSeconds: pointer.Int64Ptr(300),
+			TerminationGracePeriodSeconds: pointer.Int64Ptr(convention.PodGracePeriodSeconds),
 			HostNetwork:                   boolutil.IsTrue(template.Spec.HostNetwork),
 			ShareProcessNamespace:         pointer.BoolPtr(true),
 			Affinity:                      opts.NewAffinity(factoryCtx),

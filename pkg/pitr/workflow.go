@@ -142,8 +142,8 @@ func LoadAllBinlog(pCtx *Context) error {
 					dataFilepath := vals[0]
 					metaFilepath := vals[1]
 					if dataFilepath == "" || metaFilepath == "" {
-						err := fmt.Errorf("invalid filepath, dataFilepath = %s, metaFilepath = %s", dataFilepath, metaFilepath)
-						return err
+						pCtx.Logger.Info(fmt.Sprintf("invalid filepath, dataFilepath = %s, metaFilepath = %s", dataFilepath, metaFilepath))
+						continue
 					}
 					binlogSources = append(binlogSources, BinlogSource{
 						Filename: filename,
