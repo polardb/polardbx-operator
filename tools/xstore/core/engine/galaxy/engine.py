@@ -225,9 +225,16 @@ class GalaxyEngine(EngineCommon):
             'loose_mysqlx_max_connections': dynamic_config["mysqlx_max_connections"],
             'loose_galaxy_max_connections': dynamic_config["loose_galaxy_max_connections"],
             'default_time_zone': '+08:00',
-            'loose_new_rpc': self.new_rpc_enabled,
+            'loose_new_rpc': "on" if self.new_rpc_enabled else "off",
         }
         MySQLConfigManager.canonical_options(config)
+        return config
+
+    def _final_config(self):
+        config = configparser.ConfigParser(allow_no_value=True)
+        config['mysqld'] = {}
+        if self.new_rpc_enabled:
+            config['mysqld']['loose_new_rpc'] = 'on'
         return config
 
     def update_config(self, **override):
@@ -243,6 +250,7 @@ class GalaxyEngine(EngineCommon):
         override_configs += [self.file_config_dynamic, self._system_config()]
         if os.path.exists(self.file_config_override):
             override_configs += [self.file_config_override]
+        override_configs += [self._final_config()]
 
         mgr.update(template_config_file, overrides=override_configs)
 

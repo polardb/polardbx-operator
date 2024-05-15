@@ -73,7 +73,7 @@ func (exec *UpdateExec) Execute(rc *xstorev1reconcile.Context, flow control.Flow
 
 			leaderLocalInfo, err := xstoreinstance.ShowThis(rc, leaderPod, flow.Logger(), true)
 			if err != nil || !strings.EqualFold(leaderLocalInfo.Role, xstoremeta.RoleLeader) {
-				return flow.RetryAfter(time.Minute, "Failed to query local info on leader pod.", "pod", leaderPod.Name)
+				return flow.RetryAfter(5*time.Second, "Failed to query local info on leader pod.", "pod", leaderPod.Name)
 			}
 
 			globalInfoItems, err := xstoreinstance.ShowGlobalInfo(rc, leaderPod, flow.Logger())
@@ -106,6 +106,7 @@ func (exec *UpdateExec) Execute(rc *xstorev1reconcile.Context, flow control.Flow
 				rc.Context(),
 				pod,
 				client.PropagationPolicy(metav1.DeletePropagationBackground),
+				client.GracePeriodSeconds(xstoreconvention.PodGracePeriodSeconds),
 			); err != nil {
 				return flow.Error(err, "Unable to delete the pod", "pod", target)
 			}

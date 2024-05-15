@@ -325,6 +325,7 @@ func (f *DefaultExtraPodFactory) NewEnvs(ctx *PodFactoryContext) (map[string][]c
 				{Name: "LIMITS_CPU", Value: strconv.FormatInt(resources.Limits.Cpu().MilliValue(), 10)},
 				{Name: "LIMITS_MEM", Value: strconv.FormatInt(resources.Limits.Memory().Value(), 10)},
 				{Name: "LOG_DATA_SEPARATION", Value: strconv.FormatBool(ctx.xstore.Spec.Config.Dynamic.LogDataSeparation)},
+				{Name: "RPC_PROTOCOL_VERSION", Value: ctx.xstore.Spec.Config.Dynamic.RpcProtocolVersion.String()},
 			},
 			f.newEnvsForEnginePorts(ctx),
 			engineEnvs,

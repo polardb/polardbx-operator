@@ -19,11 +19,10 @@ package controllers
 import (
 	"context"
 	"errors"
+	"github.com/alibaba/polardbx-operator/pkg/operator/hint"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/steps/instance/pitr"
 	polarxJson "github.com/alibaba/polardbx-operator/pkg/util/json"
 	"time"
-
-	"github.com/alibaba/polardbx-operator/pkg/operator/hint"
 
 	polardbxv1 "github.com/alibaba/polardbx-operator/api/v1"
 	polardbxv1polardbx "github.com/alibaba/polardbx-operator/api/v1/polardbx"
@@ -311,14 +310,14 @@ func (r *PolarDBXReconciler) newReconcileTask(rc *polardbxreconcile.Context, pol
 				control.When(readonly,
 					instancesteps.WaitUntilPrimaryCNDeploymentsRolledOut,
 				),
+				// Only add or update, never remove.
+				instancesteps.CreateOrReconcileDNs,
+				instancesteps.WaitUntilDNsReady,
 				instancesteps.CreateOrReconcileCNs,
 				instancesteps.CreateOrReconcileCDCs,
 				instancesteps.WaitUntilCNCDCPodsReady,
 				instancesteps.CreateOrReconcileColumnars,
-				// Only add or update, never remove.
-				instancesteps.CreateOrReconcileDNs,
 
-				instancesteps.WaitUntilDNsReady,
 				instancesteps.WaitUntilCNDeploymentsRolledOut,
 				instancesteps.WaitUntilCDCDeploymentsRolledOut,
 				instancesteps.WaitUntilColumnarDeploymentsRolledOut,
