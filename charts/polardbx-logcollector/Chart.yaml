@@ -2,8 +2,8 @@ apiVersion: v2
 name: polardbx-logcollector
 description: Helm chart of polardbx-operator logcollector plugin
 type: application
-version: 1.6.0
-appVersion: v1.6.0
+version: 1.6.1
+appVersion: v1.6.1
 keywords:
   - polardb-x
   - operator

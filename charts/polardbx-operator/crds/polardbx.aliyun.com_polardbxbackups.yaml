@@ -189,7 +189,6 @@ spec:
                                 anyOf:
                                 - type: integer
                                 - type: string
-                                default: 1
                                 enum:
                                 - 1
                                 - 2

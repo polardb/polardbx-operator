@@ -15,10 +15,10 @@ images:
   polardbxClinic: polardbx-clinic
 
 # Default image tag. Use app version if not specified or 'latest' if useLatestImage is true.
-imageTag: v1.6.0
+imageTag: v1.6.1
 
 # version will be written to pxc and xstore annotation 
-version: v1.6.0
+version: v1.6.1
 
 # Uses the latest images for operator components.
 useLatestImage: false

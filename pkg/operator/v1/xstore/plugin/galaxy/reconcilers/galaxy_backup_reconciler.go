@@ -35,7 +35,7 @@ func (r *GalaxyBackupReconciler) Reconcile(rc *xstorev1reconcile.BackupContext, 
 
 	isStandard := true
 	var err error
-	if backup.GetDeletionTimestamp().IsZero() {
+	if backup.GetDeletionTimestamp().IsZero() && backup.Status.Phase != xstorev1.XStoreBackupFinished {
 		isStandard, err = rc.GetXStoreIsStandard()
 		if err != nil {
 			log.Error(err, "Unable to get corresponding xstore")
@@ -51,7 +51,6 @@ func (r *GalaxyBackupReconciler) Reconcile(rc *xstorev1reconcile.BackupContext, 
 }
 
 func (r *GalaxyBackupReconciler) newReconcileTask(rc *xstorev1reconcile.BackupContext, xstoreBackup *xstorev1.XStoreBackup, log logr.Logger, isStandard bool) (*control.Task, error) {
-
 	task := control.NewTask()
 
 	defer backupsteps.PersistentStatusChanges(task, true)

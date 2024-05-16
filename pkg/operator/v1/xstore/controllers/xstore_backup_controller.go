@@ -57,7 +57,7 @@ func (r *XStoreBackupReconciler) Reconcile(ctx context.Context, request reconcil
 	)
 	defer rc.Close()
 
-	// Verify the existence of the xstore.
+	// Verify the existence of the xstore backup.
 	xstoreBackup, err := rc.GetXStoreBackup()
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -69,9 +69,16 @@ func (r *XStoreBackupReconciler) Reconcile(ctx context.Context, request reconcil
 		}
 	}
 
+	// Check whether backup is dummy
+	if xstoreBackup.Annotations[meta.AnnotationDummyBackup] == "true" || xstoreBackup.Annotations[xstoremeta.AnnotationDummyBackup] == "true" {
+		log.Info("Dummy xstore backup, skip")
+		return reconcile.Result{}, nil
+	}
+
 	// Record the context of the corresponding xstore
 	xstoreRequest := request
-	if xstoreBackup.GetDeletionTimestamp().IsZero() { // If request to delete, no need to care about xstore
+	if xstoreBackup.GetDeletionTimestamp().IsZero() && xstoreBackup.Status.Phase != xstorev1.XStoreBackupFinished {
+		// If backup has not finished nor been deleted, reconciler needs to get xstore
 		xstore, err := rc.GetXStore()
 		if err != nil {
 			log.Error(err, "Unable to get corresponding xstore")
@@ -91,12 +98,6 @@ func (r *XStoreBackupReconciler) Reconcile(ctx context.Context, request reconcil
 
 	if reconciler == nil {
 		log.Info("No reconciler found, abort!", "engine", engine)
-		return reconcile.Result{}, nil
-	}
-
-	// check whether backup is dummy
-	if xstoreBackup.Annotations[meta.AnnotationDummyBackup] == "true" || xstoreBackup.Annotations[xstoremeta.AnnotationDummyBackup] == "true" {
-		log.Info("Dummy xstore backup, skip")
 		return reconcile.Result{}, nil
 	}
 
