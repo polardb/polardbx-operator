@@ -86,6 +86,7 @@ func (exec *DeleteExec) Execute(
 			rc.Context(),
 			pod,
 			client.PropagationPolicy(metav1.DeletePropagationBackground),
+			client.GracePeriodSeconds(xstoreconvention.PodGracePeriodSeconds),
 		); err != nil {
 			return flow.Error(err, "Failed to delete the pod", "pod", exec.Step().Target)
 		}

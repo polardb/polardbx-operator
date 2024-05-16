@@ -111,8 +111,9 @@ func (p *Planner) buildExpectedNodes() map[string]model.PaxosNode {
 func (p *Planner) createNodeRebuildConfig(podName string) map[string]interface{} {
 	rebuildConfig := make(map[string]interface{})
 	config := xstoremeta.RebuildConfig{
-		LogSeparation: strconv.FormatBool(p.xstore.Spec.Config.Dynamic.LogDataSeparation),
-		NodeName:      p.xstore.Status.BoundVolumes[podName].Host,
+		LogSeparation:      strconv.FormatBool(p.xstore.Spec.Config.Dynamic.LogDataSeparation),
+		NodeName:           p.xstore.Status.BoundVolumes[podName].Host,
+		RpcProtocolVersion: p.xstore.Spec.Config.Dynamic.RpcProtocolVersion.String(),
 	}
 	rebuildConfig[xstoremeta.LabelConfigHash] = config.ComputeHash()
 	return rebuildConfig

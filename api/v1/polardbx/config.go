@@ -30,7 +30,6 @@ type CNStaticConfig struct {
 	EnableJvmRemoteDebug bool                          `json:"EnableJvmRemoteDebug,omitempty"`
 	ServerProperties     map[string]intstr.IntOrString `json:"ServerProperties,omitempty"`
 
-	// +kubebuilder:default=1
 	// +kubebuilder:validation:Enum=1;2;"1";"2";""
 
 	RPCProtocolVersion intstr.IntOrString `json:"RPCProtocolVersion,omitempty"`
