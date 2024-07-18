@@ -62,6 +62,7 @@ var SyncEngineConfigMap = xstorev1reconcile.NewStepBinder("SyncEngineConfigMap",
 		}
 		xstore := rc.MustGetXStore()
 		xstore.Status.ObservedConfig.Engine.Override = xstore.Spec.Config.Engine.Override.DeepCopy()
+		rc.MarkXStoreChanged()
 		return flow.Continue("finish SyncEngineConfigMap")
 	},
 )

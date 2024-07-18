@@ -69,6 +69,9 @@ endif
 ifneq (, $(LATEST))
 	BUILD_IMAGE_ARGS:=${BUILD_IMAGE_ARGS} --also-latest
 endif
+ifneq (, $(IMAGE_SOURCE))
+	BUILD_IMAGE_ARGS:=${BUILD_IMAGE_ARGS} --image-source $(IMAGE_SOURCE)
+endif
 ifneq (, $(TARGET))
 	BUILD_IMAGE_ARGS:=${BUILD_IMAGE_ARGS} $(TARGET)
 endif
@@ -83,7 +86,11 @@ define BUILD_IMAGES_HELP_INFO
 #   make build TARGET=cmd/hpfs
 #   make build REPO=registry.aliyun.com/custom
 #   make build REPO=registry.aliyun.com/custom TARGET=cmd/hpfs
+#   make build REPO=registry.aliyun.com/custom IMAGE_SOURCE=docker.io/custom
+#   make build REPO=... IMAGE_SOURCE=... TARGET=... TAG=... TARGET=...
 endef
+export BUILD_IMAGES_HELP_INFO
+
 .PHONY: build
 ifeq ($(PRINT_HELP), y)
 build:
@@ -101,7 +108,11 @@ define PUSH_IMAGES_HELP_INFO
 #   make push TARGET=cmd/hpfs
 #   make push REPO=registry.aliyun.com/custom
 #   make push REPO=registry.aliyun.com/custom TARGET=cmd/hpfs
+#   make push REPO=registry.aliyun.com/custom IMAGE_SOURCE=docker.io/custom
+#   make push REPO=... IMAGE_SOURCE=... TARGET=... TAG=... TARGET=...
 endef
+export PUSH_IMAGES_HELP_INFO
+
 .PHONY: push
 ifeq ($(PRINT_HELP), y)
 push:

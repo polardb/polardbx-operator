@@ -13,7 +13,8 @@
 # limitations under the License.
 
 # Build the init command
-FROM golang:1.21.1 as builder
+ARG IMAGE_SOURCE
+FROM ${IMAGE_SOURCE}${IMAGE_SOURCE:+"/"}golang:1.21.1 as builder
 
 WORKDIR /workspace
 
@@ -35,14 +36,14 @@ ADD third-party third-party
 RUN mkdir -p target
 RUN CGO_ENABLED=0 GOOS=linux GO111MODULE=on go build -o target/polardbx-hpfs cmd/polardbx-hpfs/main.go
 
-FROM alpine:latest as certs
+FROM ${IMAGE_SOURCE}${IMAGE_SOURCE:+"/"}alpine:latest as certs
 
 # install ca-certificates
 RUN apk --update add ca-certificates
 
 
 # Use alpine as the base image
-FROM busybox:latest
+FROM ${IMAGE_SOURCE}${IMAGE_SOURCE:+"/"}busybox:latest
 
 WORKDIR /
 COPY --from=builder /workspace/target/polardbx-hpfs .

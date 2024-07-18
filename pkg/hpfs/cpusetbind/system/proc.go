@@ -12,10 +12,10 @@ import (
 	"strings"
 )
 
-const DirectoryPath = "/proc"
-const CmdLineFilepathFormat = "/proc/%d/cmdline"
-const CommFilepathFormat = "/proc/%d/comm"
-const EnvFilepathFormat = "/proc/%d/environ"
+const DirectoryPath = "/host/proc"
+const CmdLineFilepathFormat = "/host/proc/%d/cmdline"
+const CommFilepathFormat = "/host/proc/%d/comm"
+const EnvFilepathFormat = "/host/proc/%d/environ"
 const PodCmdParamPrefix = "-Dpod.id="
 const NumaMapsFilepath = "/proc/%d/numa_maps"
 const NumaNodeNumAttrPattern = `N(\d+)=(\d+)`

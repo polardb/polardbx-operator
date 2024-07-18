@@ -4,3 +4,6 @@ clusterDefaults:
     galaxysql: pxc-registry.cn-shanghai.cr.aliyuncs.com/polardbx/polardbx-sql
     galaxyengine: pxc-registry.cn-shanghai.cr.aliyuncs.com/polardbx/polardbx-engine-2.0
     galaxycdc: pxc-registry.cn-shanghai.cr.aliyuncs.com/polardbx/polardbx-cdc
+    
+imagePullSecrets:
+  - name: github-ci

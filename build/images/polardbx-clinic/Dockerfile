@@ -12,8 +12,9 @@
 # limitations under the License.
 
 # Build the manager binary
+ARG IMAGE_SOURCE
+FROM ${IMAGE_SOURCE}${IMAGE_SOURCE:+"/"}centos:7
 
-FROM centos:7
 WORKDIR /root
 USER root
 COPY build/images/polardbx-clinic/diagnose.sh /root/diagnose.sh

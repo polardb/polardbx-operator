@@ -12,8 +12,8 @@
 # limitations under the License.
 
 # Build the manager binary
-
-FROM golang:1.21.1 as builder
+ARG IMAGE_SOURCE
+FROM ${IMAGE_SOURCE}${IMAGE_SOURCE:+"/"}golang:1.21.1 as builder
 
 WORKDIR /workspace
 
@@ -35,7 +35,7 @@ ADD third-party third-party
 # Build
 RUN CGO_ENABLED=0 GOOS=linux GO111MODULE=on go build -o polardbx-exporter cmd/polardbx-exporter/main.go
 
-FROM  busybox:latest
+FROM  ${IMAGE_SOURCE}${IMAGE_SOURCE:+"/"}busybox:latest
 WORKDIR /
 COPY --from=builder /workspace/polardbx-exporter .
 USER root
