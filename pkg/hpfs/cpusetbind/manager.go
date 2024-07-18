@@ -10,6 +10,7 @@ import (
 	"github.com/alibaba/polardbx-operator/pkg/hpfs/cpusetbind/cri"
 	"github.com/alibaba/polardbx-operator/pkg/hpfs/cpusetbind/pool"
 	cpusetbind "github.com/alibaba/polardbx-operator/pkg/hpfs/cpusetbind/system"
+	polarxJson "github.com/alibaba/polardbx-operator/pkg/util/json"
 	"github.com/go-logr/logr"
 	"github.com/google/uuid"
 	v1 "k8s.io/api/core/v1"
@@ -354,6 +355,12 @@ func (m *Manager) Start() error {
 		return err
 	}
 	go func() {
+		defer func() {
+			err := recover()
+			if err != nil {
+				m.logger.Error(errors.New(polarxJson.Convert2JsonString(err)), "failed to init cpu bind")
+			}
+		}()
 		for {
 			select {
 			case <-time.After(30 * time.Second):

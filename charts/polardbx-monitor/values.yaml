@@ -4,7 +4,7 @@ monitors:
   # AlertManager will not be installed by default
   alertManager:
     # AlertManager docker repo and image. It can be set to your private repo.
-    repo: quay.io/prometheus
+    repo: polardbx-opensource-registry.cn-beijing.cr.aliyuncs.com/polardbx
     image: alertmanager
     # AlertManager version
     version: v0.21.0
@@ -28,7 +28,7 @@ monitors:
   # Grafana related configurations
   grafana:
     # Grafana docker repo and image. It can be set to your private repo.
-    repo: grafana
+    repo: polardbx-opensource-registry.cn-beijing.cr.aliyuncs.com/polardbx
     image: grafana
     version: 8.5.27
     # Grafana replicas, you can scale out/in grafana by this value.
@@ -58,7 +58,7 @@ monitors:
   # kube-state-metrics (KSM) is a simple service that listens to the Kubernetes API server and generates metrics
   # about the state of the objects.
   kubeStateMetrics:
-    repo: kubesphere
+    repo: polardbx-opensource-registry.cn-beijing.cr.aliyuncs.com/polardbx
     image: kube-state-metrics
     version: v2.3.0
     replicas: 1
@@ -78,7 +78,7 @@ monitors:
   # KubeRBACProxy is a small HTTP proxy for a single upstream, that can perform RBAC authorization
   # against the Kubernetes API using SubjectAccessReview.
   kubeRBACProxy:
-    repo: quay.io/brancz
+    repo: polardbx-opensource-registry.cn-beijing.cr.aliyuncs.com/polardbx
     image: kube-rbac-proxy
     version: v0.8.0
 
@@ -89,11 +89,11 @@ monitors:
   # It is a DaemonSet deployed in K8s
   nodeExporter:
     # NodeExporter docker repo and image
-    repo: quay.io/prometheus
+    repo: polardbx-opensource-registry.cn-beijing.cr.aliyuncs.com/polardbx
     image: node-exporter
     version: v1.0.1
     # Node exporter port, update this value if port conflict
-    port: 9100
+    port: 9103
 
     # Node exporter RBAC and ServiceAccount
     rbac:
@@ -113,7 +113,7 @@ monitors:
   # PrometheusAdapter is an implementation of the custom.metrics.k8s.io API using Prometheus
   prometheusAdapter:
     # PrometheusAdapter docker repo and image
-    repo: directxman12
+    repo: polardbx-opensource-registry.cn-beijing.cr.aliyuncs.com/polardbx
     image: k8s-prometheus-adapter
     version: v0.8.2
     # PrometheusAdapter replicas
@@ -134,7 +134,7 @@ monitors:
   # Prometheus configuration
   prometheus:
     # Docker repo and image of Prometheus
-    repo: quay.io/prometheus
+    repo: polardbx-opensource-registry.cn-beijing.cr.aliyuncs.com/polardbx
     image: prometheus
     version: v2.22.1
     # Prometheus node replicas, you can scale out/in prometheus by this value
@@ -176,7 +176,7 @@ monitors:
   # components. The purpose of this component is to simplify and automate the configuration of a Prometheus based
   # monitoring stack for Kubernetes clusters.
   prometheusOperator:
-    repo: quay.io/prometheus-operator
+    repo: polardbx-opensource-registry.cn-beijing.cr.aliyuncs.com/polardbx
     image: prometheus-operator
     version: v0.44.1
     replicas: 1
@@ -201,6 +201,6 @@ monitors:
 
   # PrometheusOperator related component
   prometheusConfigReloader:
-    repo: quay.io/prometheus-operator
+    repo: polardbx-opensource-registry.cn-beijing.cr.aliyuncs.com/polardbx
     image: prometheus-config-reloader
     version: v0.44.1

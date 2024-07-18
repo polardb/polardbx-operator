@@ -103,7 +103,7 @@ spec:
           name: tmpfs
         - mountPath: /config
           name: config
-        - mountPath: /proc
+        - mountPath: /host/proc
           name: proc
         - mountPath: /var/run
           name: varrun

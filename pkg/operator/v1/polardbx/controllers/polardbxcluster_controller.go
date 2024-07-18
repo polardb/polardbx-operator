@@ -210,6 +210,7 @@ func (r *PolarDBXReconciler) newReconcileTask(rc *polardbxreconcile.Context, pol
 				instancesteps.WaitUntilCNDeploymentsRolledOut,
 				instancesteps.WaitUntilCDCDeploymentsRolledOut,
 				instancesteps.WaitUntilColumnarDeploymentsRolledOut,
+				instancesteps.ModifyDBAAccountTypeIfNeeded,
 				instancesteps.CreateFileStorage,
 			)(task)
 
