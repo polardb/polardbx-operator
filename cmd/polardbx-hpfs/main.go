@@ -29,6 +29,7 @@ import (
 	"github.com/alibaba/polardbx-operator/pkg/hpfs/local"
 	"github.com/alibaba/polardbx-operator/pkg/hpfs/proto"
 	"github.com/alibaba/polardbx-operator/pkg/hpfs/task"
+	polarxJson "github.com/alibaba/polardbx-operator/pkg/util/json"
 	"net"
 	"os"
 	"strconv"
@@ -223,12 +224,20 @@ func startAllWatchers() {
 }
 
 func startCpuSetBind() {
-	logger := zap.New(zap.UseDevMode(true))
-	manager := cpusetbind.NewManager(logger, hostName, k8sNamespace, cpuSetBindOutput)
-	err := manager.Start()
-	if err != nil {
-		logger.Error(err, "failed to start cpuset bind")
-	}
+	go func() {
+		defer func() {
+			err := recover()
+			if err != nil {
+				log.Error(errors.New(polarxJson.Convert2JsonString(err)), "failed to init cpu bind")
+			}
+		}()
+		logger := zap.New(zap.UseDevMode(true))
+		manager := cpusetbind.NewManager(logger, hostName, k8sNamespace, cpuSetBindOutput)
+		err := manager.Start()
+		if err != nil {
+			logger.Error(err, "failed to start cpuset bind")
+		}
+	}()
 }
 
 func main() {

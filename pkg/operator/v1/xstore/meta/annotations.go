@@ -62,6 +62,7 @@ const (
 	AnnotationAutoRebuild = "xstore/auto-rebuild"
 	AnnotationFlushLocal  = "xstore/flushlocal"
 	AnnotationFlushIp     = "xstore/fluship"
+	AnnotationDeleteOnce  = "xstore/delete-once"
 )
 
 const (

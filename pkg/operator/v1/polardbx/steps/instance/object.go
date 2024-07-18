@@ -710,6 +710,44 @@ var CreateFileStorage = polardbxv1reconcile.NewStepBinder("CreateFileStorage",
 	},
 )
 
+var ModifyDBAAccountTypeIfNeeded = polardbxv1reconcile.NewStepBinder("ModifyDBAAccountTypeIfNeeded",
+	func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
+		polardbx := rc.MustGetPolarDBX()
+
+		mgr, err := rc.GetPolarDBXGMSManager()
+		if err != nil {
+			return flow.Error(err, "Unable to get GMS manager.")
+		}
+
+		privileges := polardbx.Spec.Privileges
+		rootAccountDefined := false
+		for _, priv := range privileges {
+			if priv.Type != polardbxv1polardbx.Super {
+				continue
+			}
+
+			if priv.Username == convention.RootAccount {
+				rootAccountDefined = true
+			}
+
+			// Only super account need to set to DBA
+			err = mgr.ModifyDBAccountType(priv.Username, gms.AccountTypeDBA)
+			if err != nil {
+				return flow.Error(err, "Unable to modify account type.", "username", convention.RootAccount)
+			}
+		}
+
+		if !rootAccountDefined {
+			mgr.ModifyDBAccountType(convention.RootAccount, gms.AccountTypeDBA)
+			if err != nil {
+				return flow.Error(err, "Unable to modify account type.", "username", convention.RootAccount)
+			}
+		}
+
+		return flow.Pass()
+	},
+)
+
 var CreateOrReconcileCNs = polardbxv1reconcile.NewStepBinder("CreateOrReconcileCNs",
 	func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
 		return reconcileGroupedDeployments(rc, flow, polardbxmeta.RoleCN)

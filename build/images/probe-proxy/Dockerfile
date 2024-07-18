@@ -12,8 +12,8 @@
 # limitations under the License.
 
 # Build the manager binary
-
-FROM golang:1.21.1 as builder
+ARG IMAGE_SOURCE
+FROM ${IMAGE_SOURCE}${IMAGE_SOURCE:+"/"}golang:1.21.1 as builder
 
 WORKDIR /workspace
 
@@ -37,7 +37,7 @@ RUN CGO_ENABLED=0 GOOS=linux GO111MODULE=on go build -o probe-proxy cmd/probe-pr
 
 # Use distroless as minimal base image to package the manager binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
-FROM busybox:latest
+FROM ${IMAGE_SOURCE}${IMAGE_SOURCE:+"/"}busybox:latest
 WORKDIR /
 COPY --from=builder /workspace/probe-proxy .
 

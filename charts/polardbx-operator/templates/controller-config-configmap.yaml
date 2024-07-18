@@ -38,9 +38,9 @@ data:
       store:
         galaxy:
           engine: {{ .Values.clusterDefaults.images.galaxyengine }}:{{ .Values.clusterDefaults.version }}
-          exporter: prom/mysqld-exporter:master
+          exporter: mysqld-exporter:master
         xcluster:
-          exporter: prom/mysqld-exporter:master
+          exporter: mysqld-exporter:master
 {{- if .Values.extension.config.images.store }}
 {{ toYaml .Values.extension.config.images.store | indent 8 }}
 {{- end}}

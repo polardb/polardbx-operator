@@ -466,16 +466,16 @@ func (w *Watcher) tryPurge(sqliteDb *sql.DB, mysqlDb *sql.DB, info Info, binlogN
 		purgeBinlogNum = &binlogNums[countPurgeCnt-1]
 	}
 	expireTime := time.Now().Add(time.Duration(-info.LocalExpireLogSeconds) * time.Second)
-	for _, binlogNum := range binlogNums {
+	for i, binlogNum := range binlogNums {
 		fileInfo, err := os.Stat(binlogNum.Filepath)
 		if errors.Is(err, os.ErrNotExist) {
 			continue
 		}
 		if fileInfo.ModTime().Before(expireTime) {
 			if purgeBinlogNum == nil {
-				purgeBinlogNum = &binlogNum
+				purgeBinlogNum = &binlogNums[i]
 			} else if binlogNum.Num > purgeBinlogNum.Num {
-				purgeBinlogNum = &binlogNum
+				purgeBinlogNum = &binlogNums[i]
 			}
 		}
 	}

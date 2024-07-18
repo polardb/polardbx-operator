@@ -1,5 +1,5 @@
 # Repo of operator and cluster default images. Default is polardbx.
-imageRepo: polardbx
+imageRepo: polardbx-opensource-registry.cn-beijing.cr.aliyuncs.com/polardbx
 
 # Image names of operator components. By default, operator uses the
 # images tagged with { .Chart.AppVersion }. Overwrite the tags with
@@ -15,10 +15,10 @@ images:
   polardbxClinic: polardbx-clinic
 
 # Default image tag. Use app version if not specified or 'latest' if useLatestImage is true.
-imageTag: v1.6.1
+imageTag: v1.6.2
 
 # version will be written to pxc and xstore annotation 
-version: v1.6.1
+version: v1.6.2
 
 # Uses the latest images for operator components.
 useLatestImage: false
@@ -28,7 +28,6 @@ imagePullPolicy: IfNotPresent
 
 # Image pull secrets of operator pods.
 imagePullSecrets:
-  - name: regcred
 
 # Default settings for PolarDB-X Cluster.
 clusterDefaults:

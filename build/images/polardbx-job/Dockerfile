@@ -13,7 +13,8 @@
 # limitations under the License.
 
 # Build the init command
-FROM golang:1.21.1 as builder
+ARG IMAGE_SOURCE
+FROM ${IMAGE_SOURCE}${IMAGE_SOURCE:+"/"}golang:1.21.1 as builder
 
 WORKDIR /workspace
 
@@ -36,7 +37,7 @@ RUN mkdir -p target
 RUN CGO_ENABLED=0 GOOS=linux GO111MODULE=on go build -tags polardbx -o target/polardbx-job cmd/polardbx-job/main.go
 
 # Use alpine as the base image
-FROM busybox:latest
+FROM ${IMAGE_SOURCE}${IMAGE_SOURCE:+"/"}busybox:latest
 
 WORKDIR /
 COPY --from=builder /workspace/target/polardbx-job .

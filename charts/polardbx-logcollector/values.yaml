@@ -2,7 +2,7 @@
 logstash:
   image:
     #image repo of logstash
-    repo: polardbx
+    repo: polardbx-opensource-registry.cn-beijing.cr.aliyuncs.com/polardbx
     #image name of logstash
     name: polardbx-logstash
     #image tag of logstash
@@ -47,7 +47,7 @@ logstash:
 filebeat:
   image:
     #the image repo of the filebeat
-    repo: docker.elastic.co/beats
+    repo: polardbx-opensource-registry.cn-beijing.cr.aliyuncs.com/polardbx
     #the image name of the  filebeat
     name: filebeat
     #the image tag f the filebeat

@@ -22,6 +22,8 @@ import time
 
 import lib
 
+DEFAULT_IMAGE_SOURCE = 'polardbx-opensource-registry.cn-beijing.cr.aliyuncs.com/polardbx'
+
 
 def build_image_name(repo, name, tag) -> str:
     r = ''
@@ -41,7 +43,7 @@ def retag_image(src, dest):
         'docker', 'tag', src, dest,
     ])
 
-def build_image_for(build_env: lib.BuildEnv, target: lib.BuildTarget, repo, tag) -> str:
+def build_image_for(build_env: lib.BuildEnv, target: lib.BuildTarget, repo, tag, image_source) -> str:
     dockerfile = os.path.join(build_env.get_dockerfile_parent_path(target.image), 'Dockerfile')
 
     current_revision = build_env.current_git_revision_or_tag()
@@ -67,6 +69,7 @@ def build_image_for(build_env: lib.BuildEnv, target: lib.BuildTarget, repo, tag)
     subprocess.check_call([
         'docker', 'build', '--network', 'host',
         '--build-arg', 'VERSION=' + version,
+        '--build-arg', 'IMAGE_SOURCE=' + image_source,
         '--platform', build_env.docker_build_platform(),
         '-t', image_name,
         '-f', dockerfile,
@@ -75,7 +78,7 @@ def build_image_for(build_env: lib.BuildEnv, target: lib.BuildTarget, repo, tag)
     return image_name
 
 
-def build_images(build_env: lib.BuildEnv, targets: [str] or None, repo, tag, *, also_latest=False) -> [str]:
+def build_images(build_env: lib.BuildEnv, targets: [str] or None, repo, tag, image_source, *, also_latest=False) -> [str]:
     # Select targets to build
     targets = [t for t in build_env.select_targets(targets) if t.image]
 
@@ -87,7 +90,7 @@ def build_images(build_env: lib.BuildEnv, targets: [str] or None, repo, tag, *, 
     images = []
     for t in targets:
         print('[%s] Start build...' % t.target)
-        image = build_image_for(build_env, t, repo, tag)
+        image = build_image_for(build_env, t, repo, tag, image_source)
         print('[%s] Built: %s' % (t.target, image))
 
         if tag != 'latest' and also_latest:
@@ -117,6 +120,7 @@ if __name__ == '__main__':
     parser.add_argument('targets', metavar='target', type=str, nargs='*', help='targets to build.')
     parser.add_argument('--push', dest='push', action='store_true', help='push to registry.')
     parser.add_argument('--also-latest', dest='also_latest', action='store_true', help='also tag to latest')
+    parser.add_argument('--image-source', dest='image_source', default=DEFAULT_IMAGE_SOURCE, help='custom docker source registry/namespace')
     args = parser.parse_args()
 
     images = build_images(
@@ -124,6 +128,7 @@ if __name__ == '__main__':
         args.targets,
         args.repo,
         args.tag,
+        args.image_source,
         also_latest=args.also_latest,
     )
 
