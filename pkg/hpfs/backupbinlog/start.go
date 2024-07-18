@@ -2,6 +2,8 @@ package backupbinlog
 
 import (
 	. "github.com/alibaba/polardbx-operator/pkg/hpfs/config"
+	"github.com/pkg/errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -47,7 +49,9 @@ func StartAllWatchers() {
 							infoFilepath := filepath.Join(watcherWorkDir, InfoFilename)
 							_, err := os.Stat(infoFilepath)
 							if err != nil {
-								logger.Error(err, "cannot stat file", "filepath", infoFilepath)
+								if !errors.Is(err, fs.ErrNotExist) {
+									logger.Error(err, "cannot stat file", "filepath", infoFilepath)
+								}
 								continue
 							}
 							indexFilepath := filepath.Join(watcherWorkDir, IndexFilename)

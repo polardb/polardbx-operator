@@ -12,7 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM centos:7 AS builder
+ARG IMAGE_SOURCE
+FROM ${IMAGE_SOURCE}${IMAGE_SOURCE:+"/"}centos:7 AS builder
+
+# Remove mirrorlist.centos.org.
+RUN sed -i s/mirror.centos.org/vault.centos.org/g /etc/yum.repos.d/*.repo
+RUN sed -i s/^#.*baseurl=http/baseurl=http/g /etc/yum.repos.d/*.repo
+RUN sed -i s/^mirrorlist=http/#mirrorlist=http/g /etc/yum.repos.d/*.repo
 
 # Install python3.
 RUN rpm --rebuilddb && yum install -y python3 && yum clean all
@@ -37,7 +43,7 @@ COPY tools/xstore .
 RUN ./venv/bin/python3 -m compileall . && LC_LANG=en_US.utf8 LC_ALL=en_US.utf8 ENGINE=mock ./venv/bin/python3 cli.py
 
 
-FROM golang:1.21.1 as gobuilder
+FROM ${IMAGE_SOURCE}${IMAGE_SOURCE:+"/"}golang:1.21.1 as gobuilder
 
 WORKDIR /workspace
 
@@ -65,7 +71,7 @@ RUN CGO_ENABLED=0 GOOS=linux GO111MODULE=on go build -tags polardbx -o polardbx-
 
 
 # Build the image with scripts
-FROM polardbx/xstore-tools-base:ts20240430102300
+FROM ${IMAGE_SOURCE}${IMAGE_SOURCE:+"/"}xstore-tools-base:ts20240430102300
 
 ARG VERSION=test
 

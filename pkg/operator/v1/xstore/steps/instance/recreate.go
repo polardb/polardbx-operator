@@ -82,6 +82,10 @@ func hpfsWriteResetMetaIndicate(ctx context.Context, hpfsClient hpfs.HpfsService
 func WhenNoPod(binders ...control.BindFunc) control.BindFunc {
 	return xstorev1reconcile.NewStepIfBinder("WhenNoRightPod",
 		func(rc *xstorev1reconcile.Context, log logr.Logger) (bool, error) {
+			xstore := rc.MustGetXStore()
+			if xstore.Spec.Readonly {
+				return false, nil
+			}
 			pods, err := rc.GetXStorePods()
 			if err != nil {
 				return false, err

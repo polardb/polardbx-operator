@@ -53,6 +53,17 @@ const (
 	GrantCustomPrivilege    GrantPrivilegeType = "custom"
 )
 
+type AccountType string
+
+const (
+	AccountTypeUser    AccountType = "0"
+	AccountTypeRole    AccountType = "1"
+	AccountTypeDBA     AccountType = "2"
+	AccountTypeSSO     AccountType = "3"
+	AccountTypeAuditor AccountType = "4"
+	AccountTypeGod     AccountType = "5"
+)
+
 // GrantOption which
 type GrantOption struct {
 	// Type of grant.
@@ -323,6 +334,9 @@ type Manager interface {
 
 	// DeleteDBAccount deletes the specified account in cluster by directly deleting records in metadb.
 	DeleteDBAccount(user string) error
+
+	// ModifyDBAccountType modify DB account type in metadb user_priv table if account_type fields exists.
+	ModifyDBAccountType(user string, accountType AccountType) error
 
 	// SyncAccountPasswd syncs the password of specified user in cluster by directly modifying records
 	// in metadb. If the user not exists, it returns an error.

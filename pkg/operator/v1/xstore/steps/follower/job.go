@@ -197,7 +197,7 @@ func JobArgFlushConsensusFunc(ctx JobContext) []string {
 		learnerFlag = "--learner"
 	}
 	return []string{"-c",
-		"chown -R  mysql:mysql  /data/mysql && rm -fR /data/mysql/log/mysql_bin.* && /tools/xstore/current/venv/bin/python3 /tools/xstore/current/cli.py engine reset_meta --learner --recover-index-filepath=" + backupBinlogInfoFilepath + " " + learnerFlag,
+		"chown -R  mysql:mysql  /data/mysql && chown -R  mysql:mysql  /data-log/mysql && rm -fR /data/mysql/log/mysql_bin.* && /tools/xstore/current/venv/bin/python3 /tools/xstore/current/cli.py engine reset_meta --learner --recover-index-filepath=" + backupBinlogInfoFilepath + " " + learnerFlag,
 	}
 }
 

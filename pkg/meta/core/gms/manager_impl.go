@@ -1203,9 +1203,17 @@ func (meta *manager) CreateDBAccount(user, passwd string, grantOptions ...*Grant
 	return meta.ExecuteStatementsAndNotify(insertStmt, notifyStmt)
 }
 
+func (meta *manager) ModifyDBAccountType(user string, accountType AccountType) error {
+	modifyStmt := fmt.Sprintf("UPDATE user_priv SET account_type = '%s' WHERE user_name='%s'", string(accountType), user)
+	notifyStmt := meta.newNotifyStmt(clPrivilegeInfoDataId)
+
+	// Execute the statements
+	return meta.ExecuteStatementsAndNotify(modifyStmt, notifyStmt)
+}
+
 func (meta *manager) DeleteDBAccount(user string) error {
 	// Generate delete statement
-	deleteStmt := fmt.Sprintf("DELETE FROM user_priv WHERE user = '%s", user)
+	deleteStmt := fmt.Sprintf("DELETE FROM user_priv WHERE user = '%s'", user)
 	notifyStmt := meta.newNotifyStmt(clPrivilegeInfoDataId)
 
 	// Execute the statements

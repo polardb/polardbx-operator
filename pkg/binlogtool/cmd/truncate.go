@@ -23,10 +23,13 @@ import (
 	"fmt"
 	"github.com/alibaba/polardbx-operator/pkg/binlogtool/binlog"
 	"github.com/alibaba/polardbx-operator/pkg/binlogtool/binlog/event"
+	"github.com/alibaba/polardbx-operator/pkg/binlogtool/binlog/spec"
 	"github.com/alibaba/polardbx-operator/pkg/binlogtool/utils"
 	"github.com/spf13/cobra"
 	"io"
 	"os"
+	"strconv"
+	"strings"
 )
 
 var (
@@ -34,6 +37,7 @@ var (
 	binlogChecksum       string
 	truncateEndOffset    string
 	truncateEndTimestamp uint32
+	truncateEndTSO       uint64
 	outputBinlogFile     string
 )
 
@@ -57,8 +61,8 @@ var truncateCmd = &cobra.Command{
 			binlog.WithScanMode(binlog.ScanModeRaw),
 		}
 
-		if truncateEndOffset == "" && truncateEndTimestamp <= 0 {
-			return errors.New("end-offset or end-ts must be specified")
+		if truncateEndOffset == "" && truncateEndTimestamp <= 0 && truncateEndTSO <= 0 {
+			return errors.New("end-offset or end-ts or end-tso must be specified")
 		}
 
 		if outputBinlogFile == "" {
@@ -101,19 +105,40 @@ var truncateCmd = &cobra.Command{
 		writer.WriteCommonHeader()
 
 		for {
-			_, event, err := lazyScanner.Next()
+			_, ev, err := lazyScanner.Next()
 			if err != nil {
 				if err == binlog.EOF {
 					break
 				}
 				return err
 			}
-			lastEvent = event
-			if truncateEndTimestamp > 0 && event.EventHeader().EventTimestamp() > truncateEndTimestamp {
+			lastEvent = ev
+			if truncateEndTimestamp > 0 && ev.EventHeader().EventTimestamp() > truncateEndTimestamp {
 				return nil
 			}
 
-			writer.Write(event)
+			if truncateEndTSO > 0 && ev.EventHeader().EventTypeCode() == spec.ROWS_QUERY_LOG_EVENT {
+				queryEvent := ev.EventData().(event.RawLogEventData)
+				eventContent := string(queryEvent)
+				/**
+				TSO in cdc binlog is in rows query log event and as follows:
+					CTS::714859135699727161616796565716735180810000000000000000
+				Notice: the first character in the event content is byte `1` not `C`, so I use eventContent[1:6] to
+				extract the prefix and then parse the first 19 chars to uint64.
+				*/
+				if strings.HasPrefix(eventContent[1:6], "CTS::") {
+					tso, err := strconv.ParseUint(eventContent[6:25], 10, 64)
+					if err != nil {
+						return err
+					}
+
+					if tso > truncateEndTSO {
+						return nil
+					}
+				}
+			}
+
+			writer.Write(ev)
 		}
 		return nil
 	}),
@@ -124,6 +149,7 @@ func init() {
 	truncateCmd.Flags().StringVarP(&outputBinlogFile, "output", "o", "", "The output binlog after cut")
 	truncateCmd.Flags().StringVar(&truncateEndOffset, "end-offset", "", "offset offset in bytes")
 	truncateCmd.Flags().Uint32Var(&truncateEndTimestamp, "end-ts", 0, "end timestamp in seconds (compared with event header)")
+	truncateCmd.Flags().Uint64Var(&truncateEndTSO, "end-tso", 0, "end tso (compared with event rows query info)")
 
 	rootCmd.AddCommand(truncateCmd)
 }

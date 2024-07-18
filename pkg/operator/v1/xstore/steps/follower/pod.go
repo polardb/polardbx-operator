@@ -165,6 +165,14 @@ var TryLoadTargetPod = NewStepBinder("TryLoadTargetPod", func(rc *xstorev1reconc
 		xstoremeta.LabelPod:          pod.Name,
 	}))
 	rc.MarkChanged()
+	//mark pod to be deleted once
+	pod.SetAnnotations(k8shelper.PatchAnnotations(pod.GetAnnotations(), map[string]string{
+		xstoremeta.AnnotationDeleteOnce: "1",
+	}))
+	err = rc.Client().Update(rc.BaseReconcileContext.Context(), &pod)
+	if err != nil {
+		return flow.RetryErr(err, "Failed to update rebuild pod xstore/delete-once Annotation")
+	}
 	return flow.Continue("TryLoadTargetPod Success.")
 })
 
@@ -450,7 +458,7 @@ var WaitForTargetPodReady = NewStepBinder("WaitForTargetPodReady", func(rc *xsto
 		return flow.RetryErr(err, "Failed to ge the pod", "podName", xStoreFollower.Spec.TargetPodName)
 	}
 
-	if rebuildPod.Spec.NodeName != xStoreFollower.Status.RebuildNodeName {
+	if rebuildPod.GetAnnotations()[xstoremeta.AnnotationDeleteOnce] == "1" || rebuildPod.Spec.NodeName != xStoreFollower.Status.RebuildNodeName {
 		err = rc.Client().Delete(rc.Context(), rebuildPod)
 		if err != nil {
 			return flow.RetryErr(ErrorFailDeletePod, "failed to delete pod", "pod name", rebuildPod.Name)

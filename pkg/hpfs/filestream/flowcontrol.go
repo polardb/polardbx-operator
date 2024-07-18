@@ -116,7 +116,9 @@ func (f *FlowControlManger) LimitFlow(reader io.Reader, writer io.Writer, notify
 	go func() {
 		defer func() {
 			obj := recover()
-			fmt.Println(obj, debug.Stack())
+			if obj != nil {
+				fmt.Println(obj, string(debug.Stack()))
+			}
 		}()
 		defer wg.Done()
 		for {

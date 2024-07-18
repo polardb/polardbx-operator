@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-const CpuInfoFilepath = "/proc/cpuinfo"
+const CpuInfoFilepath = "/host/proc/cpuinfo"
 const CpuPhysicalIdFilepathFormat = "/sys/devices/system/cpu/cpu%d/topology/physical_package_id"
 const CpuCoreIdFilepathFormat = "/sys/devices/system/cpu/cpu%d/topology/core_id"
 
