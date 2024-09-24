@@ -866,6 +866,7 @@ func GetFileServiceParam(sinkName string, sinkType string) (err error, params ma
 		auth["useSSL"] = strconv.FormatBool(sinkPtr.UseSSL)
 		params["bucket"] = sinkPtr.Bucket
 		fileServiceName = "s3"
+		params["bucket_lookup_type"] = sinkPtr.BucketLookupType
 	}
 	return
 }

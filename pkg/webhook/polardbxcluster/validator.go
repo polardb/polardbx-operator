@@ -737,6 +737,11 @@ func (v *PolarDBXClusterV1Validator) ValidateUpdate(ctx context.Context, oldObj,
 	old, new := oldObj.(*polardbxv1.PolarDBXCluster), newObj.(*polardbxv1.PolarDBXCluster)
 	gvk := old.GroupVersionKind()
 
+	// If syncing spec from backup set, skip validating update
+	if old.Status.Phase == polardbxv1polardbx.PhasePending && old.Spec.Restore != nil && old.Spec.Restore.SyncSpecWithOriginalCluster {
+		return nil
+	}
+
 	// Validate the immutable fields, such as storage engine.
 	oldSpec, newSpec := &old.Spec, &new.Spec
 

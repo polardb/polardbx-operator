@@ -196,7 +196,7 @@ func (v *Validator) validateParameters(ctx context.Context, obj *polardbxv1.Pola
 		templateParams[polardbxmeta.RoleDN][param.Name] = param
 	}
 
-	if len(template.Spec.NodeType.GMS.ParamList) != 0 {
+	if template.Spec.NodeType.GMS != nil && len(template.Spec.NodeType.GMS.ParamList) != 0 {
 		for _, param := range template.Spec.NodeType.GMS.ParamList {
 			templateParams[polardbxmeta.RoleGMS][param.Name] = param
 		}

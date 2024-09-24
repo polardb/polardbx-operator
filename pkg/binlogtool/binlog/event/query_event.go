@@ -200,6 +200,10 @@ Loop:
 				return layout.ErrNotEnoughBytes
 			}
 			utils.ReadNumberLittleEndianHack(&d.PrepareGCN, block[off:])
+		case spec.Q_OPT_FLASHBACK_AREA:
+			length = 1
+		case spec.Q_OPT_INDEX_FORMAT_GPP_ENABLED:
+			length = 1
 		default:
 			// Unrecognized, skip.
 			if StrictParseMode {

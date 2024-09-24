@@ -65,12 +65,15 @@ def start_backup(backup_context, job_name):
                           "--socket=" + sock_file,
                           "--slave-info",
                           "--backup", "--lock-ddl",
+                          "--compress",
                           "--xtrabackup-plugin-dir=" + context.xtrabackup_plugin]
         elif context.is_xcluster57():
             backup_cmd = [context.xtrabackup,
                           "--stream=xbstream",
                           "--socket=" + sock_file,
+                          "--compress",
                           backup_dir]
+
         logger.info("backup_cmd: %s " % backup_cmd)
 
         stderr_path = backup_dir + '/fullbackup-stderr.out'

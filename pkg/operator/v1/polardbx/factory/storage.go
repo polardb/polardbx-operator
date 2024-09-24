@@ -25,6 +25,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"strconv"
+	"strings"
 
 	polardbxv1 "github.com/alibaba/polardbx-operator/api/v1"
 	polardbxv1common "github.com/alibaba/polardbx-operator/api/v1/common"
@@ -521,7 +522,20 @@ func (f *objectFactory) GetOriginalXstoreNameForRestore(polardbx polardbxv1.Pola
 		if xstoreName[len(xstoreName)-4:] == name[len(name)-4:] { // safe when quantity of dn less than 10000
 			return xstoreName, nil
 		}
+		// match gms backupset may come from aliyun market
+		if strings.HasPrefix(xstoreName, "pxc-xdb-m") && strings.HasSuffix(name, "gms") {
+			return xstoreName, nil
+		}
 	}
+	// backup xstore name doest have dn index, to match index by the order in the backupset
+	index, err := strconv.Atoi(name[strings.LastIndex(name, "-")+1:])
+	if err != nil {
+		return "", err
+	}
+	if index < len(backup.Status.XStores) {
+		return backup.Status.XStores[index], nil
+	}
+
 	return "", errors.New("failed to find matched xstore")
 }
 

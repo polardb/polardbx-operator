@@ -15,10 +15,10 @@ images:
   polardbxClinic: polardbx-clinic
 
 # Default image tag. Use app version if not specified or 'latest' if useLatestImage is true.
-imageTag: v1.6.2
+imageTag: v1.7.0
 
 # version will be written to pxc and xstore annotation 
-version: v1.6.2
+version: v1.7.0
 
 # Uses the latest images for operator components.
 useLatestImage: false
@@ -112,6 +112,8 @@ hostPathFileService:
       accessSecret: xxxxx
       bucket: xxx
       useSSL: false
+      bucketLookupType: dns # auto, dns, path
+      uploadPartMaxSize: 629145600 # 300MB
     - name: default
       type: oss
       endpoint: xxx

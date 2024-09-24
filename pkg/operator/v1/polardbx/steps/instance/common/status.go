@@ -375,7 +375,7 @@ var InitializeParameterTemplate = polardbxv1reconcile.NewStepBinder("InitializeP
 		}
 
 		// GMS
-		if len(pt.Spec.NodeType.GMS.ParamList) != 0 {
+		if pt.Spec.NodeType.GMS != nil && len(pt.Spec.NodeType.GMS.ParamList) != 0 {
 			for _, param := range pt.Spec.NodeType.GMS.ParamList {
 				// read only / read write
 				mode := GetMode(polardbxmeta.RoleGMS, param.Mode)

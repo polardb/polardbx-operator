@@ -141,6 +141,7 @@ var UpdateBackupStartInfo = NewStepBinder("UpdateBackupStartInfo",
 				xstoreBackup.Labels[xstoremeta.LabelName],
 				fmt.Sprintf("%s-%s", xstoreBackup.Name, xstoreBackup.Status.StartTime.Format("20060102150405")),
 			)
+			xstoreBackup.Status.XStoreSpecSnapshot = xstore.Spec.DeepCopy()
 		}
 
 		// mark to update spec
@@ -683,7 +684,9 @@ var UploadXStoreMetadata = NewStepBinder("UploadXStoreMetadata",
 			LastCommitIndex: backup.Status.CommitIndex,
 			Secrets:         make([]polardbxv1polardbx.PrivilegeItem, 0, len(backupSecret.Data)),
 			TargetPod:       backup.Status.TargetPod,
+			Spec:            backup.Status.XStoreSpecSnapshot.DeepCopy(),
 		}
+
 		for user, passwd := range backupSecret.Data {
 			xstoreMetadata.Secrets = append(
 				xstoreMetadata.Secrets,

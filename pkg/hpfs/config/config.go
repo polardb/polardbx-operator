@@ -40,7 +40,9 @@ const (
 
 type MinioSink struct {
 	OssSink
-	UseSSL bool `json:"useSSL,omitempty"`
+	UseSSL            bool   `json:"useSSL,omitempty"`
+	BucketLookupType  string `json:"bucketLookupType,omitempty"`
+	UploadPartMaxSize int64  `json:"uploadPartMaxSize,omitempty"`
 }
 
 type OssSink struct {
@@ -111,6 +113,10 @@ var configValue atomic.Value
 
 func InitConfig() {
 	config := loadConfig()
+	configValue.Store(config)
+}
+
+func SetConfig(config Config) {
 	configValue.Store(config)
 }
 

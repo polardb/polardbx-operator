@@ -273,7 +273,7 @@ type Manager interface {
 	IsGmsSchemaRestored() (bool, error)
 
 	// RestoreSchemas restores the schemas in metadb.
-	RestoreSchemas(fromPxcCluster, fromPxcHash, PxcHash string) error
+	RestoreSchemas(fromPxcCluster, fromPxcHash, PxcHash string, originalDnMap map[string]string) error
 
 	// EnableComputeNodes enables the specified compute server nodes by setting
 	// the metadb.

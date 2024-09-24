@@ -3,8 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.9.0
-  creationTimestamp: null
+    controller-gen.kubebuilder.io/version: v0.16.1
   name: polardbxbackupschedules.polardbx.aliyun.com
 spec:
   group: polardbx.aliyun.com
@@ -36,14 +35,19 @@ spec:
       openAPIV3Schema:
         properties:
           apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
             type: string
           kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
             type: string
           metadata:
             type: object
@@ -54,8 +58,9 @@ spec:
                 properties:
                   cleanPolicy:
                     default: Retain
-                    description: CleanPolicy defines the clean policy for remote backup
-                      files when object of PolarDBXBackup is deleted. Default is Retain.
+                    description: |-
+                      CleanPolicy defines the clean policy for remote backup files when object of PolarDBXBackup is deleted.
+                      Default is Retain.
                     enum:
                     - Retain
                     - Delete
@@ -68,10 +73,10 @@ spec:
                       name:
                         type: string
                       uid:
-                        description: UID is a type that holds unique ID values, including
-                          UUIDs.  Because we don't ONLY use UUIDs, this is an alias
-                          to string.  Being a type captures intent and helps make
-                          sure that UIDs and names do not get conflated.
+                        description: |-
+                          UID is a type that holds unique ID values, including UUIDs.  Because we
+                          don't ONLY use UUIDs, this is an alias to string.  Being a type captures
+                          intent and helps make sure that UIDs and names do not get conflated.
                         type: string
                     type: object
                   preferredBackupRole:
@@ -83,8 +88,9 @@ spec:
                     - follower
                     type: string
                   retentionTime:
-                    description: RetentionTime defines the retention time of the backup.
-                      The format is the same with metav1.Duration. Must be provided.
+                    description: |-
+                      RetentionTime defines the retention time of the backup. The format is the same
+                      with metav1.Duration. Must be provided.
                     type: string
                   storageProvider:
                     description: StorageProvider defines the backend storage to store
@@ -102,9 +108,9 @@ spec:
                 type: object
               maxBackupCount:
                 default: 0
-                description: MaxBackupCount defines limit of reserved backup. If backup
-                  exceeds the limit, the eldest backup sets will be purged. Default
-                  is zero, which means no limit.
+                description: |-
+                  MaxBackupCount defines limit of reserved backup.
+                  If backup exceeds the limit, the eldest backup sets will be purged. Default is zero, which means no limit.
                 type: integer
               schedule:
                 description: Schedule represents backup schedule in format of cron
