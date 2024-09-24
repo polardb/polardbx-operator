@@ -3,8 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.9.0
-  creationTimestamp: null
+    controller-gen.kubebuilder.io/version: v0.16.1
   name: polardbxbackups.polardbx.aliyun.com
 spec:
   group: polardbx.aliyun.com
@@ -48,14 +47,19 @@ spec:
         description: PolarDBXBackup is the Scheme for the polardbxbackups API
         properties:
           apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
             type: string
           kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
             type: string
           metadata:
             type: object
@@ -64,8 +68,9 @@ spec:
             properties:
               cleanPolicy:
                 default: Retain
-                description: CleanPolicy defines the clean policy for remote backup
-                  files when object of PolarDBXBackup is deleted. Default is Retain.
+                description: |-
+                  CleanPolicy defines the clean policy for remote backup files when object of PolarDBXBackup is deleted.
+                  Default is Retain.
                 enum:
                 - Retain
                 - Delete
@@ -78,10 +83,10 @@ spec:
                   name:
                     type: string
                   uid:
-                    description: UID is a type that holds unique ID values, including
-                      UUIDs.  Because we don't ONLY use UUIDs, this is an alias to
-                      string.  Being a type captures intent and helps make sure that
-                      UIDs and names do not get conflated.
+                    description: |-
+                      UID is a type that holds unique ID values, including UUIDs.  Because we
+                      don't ONLY use UUIDs, this is an alias to string.  Being a type captures
+                      intent and helps make sure that UIDs and names do not get conflated.
                     type: string
                 type: object
               preferredBackupRole:
@@ -93,8 +98,9 @@ spec:
                 - follower
                 type: string
               retentionTime:
-                description: RetentionTime defines the retention time of the backup.
-                  The format is the same with metav1.Duration. Must be provided.
+                description: |-
+                  RetentionTime defines the retention time of the backup. The format is the same
+                  with metav1.Duration. Must be provided.
                 type: string
               storageProvider:
                 description: StorageProvider defines the backend storage to store
@@ -126,16 +132,18 @@ spec:
               backups:
                 additionalProperties:
                   type: string
-                description: Backups represents the underlying backup objects of xstore.
-                  The key is cluster name, and the value is the backup name.
+                description: |-
+                  Backups represents the underlying backup objects of xstore. The key is
+                  cluster name, and the value is the backup name.
                 type: object
               clusterSpecSnapshot:
                 description: ClusterSpecSnapshot records the snapshot of polardbx
                   cluster spec
                 properties:
                   config:
-                    description: Config defines the configuration of the current cluster.
-                      Both dynamic and static configs of CN and DN are included.
+                    description: |-
+                      Config defines the configuration of the current cluster. Both dynamic and
+                      static configs of CN and DN are included.
                     properties:
                       cdc:
                         description: CDC config
@@ -161,6 +169,8 @@ spec:
                                     file storage
                                   pattern: ^(?i)innodb|mrg_myisam|blackhole|myisam|csv|archive|performance_schema|federated|local_disk|external_disk|s3|oss$
                                   type: string
+                              required:
+                              - engine
                               type: object
                             type: array
                           dynamic:
@@ -218,6 +228,8 @@ spec:
                                     file storage
                                   pattern: ^(?i)innodb|mrg_myisam|blackhole|myisam|csv|archive|performance_schema|federated|local_disk|external_disk|s3|oss$
                                   type: string
+                              required:
+                              - engine
                               type: object
                             type: array
                           envs:
@@ -284,17 +296,18 @@ spec:
                       the readonly cluster
                     type: string
                   privileges:
-                    description: Privileges defines the extra accounts that should
-                      be created while provisioning the cluster. Specifying an item
-                      for the default root account will overwrite the default random
-                      password with the given one.
+                    description: |-
+                      Privileges defines the extra accounts that should be created while provisioning
+                      the cluster. Specifying an item for the default root account will overwrite the
+                      default random password with the given one.
                     items:
                       description: PrivilegeItem represents an item for privilege
                         definition.
                       properties:
                         password:
-                          description: Password for the account. The operator will
-                            generate a random password if not provided.
+                          description: |-
+                            Password for the account. The operator will generate a
+                            random password if not provided.
                           type: string
                         type:
                           default: RW
@@ -316,9 +329,9 @@ spec:
                     anyOf:
                     - type: integer
                     - type: string
-                    description: ProtocolVersion represents the supported MySQL protocols
-                      provided by the cluster. Must be either 5 (5.7) or 8 (8.0).
-                      Default is operator dependent.
+                    description: |-
+                      ProtocolVersion represents the supported MySQL protocols provided by the cluster.
+                      Must be either 5 (5.7) or 8 (8.0). Default is operator dependent.
                     enum:
                     - 5
                     - 8
@@ -333,20 +346,25 @@ spec:
                       Default is false
                     type: boolean
                   restore:
-                    description: Restore defines the restore specification. When provided,
-                      the operator will create the cluster in restore mode. Restore
-                      might fail due to lack of backups silently.
+                    description: |-
+                      Restore defines the restore specification. When provided, the operator
+                      will create the cluster in restore mode. Restore might fail due to lack of
+                      backups silently.
                     properties:
                       backupset:
-                        description: BackupSet defines the source of backup set. It
-                          works only when PolarDBXBackup object of this BackupSet
-                          still exists.
+                        description: |-
+                          BackupSet defines the source of backup set.
+                          It works only when PolarDBXBackup object of this BackupSet still exists.
                         type: string
                       binlogSource:
                         description: BinlogSource defines the binlog datasource
                         properties:
                           checksum:
                             description: Checksum defines the binlog file checksum.
+                            type: string
+                          heartbeatSName:
+                            description: SName defines the heartbeat sname in the
+                              cdc heartbeat table
                             type: string
                           namespace:
                             description: Namespace defines the source binlog namespace
@@ -366,12 +384,11 @@ spec:
                             type: object
                         type: object
                       from:
-                        description: "From defines the source information, either
-                          a running cluster, backup set path or backup selector. \n
-                          If PolarDBXRestoreFrom.BackupSetPath provided, restore will
-                          be performed using metadata backup in remote storage. It
-                          works only when BackupSet is empty and StorageProvider is
-                          provided."
+                        description: |-
+                          From defines the source information, either a running cluster, backup set path or backup selector.
+
+                          If PolarDBXRestoreFrom.BackupSetPath provided, restore will be performed using metadata backup in remote storage.
+                          It works only when BackupSet is empty and StorageProvider is provided.
                         properties:
                           backupSelector:
                             additionalProperties:
@@ -403,12 +420,10 @@ spec:
                         type: object
                       syncSpecWithOriginalCluster:
                         default: false
-                        description: SyncSpecWithOriginalCluster identifies whether
-                          restored cluster should use the same spec as the original
-                          cluster. If the field is set to true, spec of original cluster
-                          is used; otherwise users have to declare spec manually or
-                          use default spec, but replicas of dn will be forced to sync
-                          with original cluster now. Default is false
+                        description: |-
+                          SyncSpecWithOriginalCluster identifies whether restored cluster should use the same spec as the original cluster.
+                          If the field is set to true, spec of original cluster is used; otherwise users have to declare spec manually or
+                          use default spec, but replicas of dn will be forced to sync with original cluster now. Default is false
                         type: boolean
                       time:
                         description: Time defines the specified time of the restored
@@ -424,17 +439,18 @@ spec:
                       like SSL.
                     properties:
                       encodeKey:
-                        description: EncodeKey defines the encode key used by the
-                          cluster. If not provided, operator will generate a random
-                          key.
+                        description: |-
+                          EncodeKey defines the encode key used by the cluster. If not provided,
+                          operator will generate a random key.
                         properties:
                           key:
                             description: The key of the secret to select from.  Must
                               be a valid secret key.
                             type: string
                           name:
-                            description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-                              TODO: Add other useful fields. apiVersion, kind, uid?'
+                            description: |-
+                              Name of the referent.
+                              More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
                             type: string
                           optional:
                             description: Specify whether the Secret or its key must
@@ -443,6 +459,7 @@ spec:
                         required:
                         - key
                         type: object
+                        x-kubernetes-map-type: atomic
                       tls:
                         description: TLS defines the TLS config of the access port.
                         properties:
@@ -456,20 +473,22 @@ spec:
                         type: object
                     type: object
                   serviceName:
-                    description: ServiceName represents the name of main (access)
-                      service of the cluster. It's set to the name of the cluster
-                      object when not provided.
+                    description: |-
+                      ServiceName represents the name of main (access) service of the cluster.
+                      It's set to the name of the cluster object when not provided.
                     type: string
                   serviceType:
                     default: ClusterIP
-                    description: ServiceType represents the service type of main (access)
-                      service of the cluster. Default is ClusterIP.
+                    description: |-
+                      ServiceType represents the service type of main (access) service of the cluster.
+                      Default is ClusterIP.
                     type: string
                   shareGMS:
-                    description: ShareGMS represents there's no standalone GMS instance
-                      but shares the first DN as the GMS. It's not recommended in
-                      production but useful for tests in environments with not so
-                      much CPU/memory resources. Default is false.
+                    description: |-
+                      ShareGMS represents there's no standalone GMS instance but shares the first
+                      DN as the GMS. It's not recommended in production but useful for tests in
+                      environments with not so much CPU/memory resources.
+                      Default is false.
                     type: boolean
                   tde:
                     description: TDE defines the transparent data encryption of clusters
@@ -487,41 +506,39 @@ spec:
                     description: Tolerations specifies the tolerations of the Pods
                       of the cluster.
                     items:
-                      description: The pod this Toleration is attached to tolerates
-                        any taint that matches the triple <key,value,effect> using
-                        the matching operator <operator>.
+                      description: |-
+                        The pod this Toleration is attached to tolerates any taint that matches
+                        the triple <key,value,effect> using the matching operator <operator>.
                       properties:
                         effect:
-                          description: Effect indicates the taint effect to match.
-                            Empty means match all taint effects. When specified, allowed
-                            values are NoSchedule, PreferNoSchedule and NoExecute.
+                          description: |-
+                            Effect indicates the taint effect to match. Empty means match all taint effects.
+                            When specified, allowed values are NoSchedule, PreferNoSchedule and NoExecute.
                           type: string
                         key:
-                          description: Key is the taint key that the toleration applies
-                            to. Empty means match all taint keys. If the key is empty,
-                            operator must be Exists; this combination means to match
-                            all values and all keys.
+                          description: |-
+                            Key is the taint key that the toleration applies to. Empty means match all taint keys.
+                            If the key is empty, operator must be Exists; this combination means to match all values and all keys.
                           type: string
                         operator:
-                          description: Operator represents a key's relationship to
-                            the value. Valid operators are Exists and Equal. Defaults
-                            to Equal. Exists is equivalent to wildcard for value,
-                            so that a pod can tolerate all taints of a particular
-                            category.
+                          description: |-
+                            Operator represents a key's relationship to the value.
+                            Valid operators are Exists and Equal. Defaults to Equal.
+                            Exists is equivalent to wildcard for value, so that a pod can
+                            tolerate all taints of a particular category.
                           type: string
                         tolerationSeconds:
-                          description: TolerationSeconds represents the period of
-                            time the toleration (which must be of effect NoExecute,
-                            otherwise this field is ignored) tolerates the taint.
-                            By default, it is not set, which means tolerate the taint
-                            forever (do not evict). Zero and negative values will
-                            be treated as 0 (evict immediately) by the system.
+                          description: |-
+                            TolerationSeconds represents the period of time the toleration (which must be
+                            of effect NoExecute, otherwise this field is ignored) tolerates the taint. By default,
+                            it is not set, which means tolerate the taint forever (do not evict). Zero and
+                            negative values will be treated as 0 (evict immediately) by the system.
                           format: int64
                           type: integer
                         value:
-                          description: Value is the taint value the toleration matches
-                            to. If the operator is Exists, the value should be empty,
-                            otherwise just a regular string.
+                          description: |-
+                            Value is the taint value the toleration matches to.
+                            If the operator is Exists, the value should be empty, otherwise just a regular string.
                           type: string
                       type: object
                     type: array
@@ -580,26 +597,25 @@ spec:
                                             by default value if not present.
                                           type: string
                                         imagePullPolicy:
-                                          description: ImagePullPolicy describes a
-                                            policy for if/when to pull a container
-                                            image (especially for the engine container).
+                                          description: |-
+                                            ImagePullPolicy describes a policy for if/when to pull a container image (especially
+                                            for the engine container).
                                           type: string
                                         imagePullSecrets:
                                           description: ImagePullSecrets represents
                                             the secrets for pulling private images.
                                           items:
-                                            description: LocalObjectReference contains
-                                              enough information to let you locate
-                                              the referenced object inside the same
-                                              namespace.
+                                            description: |-
+                                              LocalObjectReference contains enough information to let you locate the
+                                              referenced object inside the same namespace.
                                             properties:
                                               name:
-                                                description: 'Name of the referent.
+                                                description: |-
+                                                  Name of the referent.
                                                   More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-                                                  TODO: Add other useful fields. apiVersion,
-                                                  kind, uid?'
                                                 type: string
                                             type: object
+                                            x-kubernetes-map-type: atomic
                                           type: array
                                         resources:
                                           default:
@@ -610,23 +626,23 @@ spec:
                                             of 4 cpu and 8Gi memory.
                                           properties:
                                             claims:
-                                              description: "Claims lists the names
-                                                of resources, defined in spec.resourceClaims,
-                                                that are used by this container. \n
-                                                This is an alpha field and requires
-                                                enabling the DynamicResourceAllocation
-                                                feature gate. \n This field is immutable.
-                                                It can only be set for containers."
+                                              description: |-
+                                                Claims lists the names of resources, defined in spec.resourceClaims,
+                                                that are used by this container.
+
+                                                This is an alpha field and requires enabling the
+                                                DynamicResourceAllocation feature gate.
+
+                                                This field is immutable. It can only be set for containers.
                                               items:
                                                 description: ResourceClaim references
                                                   one entry in PodSpec.ResourceClaims.
                                                 properties:
                                                   name:
-                                                    description: Name must match the
-                                                      name of one entry in pod.spec.resourceClaims
-                                                      of the Pod where this field
-                                                      is used. It makes that resource
-                                                      available inside a container.
+                                                    description: |-
+                                                      Name must match the name of one entry in pod.spec.resourceClaims of
+                                                      the Pod where this field is used. It makes that resource available
+                                                      inside a container.
                                                     type: string
                                                 required:
                                                 - name
@@ -642,9 +658,9 @@ spec:
                                                 - type: string
                                                 pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                                 x-kubernetes-int-or-string: true
-                                              description: 'Limits describes the maximum
-                                                amount of compute resources allowed.
-                                                More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                                              description: |-
+                                                Limits describes the maximum amount of compute resources allowed.
+                                                More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
                                               type: object
                                             requests:
                                               additionalProperties:
@@ -653,14 +669,11 @@ spec:
                                                 - type: string
                                                 pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                                 x-kubernetes-int-or-string: true
-                                              description: 'Requests describes the
-                                                minimum amount of compute resources
-                                                required. If Requests is omitted for
-                                                a container, it defaults to Limits
-                                                if that is explicitly specified, otherwise
-                                                to an implementation-defined value.
-                                                Requests cannot exceed Limits. More
-                                                info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                                              description: |-
+                                                Requests describes the minimum amount of compute resources required.
+                                                If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+                                                otherwise to an implementation-defined value. Requests cannot exceed Limits.
+                                                More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
                                               type: object
                                           type: object
                                       type: object
@@ -687,25 +700,25 @@ spec:
                                       by default value if not present.
                                     type: string
                                   imagePullPolicy:
-                                    description: ImagePullPolicy describes a policy
-                                      for if/when to pull a container image (especially
+                                    description: |-
+                                      ImagePullPolicy describes a policy for if/when to pull a container image (especially
                                       for the engine container).
                                     type: string
                                   imagePullSecrets:
                                     description: ImagePullSecrets represents the secrets
                                       for pulling private images.
                                     items:
-                                      description: LocalObjectReference contains enough
-                                        information to let you locate the referenced
-                                        object inside the same namespace.
+                                      description: |-
+                                        LocalObjectReference contains enough information to let you locate the
+                                        referenced object inside the same namespace.
                                       properties:
                                         name:
-                                          description: 'Name of the referent. More
-                                            info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-                                            TODO: Add other useful fields. apiVersion,
-                                            kind, uid?'
+                                          description: |-
+                                            Name of the referent.
+                                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
                                           type: string
                                       type: object
+                                      x-kubernetes-map-type: atomic
                                     type: array
                                   resources:
                                     default:
@@ -716,22 +729,23 @@ spec:
                                       cpu and 8Gi memory.
                                     properties:
                                       claims:
-                                        description: "Claims lists the names of resources,
-                                          defined in spec.resourceClaims, that are
-                                          used by this container. \n This is an alpha
-                                          field and requires enabling the DynamicResourceAllocation
-                                          feature gate. \n This field is immutable.
-                                          It can only be set for containers."
+                                        description: |-
+                                          Claims lists the names of resources, defined in spec.resourceClaims,
+                                          that are used by this container.
+
+                                          This is an alpha field and requires enabling the
+                                          DynamicResourceAllocation feature gate.
+
+                                          This field is immutable. It can only be set for containers.
                                         items:
                                           description: ResourceClaim references one
                                             entry in PodSpec.ResourceClaims.
                                           properties:
                                             name:
-                                              description: Name must match the name
-                                                of one entry in pod.spec.resourceClaims
-                                                of the Pod where this field is used.
-                                                It makes that resource available inside
-                                                a container.
+                                              description: |-
+                                                Name must match the name of one entry in pod.spec.resourceClaims of
+                                                the Pod where this field is used. It makes that resource available
+                                                inside a container.
                                               type: string
                                           required:
                                           - name
@@ -747,9 +761,9 @@ spec:
                                           - type: string
                                           pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                           x-kubernetes-int-or-string: true
-                                        description: 'Limits describes the maximum
-                                          amount of compute resources allowed. More
-                                          info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                                        description: |-
+                                          Limits describes the maximum amount of compute resources allowed.
+                                          More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
                                         type: object
                                       requests:
                                         additionalProperties:
@@ -758,13 +772,11 @@ spec:
                                           - type: string
                                           pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                           x-kubernetes-int-or-string: true
-                                        description: 'Requests describes the minimum
-                                          amount of compute resources required. If
-                                          Requests is omitted for a container, it
-                                          defaults to Limits if that is explicitly
-                                          specified, otherwise to an implementation-defined
-                                          value. Requests cannot exceed Limits. More
-                                          info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                                        description: |-
+                                          Requests describes the minimum amount of compute resources required.
+                                          If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+                                          otherwise to an implementation-defined value. Requests cannot exceed Limits.
+                                          More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
                                         type: object
                                     type: object
                                 type: object
@@ -801,25 +813,25 @@ spec:
                                       by default value if not present.
                                     type: string
                                   imagePullPolicy:
-                                    description: ImagePullPolicy describes a policy
-                                      for if/when to pull a container image (especially
+                                    description: |-
+                                      ImagePullPolicy describes a policy for if/when to pull a container image (especially
                                       for the engine container).
                                     type: string
                                   imagePullSecrets:
                                     description: ImagePullSecrets represents the secrets
                                       for pulling private images.
                                     items:
-                                      description: LocalObjectReference contains enough
-                                        information to let you locate the referenced
-                                        object inside the same namespace.
+                                      description: |-
+                                        LocalObjectReference contains enough information to let you locate the
+                                        referenced object inside the same namespace.
                                       properties:
                                         name:
-                                          description: 'Name of the referent. More
-                                            info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-                                            TODO: Add other useful fields. apiVersion,
-                                            kind, uid?'
+                                          description: |-
+                                            Name of the referent.
+                                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
                                           type: string
                                       type: object
+                                      x-kubernetes-map-type: atomic
                                     type: array
                                   resources:
                                     default:
@@ -830,22 +842,23 @@ spec:
                                       cpu and 8Gi memory.
                                     properties:
                                       claims:
-                                        description: "Claims lists the names of resources,
-                                          defined in spec.resourceClaims, that are
-                                          used by this container. \n This is an alpha
-                                          field and requires enabling the DynamicResourceAllocation
-                                          feature gate. \n This field is immutable.
-                                          It can only be set for containers."
+                                        description: |-
+                                          Claims lists the names of resources, defined in spec.resourceClaims,
+                                          that are used by this container.
+
+                                          This is an alpha field and requires enabling the
+                                          DynamicResourceAllocation feature gate.
+
+                                          This field is immutable. It can only be set for containers.
                                         items:
                                           description: ResourceClaim references one
                                             entry in PodSpec.ResourceClaims.
                                           properties:
                                             name:
-                                              description: Name must match the name
-                                                of one entry in pod.spec.resourceClaims
-                                                of the Pod where this field is used.
-                                                It makes that resource available inside
-                                                a container.
+                                              description: |-
+                                                Name must match the name of one entry in pod.spec.resourceClaims of
+                                                the Pod where this field is used. It makes that resource available
+                                                inside a container.
                                               type: string
                                           required:
                                           - name
@@ -861,9 +874,9 @@ spec:
                                           - type: string
                                           pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                           x-kubernetes-int-or-string: true
-                                        description: 'Limits describes the maximum
-                                          amount of compute resources allowed. More
-                                          info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                                        description: |-
+                                          Limits describes the maximum amount of compute resources allowed.
+                                          More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
                                         type: object
                                       requests:
                                         additionalProperties:
@@ -872,13 +885,11 @@ spec:
                                           - type: string
                                           pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                           x-kubernetes-int-or-string: true
-                                        description: 'Requests describes the minimum
-                                          amount of compute resources required. If
-                                          Requests is omitted for a container, it
-                                          defaults to Limits if that is explicitly
-                                          specified, otherwise to an implementation-defined
-                                          value. Requests cannot exceed Limits. More
-                                          info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                                        description: |-
+                                          Requests describes the minimum amount of compute resources required.
+                                          If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+                                          otherwise to an implementation-defined value. Requests cannot exceed Limits.
+                                          More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
                                         type: object
                                     type: object
                                 type: object
@@ -905,25 +916,25 @@ spec:
                                       by default value if not present.
                                     type: string
                                   imagePullPolicy:
-                                    description: ImagePullPolicy describes a policy
-                                      for if/when to pull a container image (especially
+                                    description: |-
+                                      ImagePullPolicy describes a policy for if/when to pull a container image (especially
                                       for the engine container).
                                     type: string
                                   imagePullSecrets:
                                     description: ImagePullSecrets represents the secrets
                                       for pulling private images.
                                     items:
-                                      description: LocalObjectReference contains enough
-                                        information to let you locate the referenced
-                                        object inside the same namespace.
+                                      description: |-
+                                        LocalObjectReference contains enough information to let you locate the
+                                        referenced object inside the same namespace.
                                       properties:
                                         name:
-                                          description: 'Name of the referent. More
-                                            info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-                                            TODO: Add other useful fields. apiVersion,
-                                            kind, uid?'
+                                          description: |-
+                                            Name of the referent.
+                                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
                                           type: string
                                       type: object
+                                      x-kubernetes-map-type: atomic
                                     type: array
                                   resources:
                                     default:
@@ -934,22 +945,23 @@ spec:
                                       cpu and 8Gi memory.
                                     properties:
                                       claims:
-                                        description: "Claims lists the names of resources,
-                                          defined in spec.resourceClaims, that are
-                                          used by this container. \n This is an alpha
-                                          field and requires enabling the DynamicResourceAllocation
-                                          feature gate. \n This field is immutable.
-                                          It can only be set for containers."
+                                        description: |-
+                                          Claims lists the names of resources, defined in spec.resourceClaims,
+                                          that are used by this container.
+
+                                          This is an alpha field and requires enabling the
+                                          DynamicResourceAllocation feature gate.
+
+                                          This field is immutable. It can only be set for containers.
                                         items:
                                           description: ResourceClaim references one
                                             entry in PodSpec.ResourceClaims.
                                           properties:
                                             name:
-                                              description: Name must match the name
-                                                of one entry in pod.spec.resourceClaims
-                                                of the Pod where this field is used.
-                                                It makes that resource available inside
-                                                a container.
+                                              description: |-
+                                                Name must match the name of one entry in pod.spec.resourceClaims of
+                                                the Pod where this field is used. It makes that resource available
+                                                inside a container.
                                               type: string
                                           required:
                                           - name
@@ -965,9 +977,9 @@ spec:
                                           - type: string
                                           pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                           x-kubernetes-int-or-string: true
-                                        description: 'Limits describes the maximum
-                                          amount of compute resources allowed. More
-                                          info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                                        description: |-
+                                          Limits describes the maximum amount of compute resources allowed.
+                                          More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
                                         type: object
                                       requests:
                                         additionalProperties:
@@ -976,13 +988,11 @@ spec:
                                           - type: string
                                           pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                           x-kubernetes-int-or-string: true
-                                        description: 'Requests describes the minimum
-                                          amount of compute resources required. If
-                                          Requests is omitted for a container, it
-                                          defaults to Limits if that is explicitly
-                                          specified, otherwise to an implementation-defined
-                                          value. Requests cannot exceed Limits. More
-                                          info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                                        description: |-
+                                          Requests describes the minimum amount of compute resources required.
+                                          If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+                                          otherwise to an implementation-defined value. Requests cannot exceed Limits.
+                                          More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
                                         type: object
                                     type: object
                                 type: object
@@ -1030,25 +1040,25 @@ spec:
                                       by default value if not present.
                                     type: string
                                   imagePullPolicy:
-                                    description: ImagePullPolicy describes a policy
-                                      for if/when to pull a container image (especially
+                                    description: |-
+                                      ImagePullPolicy describes a policy for if/when to pull a container image (especially
                                       for the engine container).
                                     type: string
                                   imagePullSecrets:
                                     description: ImagePullSecrets represents the secrets
                                       for pulling private images.
                                     items:
-                                      description: LocalObjectReference contains enough
-                                        information to let you locate the referenced
-                                        object inside the same namespace.
+                                      description: |-
+                                        LocalObjectReference contains enough information to let you locate the
+                                        referenced object inside the same namespace.
                                       properties:
                                         name:
-                                          description: 'Name of the referent. More
-                                            info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-                                            TODO: Add other useful fields. apiVersion,
-                                            kind, uid?'
+                                          description: |-
+                                            Name of the referent.
+                                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
                                           type: string
                                       type: object
+                                      x-kubernetes-map-type: atomic
                                     type: array
                                   resources:
                                     default:
@@ -1059,22 +1069,23 @@ spec:
                                       cpu and 8Gi memory.
                                     properties:
                                       claims:
-                                        description: "Claims lists the names of resources,
-                                          defined in spec.resourceClaims, that are
-                                          used by this container. \n This is an alpha
-                                          field and requires enabling the DynamicResourceAllocation
-                                          feature gate. \n This field is immutable.
-                                          It can only be set for containers."
+                                        description: |-
+                                          Claims lists the names of resources, defined in spec.resourceClaims,
+                                          that are used by this container.
+
+                                          This is an alpha field and requires enabling the
+                                          DynamicResourceAllocation feature gate.
+
+                                          This field is immutable. It can only be set for containers.
                                         items:
                                           description: ResourceClaim references one
                                             entry in PodSpec.ResourceClaims.
                                           properties:
                                             name:
-                                              description: Name must match the name
-                                                of one entry in pod.spec.resourceClaims
-                                                of the Pod where this field is used.
-                                                It makes that resource available inside
-                                                a container.
+                                              description: |-
+                                                Name must match the name of one entry in pod.spec.resourceClaims of
+                                                the Pod where this field is used. It makes that resource available
+                                                inside a container.
                                               type: string
                                           required:
                                           - name
@@ -1090,9 +1101,9 @@ spec:
                                           - type: string
                                           pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                           x-kubernetes-int-or-string: true
-                                        description: 'Limits describes the maximum
-                                          amount of compute resources allowed. More
-                                          info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                                        description: |-
+                                          Limits describes the maximum amount of compute resources allowed.
+                                          More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
                                         type: object
                                       limits.io:
                                         additionalProperties:
@@ -1111,29 +1122,27 @@ spec:
                                           - type: string
                                           pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                           x-kubernetes-int-or-string: true
-                                        description: 'Requests describes the minimum
-                                          amount of compute resources required. If
-                                          Requests is omitted for a container, it
-                                          defaults to Limits if that is explicitly
-                                          specified, otherwise to an implementation-defined
-                                          value. Requests cannot exceed Limits. More
-                                          info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                                        description: |-
+                                          Requests describes the minimum amount of compute resources required.
+                                          If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+                                          otherwise to an implementation-defined value. Requests cannot exceed Limits.
+                                          More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
                                         type: object
                                     type: object
                                   serviceType:
                                     default: ClusterIP
-                                    description: Service type for xstore's service.
-                                      Useful when needs an external IP. Default is
-                                      ClusterIP.
+                                    description: |-
+                                      Service type for xstore's service. Useful when needs an external IP.
+                                      Default is ClusterIP.
                                     type: string
                                 type: object
                             type: object
                           gms:
                             properties:
                               template:
-                                description: Template of GMS xstore. If not provided,
-                                  the operator will use the template for DN as template
-                                  for GMS.
+                                description: |-
+                                  Template of GMS xstore. If not provided, the operator will use
+                                  the template for DN as template for GMS.
                                 properties:
                                   diskQuota:
                                     anyOf:
@@ -1155,25 +1164,25 @@ spec:
                                       by default value if not present.
                                     type: string
                                   imagePullPolicy:
-                                    description: ImagePullPolicy describes a policy
-                                      for if/when to pull a container image (especially
+                                    description: |-
+                                      ImagePullPolicy describes a policy for if/when to pull a container image (especially
                                       for the engine container).
                                     type: string
                                   imagePullSecrets:
                                     description: ImagePullSecrets represents the secrets
                                       for pulling private images.
                                     items:
-                                      description: LocalObjectReference contains enough
-                                        information to let you locate the referenced
-                                        object inside the same namespace.
+                                      description: |-
+                                        LocalObjectReference contains enough information to let you locate the
+                                        referenced object inside the same namespace.
                                       properties:
                                         name:
-                                          description: 'Name of the referent. More
-                                            info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-                                            TODO: Add other useful fields. apiVersion,
-                                            kind, uid?'
+                                          description: |-
+                                            Name of the referent.
+                                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
                                           type: string
                                       type: object
+                                      x-kubernetes-map-type: atomic
                                     type: array
                                   resources:
                                     default:
@@ -1184,22 +1193,23 @@ spec:
                                       cpu and 8Gi memory.
                                     properties:
                                       claims:
-                                        description: "Claims lists the names of resources,
-                                          defined in spec.resourceClaims, that are
-                                          used by this container. \n This is an alpha
-                                          field and requires enabling the DynamicResourceAllocation
-                                          feature gate. \n This field is immutable.
-                                          It can only be set for containers."
+                                        description: |-
+                                          Claims lists the names of resources, defined in spec.resourceClaims,
+                                          that are used by this container.
+
+                                          This is an alpha field and requires enabling the
+                                          DynamicResourceAllocation feature gate.
+
+                                          This field is immutable. It can only be set for containers.
                                         items:
                                           description: ResourceClaim references one
                                             entry in PodSpec.ResourceClaims.
                                           properties:
                                             name:
-                                              description: Name must match the name
-                                                of one entry in pod.spec.resourceClaims
-                                                of the Pod where this field is used.
-                                                It makes that resource available inside
-                                                a container.
+                                              description: |-
+                                                Name must match the name of one entry in pod.spec.resourceClaims of
+                                                the Pod where this field is used. It makes that resource available
+                                                inside a container.
                                               type: string
                                           required:
                                           - name
@@ -1215,9 +1225,9 @@ spec:
                                           - type: string
                                           pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                           x-kubernetes-int-or-string: true
-                                        description: 'Limits describes the maximum
-                                          amount of compute resources allowed. More
-                                          info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                                        description: |-
+                                          Limits describes the maximum amount of compute resources allowed.
+                                          More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
                                         type: object
                                       limits.io:
                                         additionalProperties:
@@ -1236,20 +1246,18 @@ spec:
                                           - type: string
                                           pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                           x-kubernetes-int-or-string: true
-                                        description: 'Requests describes the minimum
-                                          amount of compute resources required. If
-                                          Requests is omitted for a container, it
-                                          defaults to Limits if that is explicitly
-                                          specified, otherwise to an implementation-defined
-                                          value. Requests cannot exceed Limits. More
-                                          info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                                        description: |-
+                                          Requests describes the minimum amount of compute resources required.
+                                          If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+                                          otherwise to an implementation-defined value. Requests cannot exceed Limits.
+                                          More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
                                         type: object
                                     type: object
                                   serviceType:
                                     default: ClusterIP
-                                    description: Service type for xstore's service.
-                                      Useful when needs an external IP. Default is
-                                      ClusterIP.
+                                    description: |-
+                                      Service type for xstore's service. Useful when needs an external IP.
+                                      Default is ClusterIP.
                                     type: string
                                 type: object
                             type: object
@@ -1277,31 +1285,27 @@ spec:
                                         reference:
                                           type: string
                                         selector:
-                                          description: A node selector represents
-                                            the union of the results of one or more
-                                            label queries over a set of nodes; that
-                                            is, it represents the OR of the selectors
-                                            represented by the node selector terms.
+                                          description: |-
+                                            A node selector represents the union of the results of one or more label queries
+                                            over a set of nodes; that is, it represents the OR of the selectors represented
+                                            by the node selector terms.
                                           properties:
                                             nodeSelectorTerms:
                                               description: Required. A list of node
                                                 selector terms. The terms are ORed.
                                               items:
-                                                description: A null or empty node
-                                                  selector term matches no objects.
-                                                  The requirements of them are ANDed.
-                                                  The TopologySelectorTerm type implements
-                                                  a subset of the NodeSelectorTerm.
+                                                description: |-
+                                                  A null or empty node selector term matches no objects. The requirements of
+                                                  them are ANDed.
+                                                  The TopologySelectorTerm type implements a subset of the NodeSelectorTerm.
                                                 properties:
                                                   matchExpressions:
                                                     description: A list of node selector
                                                       requirements by node's labels.
                                                     items:
-                                                      description: A node selector
-                                                        requirement is a selector
-                                                        that contains values, a key,
-                                                        and an operator that relates
-                                                        the key and values.
+                                                      description: |-
+                                                        A node selector requirement is a selector that contains values, a key, and an operator
+                                                        that relates the key and values.
                                                       properties:
                                                         key:
                                                           description: The label key
@@ -1309,29 +1313,17 @@ spec:
                                                             to.
                                                           type: string
                                                         operator:
-                                                          description: Represents
-                                                            a key's relationship to
-                                                            a set of values. Valid
-                                                            operators are In, NotIn,
-                                                            Exists, DoesNotExist.
-                                                            Gt, and Lt.
+                                                          description: |-
+                                                            Represents a key's relationship to a set of values.
+                                                            Valid operators are In, NotIn, Exists, DoesNotExist. Gt, and Lt.
                                                           type: string
                                                         values:
-                                                          description: An array of
-                                                            string values. If the
-                                                            operator is In or NotIn,
-                                                            the values array must
-                                                            be non-empty. If the operator
-                                                            is Exists or DoesNotExist,
-                                                            the values array must
-                                                            be empty. If the operator
-                                                            is Gt or Lt, the values
-                                                            array must have a single
-                                                            element, which will be
-                                                            interpreted as an integer.
-                                                            This array is replaced
-                                                            during a strategic merge
-                                                            patch.
+                                                          description: |-
+                                                            An array of string values. If the operator is In or NotIn,
+                                                            the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                                            the values array must be empty. If the operator is Gt or Lt, the values
+                                                            array must have a single element, which will be interpreted as an integer.
+                                                            This array is replaced during a strategic merge patch.
                                                           items:
                                                             type: string
                                                           type: array
@@ -1344,11 +1336,9 @@ spec:
                                                     description: A list of node selector
                                                       requirements by node's fields.
                                                     items:
-                                                      description: A node selector
-                                                        requirement is a selector
-                                                        that contains values, a key,
-                                                        and an operator that relates
-                                                        the key and values.
+                                                      description: |-
+                                                        A node selector requirement is a selector that contains values, a key, and an operator
+                                                        that relates the key and values.
                                                       properties:
                                                         key:
                                                           description: The label key
@@ -1356,29 +1346,17 @@ spec:
                                                             to.
                                                           type: string
                                                         operator:
-                                                          description: Represents
-                                                            a key's relationship to
-                                                            a set of values. Valid
-                                                            operators are In, NotIn,
-                                                            Exists, DoesNotExist.
-                                                            Gt, and Lt.
+                                                          description: |-
+                                                            Represents a key's relationship to a set of values.
+                                                            Valid operators are In, NotIn, Exists, DoesNotExist. Gt, and Lt.
                                                           type: string
                                                         values:
-                                                          description: An array of
-                                                            string values. If the
-                                                            operator is In or NotIn,
-                                                            the values array must
-                                                            be non-empty. If the operator
-                                                            is Exists or DoesNotExist,
-                                                            the values array must
-                                                            be empty. If the operator
-                                                            is Gt or Lt, the values
-                                                            array must have a single
-                                                            element, which will be
-                                                            interpreted as an integer.
-                                                            This array is replaced
-                                                            during a strategic merge
-                                                            patch.
+                                                          description: |-
+                                                            An array of string values. If the operator is In or NotIn,
+                                                            the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                                            the values array must be empty. If the operator is Gt or Lt, the values
+                                                            array must have a single element, which will be interpreted as an integer.
+                                                            This array is replaced during a strategic merge patch.
                                                           items:
                                                             type: string
                                                           type: array
@@ -1388,10 +1366,12 @@ spec:
                                                       type: object
                                                     type: array
                                                 type: object
+                                                x-kubernetes-map-type: atomic
                                               type: array
                                           required:
                                           - nodeSelectorTerms
                                           type: object
+                                          x-kubernetes-map-type: atomic
                                       type: object
                                   type: object
                                 type: array
@@ -1412,31 +1392,27 @@ spec:
                                         reference:
                                           type: string
                                         selector:
-                                          description: A node selector represents
-                                            the union of the results of one or more
-                                            label queries over a set of nodes; that
-                                            is, it represents the OR of the selectors
-                                            represented by the node selector terms.
+                                          description: |-
+                                            A node selector represents the union of the results of one or more label queries
+                                            over a set of nodes; that is, it represents the OR of the selectors represented
+                                            by the node selector terms.
                                           properties:
                                             nodeSelectorTerms:
                                               description: Required. A list of node
                                                 selector terms. The terms are ORed.
                                               items:
-                                                description: A null or empty node
-                                                  selector term matches no objects.
-                                                  The requirements of them are ANDed.
-                                                  The TopologySelectorTerm type implements
-                                                  a subset of the NodeSelectorTerm.
+                                                description: |-
+                                                  A null or empty node selector term matches no objects. The requirements of
+                                                  them are ANDed.
+                                                  The TopologySelectorTerm type implements a subset of the NodeSelectorTerm.
                                                 properties:
                                                   matchExpressions:
                                                     description: A list of node selector
                                                       requirements by node's labels.
                                                     items:
-                                                      description: A node selector
-                                                        requirement is a selector
-                                                        that contains values, a key,
-                                                        and an operator that relates
-                                                        the key and values.
+                                                      description: |-
+                                                        A node selector requirement is a selector that contains values, a key, and an operator
+                                                        that relates the key and values.
                                                       properties:
                                                         key:
                                                           description: The label key
@@ -1444,29 +1420,17 @@ spec:
                                                             to.
                                                           type: string
                                                         operator:
-                                                          description: Represents
-                                                            a key's relationship to
-                                                            a set of values. Valid
-                                                            operators are In, NotIn,
-                                                            Exists, DoesNotExist.
-                                                            Gt, and Lt.
+                                                          description: |-
+                                                            Represents a key's relationship to a set of values.
+                                                            Valid operators are In, NotIn, Exists, DoesNotExist. Gt, and Lt.
                                                           type: string
                                                         values:
-                                                          description: An array of
-                                                            string values. If the
-                                                            operator is In or NotIn,
-                                                            the values array must
-                                                            be non-empty. If the operator
-                                                            is Exists or DoesNotExist,
-                                                            the values array must
-                                                            be empty. If the operator
-                                                            is Gt or Lt, the values
-                                                            array must have a single
-                                                            element, which will be
-                                                            interpreted as an integer.
-                                                            This array is replaced
-                                                            during a strategic merge
-                                                            patch.
+                                                          description: |-
+                                                            An array of string values. If the operator is In or NotIn,
+                                                            the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                                            the values array must be empty. If the operator is Gt or Lt, the values
+                                                            array must have a single element, which will be interpreted as an integer.
+                                                            This array is replaced during a strategic merge patch.
                                                           items:
                                                             type: string
                                                           type: array
@@ -1479,11 +1443,9 @@ spec:
                                                     description: A list of node selector
                                                       requirements by node's fields.
                                                     items:
-                                                      description: A node selector
-                                                        requirement is a selector
-                                                        that contains values, a key,
-                                                        and an operator that relates
-                                                        the key and values.
+                                                      description: |-
+                                                        A node selector requirement is a selector that contains values, a key, and an operator
+                                                        that relates the key and values.
                                                       properties:
                                                         key:
                                                           description: The label key
@@ -1491,29 +1453,17 @@ spec:
                                                             to.
                                                           type: string
                                                         operator:
-                                                          description: Represents
-                                                            a key's relationship to
-                                                            a set of values. Valid
-                                                            operators are In, NotIn,
-                                                            Exists, DoesNotExist.
-                                                            Gt, and Lt.
+                                                          description: |-
+                                                            Represents a key's relationship to a set of values.
+                                                            Valid operators are In, NotIn, Exists, DoesNotExist. Gt, and Lt.
                                                           type: string
                                                         values:
-                                                          description: An array of
-                                                            string values. If the
-                                                            operator is In or NotIn,
-                                                            the values array must
-                                                            be non-empty. If the operator
-                                                            is Exists or DoesNotExist,
-                                                            the values array must
-                                                            be empty. If the operator
-                                                            is Gt or Lt, the values
-                                                            array must have a single
-                                                            element, which will be
-                                                            interpreted as an integer.
-                                                            This array is replaced
-                                                            during a strategic merge
-                                                            patch.
+                                                          description: |-
+                                                            An array of string values. If the operator is In or NotIn,
+                                                            the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                                            the values array must be empty. If the operator is Gt or Lt, the values
+                                                            array must have a single element, which will be interpreted as an integer.
+                                                            This array is replaced during a strategic merge patch.
                                                           items:
                                                             type: string
                                                           type: array
@@ -1523,10 +1473,12 @@ spec:
                                                       type: object
                                                     type: array
                                                 type: object
+                                                x-kubernetes-map-type: atomic
                                               type: array
                                           required:
                                           - nodeSelectorTerms
                                           type: object
+                                          x-kubernetes-map-type: atomic
                                       type: object
                                   type: object
                                 type: array
@@ -1547,31 +1499,27 @@ spec:
                                         reference:
                                           type: string
                                         selector:
-                                          description: A node selector represents
-                                            the union of the results of one or more
-                                            label queries over a set of nodes; that
-                                            is, it represents the OR of the selectors
-                                            represented by the node selector terms.
+                                          description: |-
+                                            A node selector represents the union of the results of one or more label queries
+                                            over a set of nodes; that is, it represents the OR of the selectors represented
+                                            by the node selector terms.
                                           properties:
                                             nodeSelectorTerms:
                                               description: Required. A list of node
                                                 selector terms. The terms are ORed.
                                               items:
-                                                description: A null or empty node
-                                                  selector term matches no objects.
-                                                  The requirements of them are ANDed.
-                                                  The TopologySelectorTerm type implements
-                                                  a subset of the NodeSelectorTerm.
+                                                description: |-
+                                                  A null or empty node selector term matches no objects. The requirements of
+                                                  them are ANDed.
+                                                  The TopologySelectorTerm type implements a subset of the NodeSelectorTerm.
                                                 properties:
                                                   matchExpressions:
                                                     description: A list of node selector
                                                       requirements by node's labels.
                                                     items:
-                                                      description: A node selector
-                                                        requirement is a selector
-                                                        that contains values, a key,
-                                                        and an operator that relates
-                                                        the key and values.
+                                                      description: |-
+                                                        A node selector requirement is a selector that contains values, a key, and an operator
+                                                        that relates the key and values.
                                                       properties:
                                                         key:
                                                           description: The label key
@@ -1579,29 +1527,17 @@ spec:
                                                             to.
                                                           type: string
                                                         operator:
-                                                          description: Represents
-                                                            a key's relationship to
-                                                            a set of values. Valid
-                                                            operators are In, NotIn,
-                                                            Exists, DoesNotExist.
-                                                            Gt, and Lt.
+                                                          description: |-
+                                                            Represents a key's relationship to a set of values.
+                                                            Valid operators are In, NotIn, Exists, DoesNotExist. Gt, and Lt.
                                                           type: string
                                                         values:
-                                                          description: An array of
-                                                            string values. If the
-                                                            operator is In or NotIn,
-                                                            the values array must
-                                                            be non-empty. If the operator
-                                                            is Exists or DoesNotExist,
-                                                            the values array must
-                                                            be empty. If the operator
-                                                            is Gt or Lt, the values
-                                                            array must have a single
-                                                            element, which will be
-                                                            interpreted as an integer.
-                                                            This array is replaced
-                                                            during a strategic merge
-                                                            patch.
+                                                          description: |-
+                                                            An array of string values. If the operator is In or NotIn,
+                                                            the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                                            the values array must be empty. If the operator is Gt or Lt, the values
+                                                            array must have a single element, which will be interpreted as an integer.
+                                                            This array is replaced during a strategic merge patch.
                                                           items:
                                                             type: string
                                                           type: array
@@ -1614,11 +1550,9 @@ spec:
                                                     description: A list of node selector
                                                       requirements by node's fields.
                                                     items:
-                                                      description: A node selector
-                                                        requirement is a selector
-                                                        that contains values, a key,
-                                                        and an operator that relates
-                                                        the key and values.
+                                                      description: |-
+                                                        A node selector requirement is a selector that contains values, a key, and an operator
+                                                        that relates the key and values.
                                                       properties:
                                                         key:
                                                           description: The label key
@@ -1626,29 +1560,17 @@ spec:
                                                             to.
                                                           type: string
                                                         operator:
-                                                          description: Represents
-                                                            a key's relationship to
-                                                            a set of values. Valid
-                                                            operators are In, NotIn,
-                                                            Exists, DoesNotExist.
-                                                            Gt, and Lt.
+                                                          description: |-
+                                                            Represents a key's relationship to a set of values.
+                                                            Valid operators are In, NotIn, Exists, DoesNotExist. Gt, and Lt.
                                                           type: string
                                                         values:
-                                                          description: An array of
-                                                            string values. If the
-                                                            operator is In or NotIn,
-                                                            the values array must
-                                                            be non-empty. If the operator
-                                                            is Exists or DoesNotExist,
-                                                            the values array must
-                                                            be empty. If the operator
-                                                            is Gt or Lt, the values
-                                                            array must have a single
-                                                            element, which will be
-                                                            interpreted as an integer.
-                                                            This array is replaced
-                                                            during a strategic merge
-                                                            patch.
+                                                          description: |-
+                                                            An array of string values. If the operator is In or NotIn,
+                                                            the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                                            the values array must be empty. If the operator is Gt or Lt, the values
+                                                            array must have a single element, which will be interpreted as an integer.
+                                                            This array is replaced during a strategic merge patch.
                                                           items:
                                                             type: string
                                                           type: array
@@ -1658,10 +1580,12 @@ spec:
                                                       type: object
                                                     type: array
                                                 type: object
+                                                x-kubernetes-map-type: atomic
                                               type: array
                                           required:
                                           - nodeSelectorTerms
                                           type: object
+                                          x-kubernetes-map-type: atomic
                                       type: object
                                   type: object
                                 type: array
@@ -1688,36 +1612,29 @@ spec:
                                             reference:
                                               type: string
                                             selector:
-                                              description: A node selector represents
-                                                the union of the results of one or
-                                                more label queries over a set of nodes;
-                                                that is, it represents the OR of the
-                                                selectors represented by the node
-                                                selector terms.
+                                              description: |-
+                                                A node selector represents the union of the results of one or more label queries
+                                                over a set of nodes; that is, it represents the OR of the selectors represented
+                                                by the node selector terms.
                                               properties:
                                                 nodeSelectorTerms:
                                                   description: Required. A list of
                                                     node selector terms. The terms
                                                     are ORed.
                                                   items:
-                                                    description: A null or empty node
-                                                      selector term matches no objects.
-                                                      The requirements of them are
-                                                      ANDed. The TopologySelectorTerm
-                                                      type implements a subset of
-                                                      the NodeSelectorTerm.
+                                                    description: |-
+                                                      A null or empty node selector term matches no objects. The requirements of
+                                                      them are ANDed.
+                                                      The TopologySelectorTerm type implements a subset of the NodeSelectorTerm.
                                                     properties:
                                                       matchExpressions:
                                                         description: A list of node
                                                           selector requirements by
                                                           node's labels.
                                                         items:
-                                                          description: A node selector
-                                                            requirement is a selector
-                                                            that contains values,
-                                                            a key, and an operator
-                                                            that relates the key and
-                                                            values.
+                                                          description: |-
+                                                            A node selector requirement is a selector that contains values, a key, and an operator
+                                                            that relates the key and values.
                                                           properties:
                                                             key:
                                                               description: The label
@@ -1725,32 +1642,17 @@ spec:
                                                                 applies to.
                                                               type: string
                                                             operator:
-                                                              description: Represents
-                                                                a key's relationship
-                                                                to a set of values.
-                                                                Valid operators are
-                                                                In, NotIn, Exists,
-                                                                DoesNotExist. Gt,
-                                                                and Lt.
+                                                              description: |-
+                                                                Represents a key's relationship to a set of values.
+                                                                Valid operators are In, NotIn, Exists, DoesNotExist. Gt, and Lt.
                                                               type: string
                                                             values:
-                                                              description: An array
-                                                                of string values.
-                                                                If the operator is
-                                                                In or NotIn, the values
-                                                                array must be non-empty.
-                                                                If the operator is
-                                                                Exists or DoesNotExist,
-                                                                the values array must
-                                                                be empty. If the operator
-                                                                is Gt or Lt, the values
-                                                                array must have a
-                                                                single element, which
-                                                                will be interpreted
-                                                                as an integer. This
-                                                                array is replaced
-                                                                during a strategic
-                                                                merge patch.
+                                                              description: |-
+                                                                An array of string values. If the operator is In or NotIn,
+                                                                the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                                                the values array must be empty. If the operator is Gt or Lt, the values
+                                                                array must have a single element, which will be interpreted as an integer.
+                                                                This array is replaced during a strategic merge patch.
                                                               items:
                                                                 type: string
                                                               type: array
@@ -1764,12 +1666,9 @@ spec:
                                                           selector requirements by
                                                           node's fields.
                                                         items:
-                                                          description: A node selector
-                                                            requirement is a selector
-                                                            that contains values,
-                                                            a key, and an operator
-                                                            that relates the key and
-                                                            values.
+                                                          description: |-
+                                                            A node selector requirement is a selector that contains values, a key, and an operator
+                                                            that relates the key and values.
                                                           properties:
                                                             key:
                                                               description: The label
@@ -1777,32 +1676,17 @@ spec:
                                                                 applies to.
                                                               type: string
                                                             operator:
-                                                              description: Represents
-                                                                a key's relationship
-                                                                to a set of values.
-                                                                Valid operators are
-                                                                In, NotIn, Exists,
-                                                                DoesNotExist. Gt,
-                                                                and Lt.
+                                                              description: |-
+                                                                Represents a key's relationship to a set of values.
+                                                                Valid operators are In, NotIn, Exists, DoesNotExist. Gt, and Lt.
                                                               type: string
                                                             values:
-                                                              description: An array
-                                                                of string values.
-                                                                If the operator is
-                                                                In or NotIn, the values
-                                                                array must be non-empty.
-                                                                If the operator is
-                                                                Exists or DoesNotExist,
-                                                                the values array must
-                                                                be empty. If the operator
-                                                                is Gt or Lt, the values
-                                                                array must have a
-                                                                single element, which
-                                                                will be interpreted
-                                                                as an integer. This
-                                                                array is replaced
-                                                                during a strategic
-                                                                merge patch.
+                                                              description: |-
+                                                                An array of string values. If the operator is In or NotIn,
+                                                                the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                                                the values array must be empty. If the operator is Gt or Lt, the values
+                                                                array must have a single element, which will be interpreted as an integer.
+                                                                This array is replaced during a strategic merge patch.
                                                               items:
                                                                 type: string
                                                               type: array
@@ -1812,10 +1696,12 @@ spec:
                                                           type: object
                                                         type: array
                                                     type: object
+                                                    x-kubernetes-map-type: atomic
                                                   type: array
                                               required:
                                               - nodeSelectorTerms
                                               type: object
+                                              x-kubernetes-map-type: atomic
                                           type: object
                                       type: object
                                     type: array
@@ -1829,32 +1715,28 @@ spec:
                                           reference:
                                             type: string
                                           selector:
-                                            description: A node selector represents
-                                              the union of the results of one or more
-                                              label queries over a set of nodes; that
-                                              is, it represents the OR of the selectors
-                                              represented by the node selector terms.
+                                            description: |-
+                                              A node selector represents the union of the results of one or more label queries
+                                              over a set of nodes; that is, it represents the OR of the selectors represented
+                                              by the node selector terms.
                                             properties:
                                               nodeSelectorTerms:
                                                 description: Required. A list of node
                                                   selector terms. The terms are ORed.
                                                 items:
-                                                  description: A null or empty node
-                                                    selector term matches no objects.
-                                                    The requirements of them are ANDed.
-                                                    The TopologySelectorTerm type
-                                                    implements a subset of the NodeSelectorTerm.
+                                                  description: |-
+                                                    A null or empty node selector term matches no objects. The requirements of
+                                                    them are ANDed.
+                                                    The TopologySelectorTerm type implements a subset of the NodeSelectorTerm.
                                                   properties:
                                                     matchExpressions:
                                                       description: A list of node
                                                         selector requirements by node's
                                                         labels.
                                                       items:
-                                                        description: A node selector
-                                                          requirement is a selector
-                                                          that contains values, a
-                                                          key, and an operator that
-                                                          relates the key and values.
+                                                        description: |-
+                                                          A node selector requirement is a selector that contains values, a key, and an operator
+                                                          that relates the key and values.
                                                         properties:
                                                           key:
                                                             description: The label
@@ -1862,30 +1744,17 @@ spec:
                                                               applies to.
                                                             type: string
                                                           operator:
-                                                            description: Represents
-                                                              a key's relationship
-                                                              to a set of values.
-                                                              Valid operators are
-                                                              In, NotIn, Exists, DoesNotExist.
-                                                              Gt, and Lt.
+                                                            description: |-
+                                                              Represents a key's relationship to a set of values.
+                                                              Valid operators are In, NotIn, Exists, DoesNotExist. Gt, and Lt.
                                                             type: string
                                                           values:
-                                                            description: An array
-                                                              of string values. If
-                                                              the operator is In or
-                                                              NotIn, the values array
-                                                              must be non-empty. If
-                                                              the operator is Exists
-                                                              or DoesNotExist, the
-                                                              values array must be
-                                                              empty. If the operator
-                                                              is Gt or Lt, the values
-                                                              array must have a single
-                                                              element, which will
-                                                              be interpreted as an
-                                                              integer. This array
-                                                              is replaced during a
-                                                              strategic merge patch.
+                                                            description: |-
+                                                              An array of string values. If the operator is In or NotIn,
+                                                              the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                                              the values array must be empty. If the operator is Gt or Lt, the values
+                                                              array must have a single element, which will be interpreted as an integer.
+                                                              This array is replaced during a strategic merge patch.
                                                             items:
                                                               type: string
                                                             type: array
@@ -1899,11 +1768,9 @@ spec:
                                                         selector requirements by node's
                                                         fields.
                                                       items:
-                                                        description: A node selector
-                                                          requirement is a selector
-                                                          that contains values, a
-                                                          key, and an operator that
-                                                          relates the key and values.
+                                                        description: |-
+                                                          A node selector requirement is a selector that contains values, a key, and an operator
+                                                          that relates the key and values.
                                                         properties:
                                                           key:
                                                             description: The label
@@ -1911,30 +1778,17 @@ spec:
                                                               applies to.
                                                             type: string
                                                           operator:
-                                                            description: Represents
-                                                              a key's relationship
-                                                              to a set of values.
-                                                              Valid operators are
-                                                              In, NotIn, Exists, DoesNotExist.
-                                                              Gt, and Lt.
+                                                            description: |-
+                                                              Represents a key's relationship to a set of values.
+                                                              Valid operators are In, NotIn, Exists, DoesNotExist. Gt, and Lt.
                                                             type: string
                                                           values:
-                                                            description: An array
-                                                              of string values. If
-                                                              the operator is In or
-                                                              NotIn, the values array
-                                                              must be non-empty. If
-                                                              the operator is Exists
-                                                              or DoesNotExist, the
-                                                              values array must be
-                                                              empty. If the operator
-                                                              is Gt or Lt, the values
-                                                              array must have a single
-                                                              element, which will
-                                                              be interpreted as an
-                                                              integer. This array
-                                                              is replaced during a
-                                                              strategic merge patch.
+                                                            description: |-
+                                                              An array of string values. If the operator is In or NotIn,
+                                                              the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                                              the values array must be empty. If the operator is Gt or Lt, the values
+                                                              array must have a single element, which will be interpreted as an integer.
+                                                              This array is replaced during a strategic merge patch.
                                                             items:
                                                               type: string
                                                             type: array
@@ -1944,10 +1798,12 @@ spec:
                                                         type: object
                                                       type: array
                                                   type: object
+                                                  x-kubernetes-map-type: atomic
                                                 type: array
                                             required:
                                             - nodeSelectorTerms
                                             type: object
+                                            x-kubernetes-map-type: atomic
                                         type: object
                                     type: object
                                 type: object
@@ -1974,36 +1830,29 @@ spec:
                                             reference:
                                               type: string
                                             selector:
-                                              description: A node selector represents
-                                                the union of the results of one or
-                                                more label queries over a set of nodes;
-                                                that is, it represents the OR of the
-                                                selectors represented by the node
-                                                selector terms.
+                                              description: |-
+                                                A node selector represents the union of the results of one or more label queries
+                                                over a set of nodes; that is, it represents the OR of the selectors represented
+                                                by the node selector terms.
                                               properties:
                                                 nodeSelectorTerms:
                                                   description: Required. A list of
                                                     node selector terms. The terms
                                                     are ORed.
                                                   items:
-                                                    description: A null or empty node
-                                                      selector term matches no objects.
-                                                      The requirements of them are
-                                                      ANDed. The TopologySelectorTerm
-                                                      type implements a subset of
-                                                      the NodeSelectorTerm.
+                                                    description: |-
+                                                      A null or empty node selector term matches no objects. The requirements of
+                                                      them are ANDed.
+                                                      The TopologySelectorTerm type implements a subset of the NodeSelectorTerm.
                                                     properties:
                                                       matchExpressions:
                                                         description: A list of node
                                                           selector requirements by
                                                           node's labels.
                                                         items:
-                                                          description: A node selector
-                                                            requirement is a selector
-                                                            that contains values,
-                                                            a key, and an operator
-                                                            that relates the key and
-                                                            values.
+                                                          description: |-
+                                                            A node selector requirement is a selector that contains values, a key, and an operator
+                                                            that relates the key and values.
                                                           properties:
                                                             key:
                                                               description: The label
@@ -2011,32 +1860,17 @@ spec:
                                                                 applies to.
                                                               type: string
                                                             operator:
-                                                              description: Represents
-                                                                a key's relationship
-                                                                to a set of values.
-                                                                Valid operators are
-                                                                In, NotIn, Exists,
-                                                                DoesNotExist. Gt,
-                                                                and Lt.
+                                                              description: |-
+                                                                Represents a key's relationship to a set of values.
+                                                                Valid operators are In, NotIn, Exists, DoesNotExist. Gt, and Lt.
                                                               type: string
                                                             values:
-                                                              description: An array
-                                                                of string values.
-                                                                If the operator is
-                                                                In or NotIn, the values
-                                                                array must be non-empty.
-                                                                If the operator is
-                                                                Exists or DoesNotExist,
-                                                                the values array must
-                                                                be empty. If the operator
-                                                                is Gt or Lt, the values
-                                                                array must have a
-                                                                single element, which
-                                                                will be interpreted
-                                                                as an integer. This
-                                                                array is replaced
-                                                                during a strategic
-                                                                merge patch.
+                                                              description: |-
+                                                                An array of string values. If the operator is In or NotIn,
+                                                                the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                                                the values array must be empty. If the operator is Gt or Lt, the values
+                                                                array must have a single element, which will be interpreted as an integer.
+                                                                This array is replaced during a strategic merge patch.
                                                               items:
                                                                 type: string
                                                               type: array
@@ -2050,12 +1884,9 @@ spec:
                                                           selector requirements by
                                                           node's fields.
                                                         items:
-                                                          description: A node selector
-                                                            requirement is a selector
-                                                            that contains values,
-                                                            a key, and an operator
-                                                            that relates the key and
-                                                            values.
+                                                          description: |-
+                                                            A node selector requirement is a selector that contains values, a key, and an operator
+                                                            that relates the key and values.
                                                           properties:
                                                             key:
                                                               description: The label
@@ -2063,32 +1894,17 @@ spec:
                                                                 applies to.
                                                               type: string
                                                             operator:
-                                                              description: Represents
-                                                                a key's relationship
-                                                                to a set of values.
-                                                                Valid operators are
-                                                                In, NotIn, Exists,
-                                                                DoesNotExist. Gt,
-                                                                and Lt.
+                                                              description: |-
+                                                                Represents a key's relationship to a set of values.
+                                                                Valid operators are In, NotIn, Exists, DoesNotExist. Gt, and Lt.
                                                               type: string
                                                             values:
-                                                              description: An array
-                                                                of string values.
-                                                                If the operator is
-                                                                In or NotIn, the values
-                                                                array must be non-empty.
-                                                                If the operator is
-                                                                Exists or DoesNotExist,
-                                                                the values array must
-                                                                be empty. If the operator
-                                                                is Gt or Lt, the values
-                                                                array must have a
-                                                                single element, which
-                                                                will be interpreted
-                                                                as an integer. This
-                                                                array is replaced
-                                                                during a strategic
-                                                                merge patch.
+                                                              description: |-
+                                                                An array of string values. If the operator is In or NotIn,
+                                                                the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                                                the values array must be empty. If the operator is Gt or Lt, the values
+                                                                array must have a single element, which will be interpreted as an integer.
+                                                                This array is replaced during a strategic merge patch.
                                                               items:
                                                                 type: string
                                                               type: array
@@ -2098,10 +1914,12 @@ spec:
                                                           type: object
                                                         type: array
                                                     type: object
+                                                    x-kubernetes-map-type: atomic
                                                   type: array
                                               required:
                                               - nodeSelectorTerms
                                               type: object
+                                              x-kubernetes-map-type: atomic
                                           type: object
                                       type: object
                                     type: array
@@ -2115,32 +1933,28 @@ spec:
                                           reference:
                                             type: string
                                           selector:
-                                            description: A node selector represents
-                                              the union of the results of one or more
-                                              label queries over a set of nodes; that
-                                              is, it represents the OR of the selectors
-                                              represented by the node selector terms.
+                                            description: |-
+                                              A node selector represents the union of the results of one or more label queries
+                                              over a set of nodes; that is, it represents the OR of the selectors represented
+                                              by the node selector terms.
                                             properties:
                                               nodeSelectorTerms:
                                                 description: Required. A list of node
                                                   selector terms. The terms are ORed.
                                                 items:
-                                                  description: A null or empty node
-                                                    selector term matches no objects.
-                                                    The requirements of them are ANDed.
-                                                    The TopologySelectorTerm type
-                                                    implements a subset of the NodeSelectorTerm.
+                                                  description: |-
+                                                    A null or empty node selector term matches no objects. The requirements of
+                                                    them are ANDed.
+                                                    The TopologySelectorTerm type implements a subset of the NodeSelectorTerm.
                                                   properties:
                                                     matchExpressions:
                                                       description: A list of node
                                                         selector requirements by node's
                                                         labels.
                                                       items:
-                                                        description: A node selector
-                                                          requirement is a selector
-                                                          that contains values, a
-                                                          key, and an operator that
-                                                          relates the key and values.
+                                                        description: |-
+                                                          A node selector requirement is a selector that contains values, a key, and an operator
+                                                          that relates the key and values.
                                                         properties:
                                                           key:
                                                             description: The label
@@ -2148,30 +1962,17 @@ spec:
                                                               applies to.
                                                             type: string
                                                           operator:
-                                                            description: Represents
-                                                              a key's relationship
-                                                              to a set of values.
-                                                              Valid operators are
-                                                              In, NotIn, Exists, DoesNotExist.
-                                                              Gt, and Lt.
+                                                            description: |-
+                                                              Represents a key's relationship to a set of values.
+                                                              Valid operators are In, NotIn, Exists, DoesNotExist. Gt, and Lt.
                                                             type: string
                                                           values:
-                                                            description: An array
-                                                              of string values. If
-                                                              the operator is In or
-                                                              NotIn, the values array
-                                                              must be non-empty. If
-                                                              the operator is Exists
-                                                              or DoesNotExist, the
-                                                              values array must be
-                                                              empty. If the operator
-                                                              is Gt or Lt, the values
-                                                              array must have a single
-                                                              element, which will
-                                                              be interpreted as an
-                                                              integer. This array
-                                                              is replaced during a
-                                                              strategic merge patch.
+                                                            description: |-
+                                                              An array of string values. If the operator is In or NotIn,
+                                                              the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                                              the values array must be empty. If the operator is Gt or Lt, the values
+                                                              array must have a single element, which will be interpreted as an integer.
+                                                              This array is replaced during a strategic merge patch.
                                                             items:
                                                               type: string
                                                             type: array
@@ -2185,11 +1986,9 @@ spec:
                                                         selector requirements by node's
                                                         fields.
                                                       items:
-                                                        description: A node selector
-                                                          requirement is a selector
-                                                          that contains values, a
-                                                          key, and an operator that
-                                                          relates the key and values.
+                                                        description: |-
+                                                          A node selector requirement is a selector that contains values, a key, and an operator
+                                                          that relates the key and values.
                                                         properties:
                                                           key:
                                                             description: The label
@@ -2197,30 +1996,17 @@ spec:
                                                               applies to.
                                                             type: string
                                                           operator:
-                                                            description: Represents
-                                                              a key's relationship
-                                                              to a set of values.
-                                                              Valid operators are
-                                                              In, NotIn, Exists, DoesNotExist.
-                                                              Gt, and Lt.
+                                                            description: |-
+                                                              Represents a key's relationship to a set of values.
+                                                              Valid operators are In, NotIn, Exists, DoesNotExist. Gt, and Lt.
                                                             type: string
                                                           values:
-                                                            description: An array
-                                                              of string values. If
-                                                              the operator is In or
-                                                              NotIn, the values array
-                                                              must be non-empty. If
-                                                              the operator is Exists
-                                                              or DoesNotExist, the
-                                                              values array must be
-                                                              empty. If the operator
-                                                              is Gt or Lt, the values
-                                                              array must have a single
-                                                              element, which will
-                                                              be interpreted as an
-                                                              integer. This array
-                                                              is replaced during a
-                                                              strategic merge patch.
+                                                            description: |-
+                                                              An array of string values. If the operator is In or NotIn,
+                                                              the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                                              the values array must be empty. If the operator is Gt or Lt, the values
+                                                              array must have a single element, which will be interpreted as an integer.
+                                                              This array is replaced during a strategic merge patch.
                                                             items:
                                                               type: string
                                                             type: array
@@ -2230,10 +2016,12 @@ spec:
                                                         type: object
                                                       type: array
                                                   type: object
+                                                  x-kubernetes-map-type: atomic
                                                 type: array
                                             required:
                                             - nodeSelectorTerms
                                             type: object
+                                            x-kubernetes-map-type: atomic
                                         type: object
                                     type: object
                                 type: object
@@ -2244,53 +2032,44 @@ spec:
                                 name:
                                   type: string
                                 nodeSelector:
-                                  description: A node selector represents the union
-                                    of the results of one or more label queries over
-                                    a set of nodes; that is, it represents the OR
-                                    of the selectors represented by the node selector
-                                    terms.
+                                  description: |-
+                                    A node selector represents the union of the results of one or more label queries
+                                    over a set of nodes; that is, it represents the OR of the selectors represented
+                                    by the node selector terms.
                                   properties:
                                     nodeSelectorTerms:
                                       description: Required. A list of node selector
                                         terms. The terms are ORed.
                                       items:
-                                        description: A null or empty node selector
-                                          term matches no objects. The requirements
-                                          of them are ANDed. The TopologySelectorTerm
-                                          type implements a subset of the NodeSelectorTerm.
+                                        description: |-
+                                          A null or empty node selector term matches no objects. The requirements of
+                                          them are ANDed.
+                                          The TopologySelectorTerm type implements a subset of the NodeSelectorTerm.
                                         properties:
                                           matchExpressions:
                                             description: A list of node selector requirements
                                               by node's labels.
                                             items:
-                                              description: A node selector requirement
-                                                is a selector that contains values,
-                                                a key, and an operator that relates
-                                                the key and values.
+                                              description: |-
+                                                A node selector requirement is a selector that contains values, a key, and an operator
+                                                that relates the key and values.
                                               properties:
                                                 key:
                                                   description: The label key that
                                                     the selector applies to.
                                                   type: string
                                                 operator:
-                                                  description: Represents a key's
-                                                    relationship to a set of values.
-                                                    Valid operators are In, NotIn,
-                                                    Exists, DoesNotExist. Gt, and
-                                                    Lt.
+                                                  description: |-
+                                                    Represents a key's relationship to a set of values.
+                                                    Valid operators are In, NotIn, Exists, DoesNotExist. Gt, and Lt.
                                                   type: string
                                                 values:
-                                                  description: An array of string
-                                                    values. If the operator is In
-                                                    or NotIn, the values array must
-                                                    be non-empty. If the operator
-                                                    is Exists or DoesNotExist, the
-                                                    values array must be empty. If
-                                                    the operator is Gt or Lt, the
-                                                    values array must have a single
-                                                    element, which will be interpreted
-                                                    as an integer. This array is replaced
-                                                    during a strategic merge patch.
+                                                  description: |-
+                                                    An array of string values. If the operator is In or NotIn,
+                                                    the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                                    the values array must be empty. If the operator is Gt or Lt, the values
+                                                    array must have a single element, which will be interpreted as an integer.
+                                                    This array is replaced during a strategic merge patch.
                                                   items:
                                                     type: string
                                                   type: array
@@ -2303,34 +2082,26 @@ spec:
                                             description: A list of node selector requirements
                                               by node's fields.
                                             items:
-                                              description: A node selector requirement
-                                                is a selector that contains values,
-                                                a key, and an operator that relates
-                                                the key and values.
+                                              description: |-
+                                                A node selector requirement is a selector that contains values, a key, and an operator
+                                                that relates the key and values.
                                               properties:
                                                 key:
                                                   description: The label key that
                                                     the selector applies to.
                                                   type: string
                                                 operator:
-                                                  description: Represents a key's
-                                                    relationship to a set of values.
-                                                    Valid operators are In, NotIn,
-                                                    Exists, DoesNotExist. Gt, and
-                                                    Lt.
+                                                  description: |-
+                                                    Represents a key's relationship to a set of values.
+                                                    Valid operators are In, NotIn, Exists, DoesNotExist. Gt, and Lt.
                                                   type: string
                                                 values:
-                                                  description: An array of string
-                                                    values. If the operator is In
-                                                    or NotIn, the values array must
-                                                    be non-empty. If the operator
-                                                    is Exists or DoesNotExist, the
-                                                    values array must be empty. If
-                                                    the operator is Gt or Lt, the
-                                                    values array must have a single
-                                                    element, which will be interpreted
-                                                    as an integer. This array is replaced
-                                                    during a strategic merge patch.
+                                                  description: |-
+                                                    An array of string values. If the operator is In or NotIn,
+                                                    the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                                    the values array must be empty. If the operator is Gt or Lt, the values
+                                                    array must have a single element, which will be interpreted as an integer.
+                                                    This array is replaced during a strategic merge patch.
                                                   items:
                                                     type: string
                                                   type: array
@@ -2340,17 +2111,19 @@ spec:
                                               type: object
                                             type: array
                                         type: object
+                                        x-kubernetes-map-type: atomic
                                       type: array
                                   required:
                                   - nodeSelectorTerms
                                   type: object
+                                  x-kubernetes-map-type: atomic
                               type: object
                             type: array
                         type: object
                       version:
-                        description: Version defines the default image version of
-                          the all components. Default is empty. If not provided, one
-                          should specify the images manually.
+                        description: |-
+                          Version defines the default image version of the all components. Default is empty.
+                          If not provided, one should specify the images manually.
                         type: string
                     type: object
                   upgradeStrategy:

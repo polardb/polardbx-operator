@@ -68,7 +68,8 @@ var CreateSecretsIfNotFound = polardbxv1reconcile.NewStepBinder("CreateSecretsIf
 				if err != nil {
 					return flow.Error(err, "Unable to new account secret during restoring.")
 				}
-			} else {
+			}
+			if accountSecret == nil || len(accountSecret.Data) == 0 {
 				accountSecret, err = factory.NewObjectFactory(rc).NewSecret()
 				if err != nil {
 					return flow.Error(err, "Unable to new account secret.")
@@ -720,25 +721,18 @@ var ModifyDBAAccountTypeIfNeeded = polardbxv1reconcile.NewStepBinder("ModifyDBAA
 		}
 
 		privileges := polardbx.Spec.Privileges
-		rootAccountDefined := false
 		for _, priv := range privileges {
 			if priv.Type != polardbxv1polardbx.Super {
 				continue
 			}
 
+			// Account: polardbx_root does not modify account type
 			if priv.Username == convention.RootAccount {
-				rootAccountDefined = true
+				continue
 			}
 
 			// Only super account need to set to DBA
 			err = mgr.ModifyDBAccountType(priv.Username, gms.AccountTypeDBA)
-			if err != nil {
-				return flow.Error(err, "Unable to modify account type.", "username", convention.RootAccount)
-			}
-		}
-
-		if !rootAccountDefined {
-			mgr.ModifyDBAccountType(convention.RootAccount, gms.AccountTypeDBA)
 			if err != nil {
 				return flow.Error(err, "Unable to modify account type.", "username", convention.RootAccount)
 			}

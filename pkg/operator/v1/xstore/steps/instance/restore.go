@@ -122,10 +122,11 @@ func NewDummyXstoreBackup(rc *xstorev1reconcile.Context, metadata *factory.Metad
 			StorageProvider: *xstore.Spec.Restore.StorageProvider,
 		},
 		Status: polardbxv1.XStoreBackupStatus{
-			Phase:          polardbxv1.XStoreBackupDummy,
-			CommitIndex:    xstoreMetadata.LastCommitIndex,
-			BackupRootPath: metadata.BackupRootPath,
-			TargetPod:      xstoreMetadata.TargetPod,
+			Phase:              polardbxv1.XStoreBackupDummy,
+			CommitIndex:        xstoreMetadata.LastCommitIndex,
+			BackupRootPath:     metadata.BackupRootPath,
+			TargetPod:          xstoreMetadata.TargetPod,
+			XStoreSpecSnapshot: xstoreMetadata.Spec,
 		},
 	}
 	return xstoreBackup, nil

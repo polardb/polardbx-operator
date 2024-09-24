@@ -41,6 +41,7 @@ func CreateTaskConfig(rc *polardbxv1reconcile.Context, pxcBackup *polarxv1.Polar
 	var sinkName string
 	var sinkType string
 	var binlogChecksum string
+	var heartbeatSName string
 	binlogSource := polardbx.Spec.Restore.BinlogSource
 	if binlogSource != nil {
 		namespace = binlogSource.Namespace
@@ -49,6 +50,7 @@ func CreateTaskConfig(rc *polardbxv1reconcile.Context, pxcBackup *polarxv1.Polar
 			sinkName = binlogSource.StorageProvider.Sink
 		}
 		binlogChecksum = binlogSource.Checksum
+		heartbeatSName = binlogSource.HeartbeatSName
 	}
 	if namespace == "" {
 		namespace = polardbx.Namespace
@@ -93,7 +95,12 @@ func CreateTaskConfig(rc *polardbxv1reconcile.Context, pxcBackup *polarxv1.Polar
 	if err != nil {
 		return nil, errors.Wrap(err, fmt.Sprintf("failed to get xstore backup list, polardbx name = %s, backup name = %s", pxcBackup.Spec.Cluster.Name, pxcBackup.Name))
 	}
-	xstoreConfigs := generateXStoreTaskConfigs(xstoreBackups.Items, rc.Config().Backup().GetRestorePodSuffix())
+
+	if heartbeatSName == "" {
+		heartbeatSName = backupbinlog.Sname
+	}
+
+	xstoreConfigs := generateXStoreTaskConfigs(xstoreBackups.Items, rc.Config().Backup().GetRestorePodSuffix(), heartbeatSName)
 
 	var currentXStores polarxv1.XStoreList
 	err = rc.Client().List(rc.Context(), &currentXStores, client.InNamespace(namespace), client.MatchingLabels{
@@ -134,12 +141,12 @@ func CreateTaskConfig(rc *polardbxv1reconcile.Context, pxcBackup *polarxv1.Polar
 	return &taskConfig, nil
 }
 
-func generateXStoreTaskConfigs(dnBackups []polarxv1.XStoreBackup, restorePodSuffix string) map[string]*pitr.XStoreConfig {
+func generateXStoreTaskConfigs(dnBackups []polarxv1.XStoreBackup, restorePodSuffix string, heartbeatSname string) map[string]*pitr.XStoreConfig {
 	dnConfigs := make(map[string]*pitr.XStoreConfig, len(dnBackups))
 	for _, backup := range dnBackups {
 		xstoreName := backup.Spec.XStore.Name
 		globalConsistent := true
-		if strings.HasSuffix(xstoreName, "gms") {
+		if strings.HasSuffix(xstoreName, "gms") || strings.HasPrefix(xstoreName, "pxc-xdb-m") {
 			globalConsistent = false
 		}
 		podName := backup.Status.TargetPod
@@ -151,7 +158,7 @@ func generateXStoreTaskConfigs(dnBackups []polarxv1.XStoreBackup, restorePodSuff
 			XStoreName:          xstoreName,
 			XStoreUid:           string(backup.Spec.XStore.UID),
 			BackupSetStartIndex: uint64(backup.Status.CommitIndex),
-			HeartbeatSname:      backupbinlog.Sname,
+			HeartbeatSname:      heartbeatSname,
 			Pods: map[string]*pitr.PodConfig{
 				podName: {
 					PodName: podName,

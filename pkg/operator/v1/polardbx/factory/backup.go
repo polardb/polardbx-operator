@@ -44,6 +44,9 @@ type XstoreMetadata struct {
 
 	// TargetPod denotes the pod where backup was performed
 	TargetPod string `json:"targetPod,omitempty"`
+
+	// Spec records the topology from original xstore
+	Spec *polardbxv1.XStoreSpec `json:"spec,omitempty"`
 }
 
 // MetadataBackup defines metadata to be uploaded during backup

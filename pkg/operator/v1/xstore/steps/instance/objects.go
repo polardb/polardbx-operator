@@ -45,20 +45,17 @@ var CreateSecret = xstorev1reconcile.NewStepBinder("CreateSecret",
 		}
 		if secret == nil {
 			if xstore.Spec.Restore != nil {
-				secret, err := factory.NewSecretForRestore(rc, xstore)
+				secret, err = factory.NewSecretForRestore(rc, xstore)
 				if err != nil {
 					return flow.Error(err, "unable to get secret while restoring")
 				}
-				err = rc.SetControllerRefAndCreate(secret)
-				if err != nil {
-					return flow.Error(err, "Unable to set secret while restoring.")
-				}
-			} else {
+			}
+			if secret == nil || len(secret.Data) == 0 {
 				secret = factory.NewSecret(xstore)
-				err := rc.SetControllerRefAndCreate(secret)
-				if err != nil {
-					return flow.Error(err, "Unable to create secret.")
-				}
+			}
+			err := rc.SetControllerRefAndCreate(secret)
+			if err != nil {
+				return flow.Error(err, "Unable to create secret.")
 			}
 		}
 

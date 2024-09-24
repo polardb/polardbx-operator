@@ -71,7 +71,7 @@ RUN CGO_ENABLED=0 GOOS=linux GO111MODULE=on go build -tags polardbx -o polardbx-
 
 
 # Build the image with scripts
-FROM ${IMAGE_SOURCE}${IMAGE_SOURCE:+"/"}xstore-tools-base:ts20240430102300
+FROM ${IMAGE_SOURCE}${IMAGE_SOURCE:+"/"}xstore-tools-base:ts20240913161759
 
 ARG VERSION=test
 

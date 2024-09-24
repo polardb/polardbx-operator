@@ -24,7 +24,7 @@ $(LOCALBIN):
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 
 ## Tool Versions
-CONTROLLER_TOOLS_VERSION ?= v0.9.0
+CONTROLLER_TOOLS_VERSION ?= v0.16.1
 
 define ALL_HELP_INFO
 # Build code.
@@ -193,7 +193,7 @@ e2e-test:
 endif
 
 .PHONY: manifests
-manifests: download-controller-gen
+manifests: controller-gen
 	$(CONTROLLER_GEN) crd:crdVersions=v1 rbac:roleName=manager-role webhook paths="./api/..." output:crd:artifacts:config=charts/polardbx-operator/crds
 
 .PHONY: generate-notice

@@ -87,9 +87,11 @@ def start(restore_context):
 
     initialize_local_mycnf(context, logger)
 
+    create_init_file(context, logger)
+
     apply_backup_file(keyring_path_local, context, logger)
 
-    if is_pxc_xstore:
+    if is_pxc_xstore or len(pitr_endpoint) != 0:
         mysql_bin_list = download_binlogbackup_file(binlog_dir_path, filestream_client, logger) if len(
             pitr_endpoint) == 0 else download_pitr_binloglist(context, pitr_endpoint, pitr_xstore, logger)
 
@@ -111,6 +113,7 @@ def start(restore_context):
         p = subprocess.Popen([
             os.path.join(context.engine_home, 'bin', 'mysqld'),
             "--defaults-file=" + context.mycnf_path,
+            "--init-file=" + os.path.join(context.mysql_conf, "mysql-init.sql"),
             "--user=mysql"
         ], stdout=sys.stdout)
 
@@ -118,40 +121,11 @@ def start(restore_context):
 
         p.kill()
         p.wait()
-
     else:
-        if len(pitr_endpoint) != 0:
-            mysql_bin_list = download_pitr_binloglist(context, pitr_endpoint, pitr_xstore, logger)
-            copy_binlog_to_new_path(mysql_bin_list, context, logger)
-            cluster_start_index = get_xtrabackup_binlog_info_from_instance_local(context)
-            logger.info("cluster_start_index is: %s" % cluster_start_index)
+        chown_data_dir(context, logger)
+        init_mysqld_metadata(commit_index, commit_index, context, 0, node_role, logger, is_pxc_xstore,
+                             pitr_endpoint)
 
-            chown_data_dir(context, logger)
-
-            last_binlog, first_binlog = show_last_and_first_binlog(context, logger)
-            pitr_ts = download_pitr_ts(pitr_endpoint, logger)
-            truncate_last_binlog(last_binlog, pitr_ts, context, logger)
-
-            end_index, end_term = xdb_show_binlog_index(last_binlog, context, logger)
-            logger.info("end_index:%s;end_term:%s" % (end_index, end_term))
-
-            init_mysqld_metadata(cluster_start_index, commit_index, context, end_term, node_role, logger, is_pxc_xstore,
-                                 pitr_endpoint)
-
-            p = subprocess.Popen([
-                os.path.join(context.engine_home, 'bin', 'mysqld'),
-                "--defaults-file=" + context.mycnf_path,
-                "--user=mysql"
-            ], stdout=sys.stdout)
-
-            wait_binlog_apply_ready(context.port_access(), end_index, logger)
-
-            p.kill()
-            p.wait()
-        else:
-            chown_data_dir(context, logger)
-            init_mysqld_metadata(commit_index, commit_index, context, 0, node_role, logger, is_pxc_xstore,
-                                 pitr_endpoint)
     sync_cluster_metadata(context, logger)
     context.mark_node_initialized()
 
@@ -259,7 +233,7 @@ def copy_binlog_to_new_path(mysql_bin_list, context, logger):
 
 
 def decompress_backup_file(backup_file_name, context, logger):
-    decompress_cmd = "%s/xbstream -x < %s -C %s" % (
+    decompress_cmd = "%s/xbstream --decompress -x < %s -C %s" % (
         context.xtrabackup_home, os.path.join(RESTORE_TEMP_DIR, backup_file_name),
         context.volume_path(VOLUME_DATA, "data"))
     logger.info("decompress_cmd:%s" % decompress_cmd)
@@ -275,6 +249,14 @@ def sort_config(config: configparser.ConfigParser) -> configparser.ConfigParser:
     config._sections = collections.OrderedDict(sorted(config._sections.items(), key=lambda t: t[0]))
     return config
 
+
+def create_init_file(context: Context, logger):
+    init_filepath = os.path.join(context.mysql_conf, 'mysql-init.sql')
+    with open(init_filepath, 'w') as init_file:
+        init_file.write("set sql_log_bin=OFF;\n")
+        init_file.write("set force_revise=ON;\n")
+        init_file.write("update mysql.user set user='root' , host = 'localhost' , authentication_string = '' where user = 'aliyun_root' or user = 'root' ;\n")
+        init_file.write("flush privileges;\n")
 
 def initialize_local_mycnf(context: Context, logger):
     indicate = context.current_indicate()
