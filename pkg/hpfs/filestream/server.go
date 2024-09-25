@@ -638,10 +638,11 @@ func (f *FileServer) processUploadMinio(logger logr.Logger, metadata ActionMetad
 	if newMinioParams["retention-time"] == "" {
 		delete(newMinioParams, "retention-time")
 	}
-	if metadata.MinioBufferSize != "" {
-		newMinioParams["limit_reader_size"] = metadata.MinioBufferSize
-	}
+	newMinioParams["limit_reader_size"] = metadata.MinioBufferSize
+	newMinioParams["single_part_max_size"] = strconv.FormatInt(sink.UploadPartMaxSize, 10)
 	newMinioParams["bucket"] = sink.Bucket
+	newMinioParams["bucket_lookup_type"] = sink.BucketLookupType
+
 	minioAuth := getMinioAuth(*sink)
 	ft, err := fileService.UploadFile(ctx, reader, metadata.Filepath, minioAuth, newMinioParams)
 	if err != nil {
@@ -702,6 +703,8 @@ func (f *FileServer) processDownloadMinio(logger logr.Logger, metadata ActionMet
 	ctx := context.Background()
 	newMinioParams := polarxMap.MergeMap(map[string]string{}, minioParams, false).(map[string]string)
 	newMinioParams["bucket"] = sink.Bucket
+	newMinioParams["bucket_lookup_type"] = sink.BucketLookupType
+
 	minioAuth := getMinioAuth(*sink)
 	ft, err := fileService.DownloadFile(ctx, writer, metadata.Filepath, minioAuth, newMinioParams)
 	if err != nil {
@@ -751,6 +754,8 @@ func (f *FileServer) processListMinio(logger logr.Logger, metadata ActionMetadat
 	ctx := context.Background()
 	minioParams := polarxMap.MergeMap(map[string]string{}, minioParams, false).(map[string]string)
 	minioParams["bucket"] = sink.Bucket
+	minioParams["bucket_lookup_type"] = sink.BucketLookupType
+
 	minioAuth := getMinioAuth(*sink)
 	ft, err := fileService.ListFiles(ctx, writer, metadata.Filepath, minioAuth, minioParams)
 	if err != nil {

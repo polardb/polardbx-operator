@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import os
 import subprocess
 import sys
 
@@ -61,7 +62,7 @@ class FileStreamClient:
         self._upload_action = None
         self.init_action()
 
-    def upload_from_stdin(self, remote_path, stdin, stderr=sys.stderr, logger=None, is_string_input=False):
+    def upload_from_stdin(self, remote_path, stdin, stderr=sys.stderr, logger=None, is_string_input=False, file_size=""):
         upload_cmd = [
             self._client,
             "--meta.action=" + self._upload_action.value,
@@ -73,8 +74,15 @@ class FileStreamClient:
             upload_cmd.append("--meta.ossBufferSize=102400")
         if is_string_input and self._storage == BackupStorage.S3:
             upload_cmd.append("--meta.minioBufferSize=102400")
+
+        if file_size != "" and self._storage == BackupStorage.OSS:
+            upload_cmd.append(f"--meta.ossBufferSize={file_size}")
+        if file_size != "" and self._storage == BackupStorage.S3:
+            upload_cmd.append(f"--meta.minioBufferSize={file_size}")
+
         if logger:
             logger.info("Upload command: %s" % upload_cmd)
+
         with subprocess.Popen(upload_cmd, stdin=stdin, stderr=stderr, close_fds=True) as up:
             return_code = up.wait()
             if return_code:
@@ -105,7 +113,9 @@ class FileStreamClient:
         :param logger: just a logger
         """
         with open(local, "r") as f:
-            self.upload_from_stdin(remote_path=remote, stdin=f, stderr=stderr, logger=logger)
+            file_size = os.path.getsize(local)
+            self.upload_from_stdin(remote_path=remote, stdin=f, stderr=stderr, logger=logger, is_string_input=False,
+                                   file_size=str(file_size))
 
     def download_to_file(self, remote, local, stderr=sys.stderr, logger=None):
         """

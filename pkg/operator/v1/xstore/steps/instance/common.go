@@ -380,7 +380,7 @@ var InitializeParameterTemplate = xstorev1reconcile.NewStepBinder("InitializePar
 		}
 
 		// GMS
-		if len(pt.Spec.NodeType.GMS.ParamList) != 0 {
+		if pt.Spec.NodeType.GMS != nil && len(pt.Spec.NodeType.GMS.ParamList) != 0 {
 			for _, param := range pt.Spec.NodeType.GMS.ParamList {
 				// read only / read write
 				mode := common.GetMode(polardbxmeta.RoleGMS, param.Mode)
@@ -425,7 +425,7 @@ var GetParametersRoleMap = xstorev1reconcile.NewStepBinder("GetParametersRoleMap
 			templateParams[polardbxmeta.RoleDN][param.Name] = param
 		}
 
-		if len(pt.Spec.NodeType.GMS.ParamList) != 0 {
+		if pt.Spec.NodeType.GMS != nil && len(pt.Spec.NodeType.GMS.ParamList) != 0 {
 			for _, param := range pt.Spec.NodeType.GMS.ParamList {
 				templateParams[polardbxmeta.RoleGMS][param.Name] = param
 			}

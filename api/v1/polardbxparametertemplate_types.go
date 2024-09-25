@@ -69,7 +69,7 @@ type TemplateNodeType struct {
 	// +optional
 	DN TemplateNode `json:"dn,omitempty"`
 	// +optional
-	GMS TemplateNode `json:"gms,omitempty"`
+	GMS *TemplateNode `json:"gms,omitempty"`
 }
 
 type PolarDBXParameterTemplateSpec struct {

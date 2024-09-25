@@ -235,6 +235,8 @@ const (
 	Q_DEFAULT_COLLATION_FOR_UTF8MB4         = 18
 	Q_SQL_REQUIRE_PRIMARY_KEY               = 19
 	Q_DEFAULT_TABLE_ENCRYPTION              = 20
+	Q_OPT_FLASHBACK_AREA                    = 21
+	Q_OPT_INDEX_FORMAT_GPP_ENABLED          = 22
 )
 
 // Rows event flags.

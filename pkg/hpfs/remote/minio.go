@@ -14,6 +14,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"io"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 )
@@ -32,16 +33,42 @@ type minioFs struct{}
 type minioContext struct {
 	ctx context.Context
 
-	accessKey     string
-	secretKey     string
-	endpoint      string
-	useSSL        bool
-	bucket        string
-	retentionTime time.Duration
-	writeLen      bool
-	bufferSize    int64
-	useTmpFile    bool
-	deadline      int64
+	accessKey        string
+	secretKey        string
+	endpoint         string
+	useSSL           bool
+	bucket           string
+	retentionTime    time.Duration
+	writeLen         bool
+	bufferSize       int64
+	useTmpFile       bool
+	deadline         int64
+	bucketLookupType minio.BucketLookupType
+}
+
+func bucketLookupType2string(lookupType minio.BucketLookupType) string {
+	switch lookupType {
+	case minio.BucketLookupAuto:
+		return "auto"
+	case minio.BucketLookupDNS:
+		return "dns"
+	case minio.BucketLookupPath:
+		return "path"
+	default:
+		return "auto"
+	}
+}
+func string2bucketLookupType(lookupType string) minio.BucketLookupType {
+	switch strings.ToLower(lookupType) {
+	case "auto":
+		return minio.BucketLookupAuto
+	case "dns":
+		return minio.BucketLookupDNS
+	case "path":
+		return minio.BucketLookupPath
+	default:
+		return minio.BucketLookupAuto
+	}
 }
 
 func newMinioContext(ctx context.Context, auth, params map[string]string) (*minioContext, error) {
@@ -85,18 +112,20 @@ func newMinioContext(ctx context.Context, auth, params map[string]string) (*mini
 		}
 		deadline = parsedDeadline
 	}
+	var bucketLookupType minio.BucketLookupType = string2bucketLookupType(params["bucket_lookup_type"])
 
 	minioCtx := &minioContext{
-		ctx:        ctx,
-		endpoint:   auth["endpoint"],
-		accessKey:  auth["access_key"],
-		secretKey:  auth["secret_key"],
-		bucket:     params["bucket"],
-		useSSL:     useSSL,
-		writeLen:   writeLen,
-		bufferSize: bufferSize,
-		useTmpFile: useTmpFile,
-		deadline:   deadline,
+		ctx:              ctx,
+		endpoint:         auth["endpoint"],
+		accessKey:        auth["access_key"],
+		secretKey:        auth["secret_key"],
+		bucket:           params["bucket"],
+		useSSL:           useSSL,
+		writeLen:         writeLen,
+		bufferSize:       bufferSize,
+		useTmpFile:       useTmpFile,
+		deadline:         deadline,
+		bucketLookupType: bucketLookupType,
 	}
 
 	if t, ok := params["retention-time"]; ok {
@@ -114,15 +143,16 @@ func newMinioContext(ctx context.Context, auth, params map[string]string) (*mini
 
 func (m *minioFs) newClient(minioCtx *minioContext) (*minio.Client, error) {
 	return minio.New(minioCtx.endpoint, &minio.Options{
-		Creds:  credentials.NewStaticV4(minioCtx.accessKey, minioCtx.secretKey, ""),
-		Secure: minioCtx.useSSL,
+		Creds:        credentials.NewStaticV4(minioCtx.accessKey, minioCtx.secretKey, ""),
+		Secure:       minioCtx.useSSL,
+		BucketLookup: minioCtx.bucketLookupType,
 	})
 }
-
 func (m *minioFs) newCore(minioCtx *minioContext) (*minio.Core, error) {
 	return minio.NewCore(minioCtx.endpoint, &minio.Options{
-		Creds:  credentials.NewStaticV4(minioCtx.accessKey, minioCtx.secretKey, ""),
-		Secure: minioCtx.useSSL,
+		Creds:        credentials.NewStaticV4(minioCtx.accessKey, minioCtx.secretKey, ""),
+		Secure:       minioCtx.useSSL,
+		BucketLookup: minioCtx.bucketLookupType,
 	})
 }
 
@@ -190,8 +220,12 @@ func (m minioFs) DeleteExpiredFile(ctx context.Context, path string, auth, param
 	}
 	ft := newFileTask(ctx)
 	go func() {
-		err := m.ListMinioFileWithDeadline(client, minioCtx, path, true, func(objs []string) error {
+		err := m.ListMinioFileWithDeadline(client, minioCtx, path, func(objs []string) error {
 			for _, obj := range objs {
+				err := client.RemoveObject(ctx, minioCtx.bucket, obj, minio.RemoveObjectOptions{GovernanceBypass: true})
+				if err != nil {
+					return err
+				}
 				if val, ok := ctx.Value(common.AffectedFiles).(*[]string); ok {
 					*val = append(*val, obj)
 				}
@@ -206,18 +240,21 @@ func (m minioFs) DeleteExpiredFile(ctx context.Context, path string, auth, param
 
 func (m *minioFs) UploadFile(ctx context.Context, reader io.Reader, path string, auth, params map[string]string) (FileTask, error) {
 	minioCtx, err := newMinioContext(ctx, auth, params)
+	// params["limit_reader_size"]: 客户端传来的文件大小或单个分段的最大大小
+	// params["single_part_max_size"]: hpfs configmap 传入，单个分段的最大大小
+	// MinioLimitedReaderSize: 单个分段的最大大小的安全值
+	// 取三者中的最小值(>0)
 	var limitReaderSize int64 = MinioLimitedReaderSize
-	val, ok := params["limit_reader_size"]
-	if ok && val != "" {
-		parsedVal, err := strconv.ParseInt(val, 10, 64)
-		if err != nil {
-			panic(err)
-		}
-		limitReaderSize = parsedVal
+	var val int64
+	val, _ = strconv.ParseInt(params["limit_reader_size"], 10, 64)
+	if val > 0 && val < limitReaderSize {
+		limitReaderSize = val
 	}
-	if err != nil {
-		return nil, err
+	val, _ = strconv.ParseInt(params["single_part_max_size"], 10, 64)
+	if val > 0 && val < limitReaderSize {
+		limitReaderSize = val
 	}
+	fmt.Printf("UploadFile: limitReaderSize = %d, path = %s\n", limitReaderSize, path)
 
 	client, err := m.newCore(minioCtx)
 	if err != nil {
@@ -284,8 +321,11 @@ func (m *minioFs) UploadFile(ctx context.Context, reader io.Reader, path string,
 				break
 			}
 			limitedReader := io.LimitReader(pipeReader, limitReaderSize)
-
 			uploadPart, err := client.PutObjectPart(ctx, minioCtx.bucket, path, uploadID, partIndex, limitedReader, limitReaderSize, "", "", nil)
+			if errResponse, ok := err.(minio.ErrorResponse); ok {
+				fmt.Printf("PutObjectPart Error: %s, bucketLookupType=%s, bucket=%s, path=%s, uploadID=%s, partIndex=%d, limitReaderSize=%d, remoteRequestID=%s\n",
+					err, bucketLookupType2string(minioCtx.bucketLookupType), minioCtx.bucket, path, uploadID, partIndex, limitReaderSize, errResponse.RequestID)
+			}
 			partsInfo[partIndex] = uploadPart
 			partIndex++
 			uploadedLen += limitReaderSize
@@ -304,6 +344,10 @@ func (m *minioFs) UploadFile(ctx context.Context, reader io.Reader, path string,
 			}
 			_, err = client.CompleteMultipartUpload(ctx, minioCtx.bucket, path, uploadID, completeParts)
 			if err != nil {
+				if errResponse, ok := err.(minio.ErrorResponse); ok {
+					fmt.Printf("CompleteMultipartUpload Error: %s, bucketLookupType=%s, bucket=%s, path=%s, uploadID=%s, remoteRequestID=%s, completeParts=%v\n",
+						err, bucketLookupType2string(minioCtx.bucketLookupType), minioCtx.bucket, path, uploadID, errResponse.RequestID, completeParts)
+				}
 				ft.complete(err)
 				return
 			}
@@ -321,6 +365,7 @@ func (m *minioFs) UploadFile(ctx context.Context, reader io.Reader, path string,
 				}
 				metadata := make(map[string]string)
 				for {
+					// SinglePartMaxSize is for multi-parts upload, copy parts uses MinioMaxPartSize
 					partSize := totalSize - copyPosition
 					if partSize >= MinioMaxPartSize {
 						partSize = MinioMaxPartSize
@@ -328,6 +373,10 @@ func (m *minioFs) UploadFile(ctx context.Context, reader io.Reader, path string,
 					copiedUploadPart, err := client.CopyObjectPart(ctx, minioCtx.bucket, path, minioCtx.bucket, path, uploadID,
 						pageNumber, copyPosition, partSize, metadata)
 					if err != nil {
+						if errResponse, ok := err.(minio.ErrorResponse); ok {
+							fmt.Printf("CopyObjectPart<copy> Error: %s, bucketLookupType=%s, srcBucket=%s, srcPath=%s, dstBucket=%s, dstPath=%s, uploadID=%s, partIndex=%d, startOffset=%d, length=%d, remoteRequestID=%s\n",
+								err, bucketLookupType2string(minioCtx.bucketLookupType), minioCtx.bucket, path, minioCtx.bucket, path, uploadID, pageNumber, copyPosition, partSize, errResponse.RequestID)
+						}
 						return
 					}
 					pageNumber++
@@ -336,6 +385,10 @@ func (m *minioFs) UploadFile(ctx context.Context, reader io.Reader, path string,
 					if copyPosition == totalSize {
 						_, err = client.CompleteMultipartUpload(ctx, minioCtx.bucket, path, uploadID, copiedParts)
 						if err != nil {
+							if errResponse, ok := err.(minio.ErrorResponse); ok {
+								fmt.Printf("CompleteMultipartUpload<Copy> Error: %s, bucketLookupType=%s, bucket=%s, path=%s, uploadID=%s, remoteRequestID=%s, completeParts=%v\n",
+									err, bucketLookupType2string(minioCtx.bucketLookupType), minioCtx.bucket, path, uploadID, errResponse.RequestID, copiedParts)
+							}
 							return
 						}
 						SetMinioTags(client, ctx, minioCtx, path, actualSize)
@@ -507,7 +560,7 @@ func (m *minioFs) ListAllFiles(ctx context.Context, path string, auth, params ma
 	}
 	ft := newFileTask(ctx)
 	go func() {
-		err := m.ListMinioFileWithDeadline(client, minioCtx, path, false, func(objs []string) error {
+		err := m.ListMinioFileWithDeadline(client, minioCtx, path, func(objs []string) error {
 			for _, obj := range objs {
 				if val, ok := ctx.Value(common.AffectedFiles).(*[]string); ok {
 					*val = append(*val, obj)
@@ -521,7 +574,7 @@ func (m *minioFs) ListAllFiles(ctx context.Context, path string, auth, params ma
 
 }
 
-func (m *minioFs) ListMinioFileWithDeadline(client *minio.Core, minioCtx *minioContext, path string, isDelete bool, callback func([]string) error) error {
+func (m *minioFs) ListMinioFileWithDeadline(client *minio.Core, minioCtx *minioContext, path string, callback func([]string) error) error {
 	marker := ""
 	delimiter := "/"
 	fileQueue := queue.New()
@@ -538,20 +591,6 @@ func (m *minioFs) ListMinioFileWithDeadline(client *minio.Core, minioCtx *minioC
 		}
 		for _, commonPrefix := range lsRes.CommonPrefixes {
 			fileQueue.Add([]string{commonPrefix.Prefix, ""})
-		}
-		if isDelete {
-			objectsCh := make(chan minio.ObjectInfo)
-			go func() {
-				defer close(objectsCh)
-				for _, obj := range lsRes.Contents {
-					if obj.LastModified.Unix() < time.Now().Unix() {
-						objectsCh <- obj
-					}
-				}
-			}()
-			for rErr := range client.RemoveObjects(context.Background(), minioCtx.bucket, objectsCh, minio.RemoveObjectsOptions{GovernanceBypass: true}) {
-				fmt.Println("Error detected during deletion: ", rErr)
-			}
 		}
 		objs := make([]string, 0)
 

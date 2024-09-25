@@ -132,12 +132,10 @@ func (r *GalaxyReconciler) newReconcileTask(rc *xstorev1reconcile.Context, xstor
 		// Unblock bootstrap.
 		xstoreplugincommonsteps.UnblockBootstrap(task)
 
-		// Wait until leader ready.
-		instancesteps.WaitUntilCandidatesAndVotersReady(task)
-
 		// Role reconciliation.
 		instancesteps.ReconcileConsensusRoleLabels(task)
 		instancesteps.WaitUntilLeaderElected(task)
+		instancesteps.WaitUntilCandidatesAndVotersReady(task)
 		control.When(readonly,
 			instancesteps.AddLearnerNodesToClusterOnLeader,
 			instancesteps.RestoreToLearner,
@@ -174,14 +172,12 @@ func (r *GalaxyReconciler) newReconcileTask(rc *xstorev1reconcile.Context, xstor
 			// Unblock bootstrap.
 			xstoreplugincommonsteps.UnblockBootstrap(task)
 
-			// Wait until leader ready.
 			instancesteps.WaitUntilCandidatesAndVotersReady(task)
 
 			// Role reconciliation.
 			instancesteps.ReconcileConsensusRoleLabels(task)
-
 			instancesteps.WaitUntilLeaderElected(task)
-
+			instancesteps.CreateAccounts(task)
 			if !isStandard {
 				instancesteps.StartRecoverJob(task)
 				instancesteps.WaitUntilRecoverJobFinished(task)
