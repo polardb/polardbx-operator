@@ -81,6 +81,10 @@ type XStoreBackupStatus struct {
 	// Message includes human-readable message related to current status.
 	// +optional
 	Message string `json:"message,omitempty"`
+
+	// XStoreSpecSnapshot records the snapshot of xstore spec
+	// +optional
+	XStoreSpecSnapshot *XStoreSpec `json:"xstoreSpecSnapshot,omitempty"`
 }
 
 type XStoreBackupPhase string

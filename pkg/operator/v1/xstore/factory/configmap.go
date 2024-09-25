@@ -172,7 +172,7 @@ func syncParameterToConfigMap(rc *reconcile.Context, xstore *polardbxv1.XStore, 
 		return "", err
 	}
 
-	if cmRole == polardbxmeta.RoleGMS && len(pt.Spec.NodeType.GMS.ParamList) == 0 {
+	if cmRole == polardbxmeta.RoleGMS && (pt.Spec.NodeType.GMS == nil || len(pt.Spec.NodeType.GMS.ParamList) == 0) {
 		cmRole = polardbxmeta.RoleDN
 	}
 

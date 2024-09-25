@@ -73,4 +73,6 @@ type RestoreBinlogSource struct {
 	Checksum string `json:"checksum,omitempty"`
 	//StorageProvider defines the source binlog sink
 	StorageProvider *BackupStorageProvider `json:"storageProvider,omitempty"`
+	//SName defines the heartbeat sname in the cdc heartbeat table
+	HeartbeatSName string `json:"heartbeatSName,omitempty"`
 }

@@ -16,10 +16,10 @@
 
 
 SOURCE_REPO=polarximages-registry.cn-zhangjiakou.cr.aliyuncs.com/daixingpolarximages
-SOURCE_VERSION=v1.6.2
-DEST_REPO=polardbx
-DEST_VERSION=v1.6.2
-TARGETS="xstore-tools polardbx-operator probe-proxy polardbx-exporter polardbx-init polardbx-hpfs polardbx-job polardbx-clinic polardbx-logstash"
+SOURCE_VERSION=v1.7.0-2
+DEST_REPO=polardbx-opensource-registry.cn-beijing.cr.aliyuncs.com/polardbx
+DEST_VERSION=v1.7.0
+TARGETS="xstore-tools polardbx-operator probe-proxy polardbx-exporter polardbx-init polardbx-hpfs polardbx-job polardbx-clinic polardbx-logstash backupset-importer"
 
 #pull from source image and tag it
 for i in $TARGETS

@@ -93,6 +93,7 @@ const (
   gmt_modified timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   user_name char(32) COLLATE utf8_unicode_ci NOT NULL DEFAULT '',
   host char(60) COLLATE utf8_unicode_ci NOT NULL DEFAULT '',
+  account_type tinyint(1) NOT NULL DEFAULT '0',
   password char(100) COLLATE utf8_unicode_ci NOT NULL,
   select_priv tinyint(1) NOT NULL DEFAULT '0',
   insert_priv tinyint(1) NOT NULL DEFAULT '0',
@@ -107,6 +108,10 @@ const (
   create_view_priv int(11) NOT NULL DEFAULT '0',
   create_user_priv int(11) NOT NULL DEFAULT '0',
   meta_db_priv int(11) NOT NULL DEFAULT '0',
+  show_audit_log_priv int(11) NOT NULL DEFAULT '0',
+  replication_client_priv tinyint(1) NOT NULL DEFAULT '0',
+  replication_slave_priv tinyint(1) NOT NULL DEFAULT '0',
+  plugin varchar(64) COLLATE utf8_bin NOT NULL DEFAULT '',
   PRIMARY KEY (id),
   UNIQUE KEY uk (user_name, host)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8 COLLATE = utf8_unicode_ci COMMENT = 'Users and global privileges'`
@@ -493,7 +498,7 @@ func (meta *manager) InitializeMetaDBSchema() error {
 	}
 
 	// Insert the version record
-	const schemaChangeInitDml = "insert ignore into `schema_change`(`table_name`, `version`) values('user_priv', 1)"
+	const schemaChangeInitDml = "insert ignore into `schema_change`(`table_name`, `version`) values('user_priv', 10)"
 	if _, err := conn.ExecContext(ctx, schemaChangeInitDml); err != nil {
 		return fmt.Errorf("unable to insert schema change init record: %w", err)
 	}
@@ -587,7 +592,7 @@ func (meta *manager) IsGmsSchemaRestored() (bool, error) {
 }
 
 //goland:noinspection SqlDialectInspection
-func (meta *manager) RestoreSchemas(fromPxcCluster, fromPxcHash, PxcHash string) error {
+func (meta *manager) RestoreSchemas(fromPxcCluster, fromPxcHash, PxcHash string, originalDnMap map[string]string) error {
 	conn, err := meta.getConnectionForMetaDB(meta.ctx)
 	if err != nil {
 		return err
@@ -610,11 +615,17 @@ func (meta *manager) RestoreSchemas(fromPxcCluster, fromPxcHash, PxcHash string)
 		return errors.New("unable to clear non-master configs: " + err.Error())
 	}
 
-	// Reset the single group's storage id
-	//goland:noinspection SqlNoDataSourceInspection,SqlResolve
-	_, err = conn.ExecContext(ctx, "UPDATE inst_config SET param_val=REPLACE(param_val, ?, ?) where param_key='SINGLE_GROUP_STORAGE_INST_LIST'", fromPxcCluster+"-"+fromPxcHash, meta.getClusterID()+"-"+PxcHash)
-	if err != nil {
-		return errors.New("unable to reset single group's storage id: " + err.Error())
+	for k, v := range originalDnMap {
+		// Reset the single group's storage id
+		_, err = conn.ExecContext(ctx, "UPDATE inst_config SET param_val=REPLACE(param_val, ?, ?) where param_key='SINGLE_GROUP_STORAGE_INST_LIST'", k, v)
+		if err != nil {
+			return errors.New("unable to reset single group's storage id: " + err.Error())
+		}
+		// update topologies
+		_, err = conn.ExecContext(ctx, "UPDATE group_detail_info SET inst_id=?, storage_inst_id=REPLACE(storage_inst_id, ?, ?)", meta.getClusterID(), k, v)
+		if err != nil {
+			return errors.New("unable to update group topologies: " + err.Error())
+		}
 	}
 
 	// FIXME not robust, some name's like 'gms-gms' will be replaced to 'a-a'. Just avoid names like 'gms', 'dn-%d'.
@@ -623,14 +634,6 @@ func (meta *manager) RestoreSchemas(fromPxcCluster, fromPxcHash, PxcHash string)
 	_, err = conn.ExecContext(ctx, "DELETE FROM group_detail_info WHERE inst_id IN (SELECT inst_id FROM server_info WHERE inst_type != 0 )")
 	if err != nil {
 		return errors.New("unable to clear non-master topologies: " + err.Error())
-	}
-
-	// update topologies
-	//goland:noinspection SqlNoDataSourceInspection,SqlResolve
-	_, err = conn.ExecContext(ctx, "UPDATE group_detail_info SET inst_id=?, storage_inst_id=REPLACE(storage_inst_id, ?, ?)", meta.getClusterID(),
-		fromPxcCluster+"-"+fromPxcHash, meta.getClusterID()+"-"+PxcHash)
-	if err != nil {
-		return errors.New("unable to update group topologies: " + err.Error())
 	}
 
 	// update configs
@@ -1042,120 +1045,144 @@ func (meta *manager) SetGlobalVariables(key, value string) error {
 }
 
 type userPrivSchema struct {
-	User           string
-	Host           string
-	encPasswd      string
-	SelectPriv     int8
-	InsertPriv     int8
-	UpdatePriv     int8
-	DeletePriv     int8
-	CreatePriv     int8
-	DropPriv       int8
-	GrantPriv      int8
-	IndexPriv      int8
-	AlterPriv      int8
-	ShowViewPriv   int8
-	CreateViewPriv int8
-	CreateUserPriv int8
-	MetaDbPriv     int8
+	User                  string
+	Host                  string
+	encPasswd             string
+	SelectPriv            int8
+	InsertPriv            int8
+	UpdatePriv            int8
+	DeletePriv            int8
+	CreatePriv            int8
+	DropPriv              int8
+	GrantPriv             int8
+	IndexPriv             int8
+	AlterPriv             int8
+	ShowViewPriv          int8
+	CreateViewPriv        int8
+	CreateUserPriv        int8
+	MetaDbPriv            int8
+	AccountType           int8 // 0: normal, 5: god
+	ShowAuditLogPriv      int8
+	ReplicationClientPriv int8
+	ReplicationSlavePriv  int8
 }
 
 func newSchemaSuperUser(user, encPasswd string, grantType GrantPrivilegeType) *userPrivSchema {
 	switch grantType {
 	case GrantSuperPrivilege, GrantAllPrivilege:
 		return &userPrivSchema{
-			User:           user,
-			Host:           "%",
-			encPasswd:      encPasswd,
-			SelectPriv:     1,
-			InsertPriv:     1,
-			UpdatePriv:     1,
-			DeletePriv:     1,
-			CreatePriv:     1,
-			DropPriv:       1,
-			GrantPriv:      1,
-			IndexPriv:      1,
-			AlterPriv:      1,
-			ShowViewPriv:   1,
-			CreateViewPriv: 1,
-			CreateUserPriv: 1,
-			MetaDbPriv:     1,
+			User:                  user,
+			Host:                  "%",
+			encPasswd:             encPasswd,
+			SelectPriv:            1,
+			InsertPriv:            1,
+			UpdatePriv:            1,
+			DeletePriv:            1,
+			CreatePriv:            1,
+			DropPriv:              1,
+			GrantPriv:             1,
+			IndexPriv:             1,
+			AlterPriv:             1,
+			ShowViewPriv:          1,
+			CreateViewPriv:        1,
+			CreateUserPriv:        1,
+			MetaDbPriv:            1,
+			AccountType:           5,
+			ShowAuditLogPriv:      1,
+			ReplicationClientPriv: 1,
+			ReplicationSlavePriv:  1,
 		}
 	case GrantDdlPrivilege:
 		return &userPrivSchema{
-			User:           user,
-			Host:           "%",
-			encPasswd:      encPasswd,
-			SelectPriv:     0,
-			InsertPriv:     0,
-			UpdatePriv:     0,
-			DeletePriv:     0,
-			CreatePriv:     1,
-			DropPriv:       1,
-			GrantPriv:      0,
-			IndexPriv:      1,
-			AlterPriv:      1,
-			ShowViewPriv:   1,
-			CreateViewPriv: 1,
-			CreateUserPriv: 0,
-			MetaDbPriv:     0,
+			User:                  user,
+			Host:                  "%",
+			encPasswd:             encPasswd,
+			SelectPriv:            0,
+			InsertPriv:            0,
+			UpdatePriv:            0,
+			DeletePriv:            0,
+			CreatePriv:            1,
+			DropPriv:              1,
+			GrantPriv:             0,
+			IndexPriv:             1,
+			AlterPriv:             1,
+			ShowViewPriv:          1,
+			CreateViewPriv:        1,
+			CreateUserPriv:        0,
+			MetaDbPriv:            0,
+			AccountType:           0,
+			ShowAuditLogPriv:      0,
+			ReplicationClientPriv: 0,
+			ReplicationSlavePriv:  0,
 		}
 	case GrantReadWritePrivilege:
 		return &userPrivSchema{
-			User:           user,
-			Host:           "%",
-			encPasswd:      encPasswd,
-			SelectPriv:     1,
-			InsertPriv:     1,
-			UpdatePriv:     1,
-			DeletePriv:     1,
-			CreatePriv:     0,
-			DropPriv:       0,
-			GrantPriv:      0,
-			IndexPriv:      0,
-			AlterPriv:      0,
-			ShowViewPriv:   1,
-			CreateViewPriv: 0,
-			CreateUserPriv: 0,
-			MetaDbPriv:     0,
+			User:                  user,
+			Host:                  "%",
+			encPasswd:             encPasswd,
+			SelectPriv:            1,
+			InsertPriv:            1,
+			UpdatePriv:            1,
+			DeletePriv:            1,
+			CreatePriv:            0,
+			DropPriv:              0,
+			GrantPriv:             0,
+			IndexPriv:             0,
+			AlterPriv:             0,
+			ShowViewPriv:          1,
+			CreateViewPriv:        0,
+			CreateUserPriv:        0,
+			MetaDbPriv:            0,
+			AccountType:           0,
+			ShowAuditLogPriv:      0,
+			ReplicationClientPriv: 1,
+			ReplicationSlavePriv:  1,
 		}
 	case GrantReadOnlyPrivilege:
 		return &userPrivSchema{
-			User:           user,
-			Host:           "%",
-			encPasswd:      encPasswd,
-			SelectPriv:     1,
-			InsertPriv:     0,
-			UpdatePriv:     0,
-			DeletePriv:     0,
-			CreatePriv:     0,
-			DropPriv:       0,
-			GrantPriv:      0,
-			IndexPriv:      0,
-			AlterPriv:      0,
-			ShowViewPriv:   1,
-			CreateViewPriv: 0,
-			CreateUserPriv: 0,
-			MetaDbPriv:     0,
+			User:                  user,
+			Host:                  "%",
+			encPasswd:             encPasswd,
+			SelectPriv:            1,
+			InsertPriv:            0,
+			UpdatePriv:            0,
+			DeletePriv:            0,
+			CreatePriv:            0,
+			DropPriv:              0,
+			GrantPriv:             0,
+			IndexPriv:             0,
+			AlterPriv:             0,
+			ShowViewPriv:          1,
+			CreateViewPriv:        0,
+			CreateUserPriv:        0,
+			MetaDbPriv:            0,
+			AccountType:           0,
+			ShowAuditLogPriv:      0,
+			ReplicationClientPriv: 1,
+			ReplicationSlavePriv:  1,
 		}
 	default:
 		return &userPrivSchema{
-			User:           user,
-			Host:           "%",
-			encPasswd:      encPasswd,
-			SelectPriv:     0,
-			InsertPriv:     0,
-			UpdatePriv:     0,
-			DeletePriv:     0,
-			CreatePriv:     0,
-			DropPriv:       0,
-			GrantPriv:      0,
-			IndexPriv:      0,
-			AlterPriv:      0,
-			ShowViewPriv:   0,
-			CreateViewPriv: 0,
-			CreateUserPriv: 0,
-			MetaDbPriv:     0,
+			User:                  user,
+			Host:                  "%",
+			encPasswd:             encPasswd,
+			SelectPriv:            0,
+			InsertPriv:            0,
+			UpdatePriv:            0,
+			DeletePriv:            0,
+			CreatePriv:            0,
+			DropPriv:              0,
+			GrantPriv:             0,
+			IndexPriv:             0,
+			AlterPriv:             0,
+			ShowViewPriv:          0,
+			CreateViewPriv:        0,
+			CreateUserPriv:        0,
+			MetaDbPriv:            0,
+			AccountType:           0,
+			ShowAuditLogPriv:      0,
+			ReplicationClientPriv: 0,
+			ReplicationSlavePriv:  0,
 		}
 	}
 }
@@ -1163,14 +1190,15 @@ func newSchemaSuperUser(user, encPasswd string, grantType GrantPrivilegeType) *u
 func (schema *userPrivSchema) valueHeader() []string {
 	return []string{"id", "gmt_created", "gmt_modified", "user_name", "host", "password", "select_priv", "insert_priv",
 		"update_priv", "delete_priv", "create_priv", "drop_priv", "grant_priv", "index_priv", "alter_priv", "show_view_priv",
-		"create_view_priv", "create_user_priv", "meta_db_priv"}
+		"create_view_priv", "create_user_priv", "meta_db_priv", "account_type", "show_audit_log_priv", "replication_client_priv", "replication_slave_priv"}
 }
 
 func (schema *userPrivSchema) toInsertValue() string {
-	return fmt.Sprintf("(NULL, NOW(), NOW(), '%s', '%s', '%s', %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d)",
+	return fmt.Sprintf("(NULL, NOW(), NOW(), '%s', '%s', '%s', %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d)",
 		schema.User, schema.Host, schema.encPasswd, schema.SelectPriv, schema.IndexPriv, schema.UpdatePriv, schema.DeletePriv,
 		schema.CreatePriv, schema.DropPriv, schema.GrantPriv, schema.IndexPriv, schema.AlterPriv, schema.ShowViewPriv,
-		schema.CreateViewPriv, schema.CreateUserPriv, schema.MetaDbPriv)
+		schema.CreateViewPriv, schema.CreateUserPriv, schema.MetaDbPriv, schema.AccountType, schema.ShowAuditLogPriv,
+		schema.ReplicationClientPriv, schema.ReplicationSlavePriv)
 }
 
 func (meta *manager) newNotifyStmt(dataId string) string {

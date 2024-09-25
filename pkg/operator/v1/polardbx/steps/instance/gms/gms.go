@@ -100,7 +100,7 @@ func getHashFromXstoreName(xstoreNames interface{}) (string, error) {
 }
 
 // getOriginalPxcInfo is a helper function to extract hash and name of original pxc during restore
-func getOriginalPxcInfo(rc *polardbxreconcile.Context) (string, string, error) {
+func getOriginalPxcInfo(rc *polardbxreconcile.Context) (string, string, map[string]string, error) {
 	polardbx := rc.MustGetPolarDBX()
 	backup := &polardbxv1.PolarDBXBackup{}
 	var err error
@@ -110,7 +110,7 @@ func getOriginalPxcInfo(rc *polardbxreconcile.Context) (string, string, error) {
 		backup, err = rc.GetPXCBackupByName(polardbx.Spec.Restore.BackupSet)
 	}
 	if err != nil {
-		return "", "", err
+		return "", "", nil, err
 	}
 
 	var pxcHash, pxcName string
@@ -122,15 +122,28 @@ func getOriginalPxcInfo(rc *polardbxreconcile.Context) (string, string, error) {
 				pxcHash = splitXStoreName[len(splitXStoreName)-3]
 			}
 		}
-		return pxcHash, pxcName, nil
+		xstores, err := rc.GetOrderedDNList()
+		if err != nil {
+			return "", "", nil, err
+		}
+		originalDnNameMap := map[string]string{}
+		for _, xstore := range xstores {
+			originalDnNameMap[xstore.Spec.Restore.From.XStoreName] = xstore.Name
+		}
+		gms, err := rc.GetGMS()
+		if err != nil {
+			return "", "", nil, err
+		}
+		originalDnNameMap[gms.Spec.Restore.From.XStoreName] = gms.Name
+		return pxcHash, pxcName, originalDnNameMap, nil
 	}
-	return "", "", errors.New("failed to get hash from name of xstore")
+	return "", "", nil, errors.New("failed to get hash from name of xstore")
 }
 
 var RestoreSchemas = polardbxreconcile.NewStepBinder("RestoreSchemas",
 	func(rc *polardbxreconcile.Context, flow control.Flow) (reconcile.Result, error) {
 		polarDBX := rc.MustGetPolarDBX()
-		originalPXCHash, originalPXCName, err := getOriginalPxcInfo(rc)
+		originalPXCHash, originalPXCName, originalDnNameMap, err := getOriginalPxcInfo(rc)
 		if err != nil {
 			return flow.Error(err, "Get oldXStoreName Failed")
 		}
@@ -145,7 +158,7 @@ var RestoreSchemas = polardbxreconcile.NewStepBinder("RestoreSchemas",
 		}
 
 		if !restored {
-			err = mgr.RestoreSchemas(originalPXCName, originalPXCHash, polarDBX.Status.Rand)
+			err = mgr.RestoreSchemas(originalPXCName, originalPXCHash, polarDBX.Status.Rand, originalDnNameMap)
 			if err != nil {
 				return flow.Error(err, "Unable to restore GMS schemas.")
 			}
