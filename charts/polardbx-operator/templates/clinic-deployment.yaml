@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: polardbx-clinic
-  namespace: polardbx-operator-system
+  namespace: {{ .Release.Namespace }}
 spec:
   replicas: 1
   selector:
