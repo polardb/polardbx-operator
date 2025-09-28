@@ -1,0 +1,11 @@
+.app-container {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Root 仅承载 router-outlet，不再包含任何头部样式，避免与子布局冲突 */
+.app-content {
+  flex: 1;
+  overflow: hidden;
+}

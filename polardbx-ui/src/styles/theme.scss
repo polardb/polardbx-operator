@@ -1,0 +1,197 @@
+// Theme variables inspired by Podman Desktop website
+:root {
+  /* Refined palette (Podman Desktop-inspired) */
+  --pd-primary: #2f5d8a;        /* primary */
+  --pd-primary-600: #254a6e;    /* primary hover */
+  --pd-accent: #5aa0e6;         /* accent */
+  --pd-accent-600: #3e86ce;     /* accent hover */
+  --pd-bg: #f6f7f9;
+  --pd-surface: #ffffff;
+  --pd-text: #2f3b47;
+  --pd-text-secondary: #6b7785;
+  --pd-border: #e5e9ef;
+  --pd-radius: 12px;
+  --pd-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+
+  /* Map to legacy custom vars to keep compatibility */
+  --primary-color: var(--pd-primary);
+  --accent-color: var(--pd-accent);
+  --background-color: var(--pd-bg);
+  --text-color: var(--pd-text);
+  --border-color: var(--pd-border);
+}
+
+body {
+  background-color: var(--pd-bg);
+  color: var(--pd-text);
+}
+
+/* Dark theme overrides */
+.dark-theme {
+  --pd-bg: #0f1721;
+  --pd-surface: #131c27;
+  --pd-text: #e4e8ee;
+  --pd-text-secondary: #aab4c0;
+  --pd-border: #223042;
+  --pd-primary: #5aa0e6;
+  --pd-primary-600: #3e86ce;
+  --pd-accent: #8bbdf1;
+  --pd-accent-600: #76aee7;
+
+  background-color: var(--pd-bg);
+  color: var(--pd-text);
+}
+
+.mat-toolbar.mat-primary {
+  background: var(--pd-primary);
+}
+
+.mat-raised-button.mat-primary {
+  background: var(--pd-primary);
+}
+
+.mat-mdc-card,
+.mat-card {
+  background: var(--pd-surface);
+  border: 1px solid var(--pd-border);
+  border-radius: var(--pd-radius);
+  box-shadow: var(--pd-shadow);
+  margin-bottom: 16px;
+}
+
+.mat-chip.mat-primary {
+  background: var(--pd-accent);
+  color: #fff;
+}
+
+.page-header .header-actions button + button,
+.actions-toolbar button + button {
+  margin-left: 8px;
+}
+
+/* Navigation (sidenav/list) */
+.mat-sidenav-container .mat-sidenav {
+  background: var(--pd-surface);
+  border-right: 1px solid var(--pd-border);
+}
+
+.mat-nav-list .mat-list-item,
+.mat-mdc-list-item {
+  border-radius: 8px;
+  color: var(--pd-text);
+}
+
+.mat-nav-list .mat-list-item.active,
+.mat-mdc-list-item.active {
+  background: rgba(47, 93, 138, 0.14);
+  color: var(--pd-primary);
+  box-shadow: inset 2px 0 0 var(--pd-primary);
+}
+
+.mat-nav-list .mat-list-item:hover,
+.mat-mdc-list-item:hover {
+  background: rgba(47, 93, 138, 0.08);
+}
+
+/* Tabs selected state */
+.mat-mdc-tab-group .mdc-tab.mdc-tab--active .mdc-tab__text-label {
+  color: var(--pd-primary);
+}
+.mat-mdc-tab-group .mdc-tab-indicator__content--underline {
+  border-color: var(--pd-primary);
+}
+
+/* Table header */
+.mat-mdc-table .mat-mdc-header-row,
+.mat-table thead tr {
+  background: #f0f3f7;
+}
+.mat-mdc-table .mat-mdc-header-cell,
+.mat-table thead th {
+  color: var(--pd-text-secondary);
+  font-weight: 600;
+}
+
+.mat-mdc-table .mat-mdc-row:hover,
+.mat-table tbody tr:hover {
+  background: #f6f9fc;
+}
+
+/* Empty state unified */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 16px;
+  color: var(--pd-text-secondary);
+}
+.empty-state mat-icon {
+  font-size: 64px;
+  height: 64px;
+  width: 64px;
+  color: var(--pd-accent);
+  margin-bottom: 8px;
+}
+.empty-state .hint {
+  margin-top: 4px;
+  font-size: 13px;
+}
+
+/* Buttons hover/active */
+.mat-mdc-raised-button.mat-primary:hover {
+  background: var(--pd-primary-600);
+}
+.mat-mdc-raised-button.mat-accent {
+  background: var(--pd-accent);
+}
+.mat-mdc-raised-button.mat-accent:hover {
+  background: var(--pd-accent-600);
+}
+
+/* Chips */
+.mat-mdc-chip.mat-primary {
+  background: var(--pd-accent) !important;
+  color: #fff !important;
+}
+
+/* Typography: titles */
+.page-title { font-size: 24px; font-weight: 600; }
+mat-card-title { font-size: 18px !important; font-weight: 600 !important; }
+mat-card-subtitle { font-size: 14px !important; color: var(--pd-text-secondary) !important; }
+
+/* Breadcrumbs in enhanced toolbar */
+.enhanced-toolbar .breadcrumb {
+  color: var(--pd-text-secondary);
+}
+.enhanced-toolbar .breadcrumb .breadcrumb-separator {
+  color: rgba(47, 59, 71, 0.35);
+}
+.enhanced-toolbar .breadcrumb .breadcrumb-title {
+  color: var(--pd-text);
+  font-weight: 500;
+}
+
+/* Dialog surface rounding & shadow */
+.mat-mdc-dialog-container .mdc-dialog__surface {
+  border-radius: var(--pd-radius) !important;
+  box-shadow: var(--pd-shadow) !important;
+}
+.mat-mdc-dialog-container .mdc-dialog__content {
+  padding: 16px 24px !important;
+}
+.mat-mdc-dialog-actions {
+  padding: 12px 24px !important;
+}
+
+/* Unified page spacing */
+.tab-content {
+  padding: 12px 8px;
+}
+@media (min-width: 992px) {
+  .tab-content { padding: 16px 12px; }
+}
+@media (min-width: 1280px) {
+  .tab-content { padding: 20px 16px; }
+}
+

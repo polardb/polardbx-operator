@@ -1,0 +1,211 @@
+.recovery-wizard-container { padding: 16px; background: #ffffff; }
+.wizard-inner { max-width: 1120px; margin: 0 auto; background: #fff; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.06); padding: 16px 20px; }
+
+/* Ensure all stepper layers are white */
+.recovery-wizard-container .mat-horizontal-stepper,
+.recovery-wizard-container .mat-horizontal-stepper-header-container,
+.recovery-wizard-container .mat-horizontal-content-container,
+.recovery-wizard-container .mat-horizontal-stepper-content { background: #ffffff; }
+
+.step-content { padding: 8px 0 4px; }
+.step-actions { display: flex; justify-content: space-between; margin-top: 8px; }
+
+.form-row { display: flex; gap: 16px; margin-bottom: 12px; }
+.full-width { flex: 1 1 100%; }
+
+.restore-type-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.restore-option { width: 100%; }
+.option-content { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; display: grid; gap: 6px; }
+.option-header { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.option-description { color: #666; margin: 0; }
+
+.backup-selection,
+.pitr-selection {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.create-new-option {
+  margin: 24px 0;
+  
+  .mat-mdc-checkbox-label {
+    font-weight: 500;
+  }
+}
+
+.target-existing,
+.target-new {
+  margin-top: 16px;
+}
+
+// Step 4: Storage Configuration
+.custom-storage-option {
+  margin: 24px 0;
+  
+  .mat-mdc-checkbox-label {
+    font-weight: 500;
+  }
+}
+
+.storage-config {
+  margin-top: 24px;
+  padding: 24px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background-color: #ffffff;
+}
+
+.storage-provider-config {
+  margin-top: 24px;
+  
+  h4 {
+    margin: 0 0 16px 0;
+    color: rgba(0, 0, 0, 0.87);
+    font-weight: 500;
+  }
+}
+
+// Step 5: Confirmation
+.summary-card {
+  margin: 24px 0;
+  
+  .mat-mdc-card-header {
+    padding-bottom: 8px;
+  }
+  
+  .mat-mdc-card-title {
+    font-size: 18px;
+    font-weight: 500;
+  }
+}
+
+.summary-section {
+  margin: 16px 0;
+  
+  h4 {
+    margin: 0 0 8px 0;
+    color: rgba(0, 0, 0, 0.87);
+    font-weight: 500;
+    font-size: 14px;
+  }
+  
+  p {
+    margin: 4px 0;
+    color: rgba(0, 0, 0, 0.6);
+    font-size: 14px;
+    
+    strong {
+      color: rgba(0, 0, 0, 0.87);
+      font-weight: 500;
+    }
+  }
+}
+
+.confirmation-options {
+  margin: 24px 0;
+  
+  mat-checkbox {
+    display: block;
+    margin: 16px 0;
+    
+    &.confirmation-checkbox {
+      margin-top: 24px;
+      
+      .mat-mdc-checkbox-label {
+        font-weight: 500;
+        color: rgba(0, 0, 0, 0.87);
+      }
+    }
+  }
+}
+
+// Dialog Actions
+.dialog-actions {
+  padding: 16px 24px;
+  border-top: 1px solid #e0e0e0;
+  margin: 0;
+}
+
+// Spinner Animation
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+  margin-right: 8px;
+}
+
+// Material Design Overrides
+.mat-horizontal-stepper-header-container {
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.mat-horizontal-stepper-content {
+  padding: 24px;
+}
+
+.mat-stepper-horizontal-line {
+  border-top-color: #e0e0e0;
+}
+
+// Chip styling
+mat-chip-listbox {
+  mat-chip-option {
+    &[aria-selected="true"] {
+      background-color: #1976d2;
+      color: white;
+    }
+  }
+}
+
+// Form field styling
+mat-form-field {
+  .mat-mdc-form-field-subscript-wrapper {
+    margin-top: 4px;
+  }
+  
+  .mat-mdc-form-field-hint-wrapper,
+  .mat-mdc-form-field-error-wrapper {
+    padding: 0;
+  }
+}
+
+// Responsive Design
+@media (max-width: 768px) {
+  .form-row {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .option-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  
+  .recovery-wizard-container {
+    min-height: 500px;
+  }
+  
+  .mat-horizontal-stepper-content {
+    padding: 16px;
+  }
+}
+
+// Accessibility
+.mat-mdc-radio-button:focus .mdc-radio__outer-circle {
+  border-color: #1976d2;
+}
+
+.confirmation-checkbox.mat-mdc-checkbox-checked .mdc-checkbox__checkmark {
+  color: #1976d2;
+}
+
+// Error states
+mat-error {
+  font-size: 12px;
+  margin-top: 4px;
+}

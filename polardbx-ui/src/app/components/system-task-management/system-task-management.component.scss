@@ -1,0 +1,345 @@
+.system-task-management {
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+
+  .header-card {
+    margin-bottom: 24px;
+    
+    mat-card-header {
+      mat-card-title {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 24px;
+        
+        mat-icon {
+          font-size: 28px;
+          width: 28px;
+          height: 28px;
+        }
+      }
+    }
+  }
+
+  .main-tabs {
+    .mat-mdc-tab-body-wrapper {
+      min-height: 600px;
+    }
+  }
+
+  .tab-content {
+    padding: 24px 0;
+  }
+
+  .actions-toolbar {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 20px;
+    
+    button {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+  }
+
+  .table-card {
+    .table-container {
+      overflow-x: auto;
+      
+      .system-tasks-table {
+        width: 100%;
+        
+        .task-name {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          
+          mat-icon {
+            font-size: 20px;
+            width: 20px;
+            height: 20px;
+          }
+        }
+        
+        .task-description {
+          font-size: 0.9em;
+          color: rgba(0, 0, 0, 0.6);
+          max-width: 200px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        
+        mat-chip {
+          font-size: 0.8em;
+          min-height: 24px;
+        }
+      }
+    }
+    
+    .no-data {
+      text-align: center;
+      padding: 48px;
+      color: rgba(0, 0, 0, 0.6);
+      
+      mat-icon {
+        font-size: 48px;
+        width: 48px;
+        height: 48px;
+        margin-bottom: 16px;
+        opacity: 0.5;
+      }
+      
+      p {
+        font-size: 16px;
+        margin: 0;
+      }
+    }
+  }
+
+  .form-card {
+    max-width: 900px;
+    margin: 0 auto;
+    
+    .task-form {
+      .form-section {
+        margin-bottom: 16px;
+        
+        mat-expansion-panel-header {
+          font-weight: 500;
+        }
+        
+        .form-row {
+          display: flex;
+          gap: 16px;
+          margin-bottom: 16px;
+          flex-wrap: wrap;
+          
+          .full-width {
+            flex: 1;
+            min-width: 100%;
+          }
+          
+          .half-width {
+            flex: 1;
+            min-width: 280px;
+          }
+          
+          .quarter-width {
+            flex: 1;
+            min-width: 180px;
+          }
+          
+          @media (max-width: 768px) {
+            .half-width,
+            .quarter-width {
+              min-width: 100%;
+            }
+          }
+        }
+        
+        .resource-group {
+          border: 1px solid #e0e0e0;
+          border-radius: 8px;
+          padding: 16px;
+          margin-bottom: 16px;
+          background-color: #fafafa;
+          
+          h4 {
+            margin: 0 0 16px 0;
+            color: #424242;
+            font-size: 16px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            
+            .mat-icon {
+              margin-right: 8px;
+              font-size: 20px;
+              width: 20px;
+              height: 20px;
+            }
+          }
+        }
+      }
+    }
+    
+    mat-card-actions {
+      padding: 16px 24px;
+      
+      button {
+        margin-left: 8px;
+        
+        &:first-child {
+          margin-left: 0;
+        }
+      }
+    }
+  }
+
+  .loading-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 48px;
+    
+    mat-progress-spinner {
+      margin-bottom: 16px;
+    }
+    
+    p {
+      color: rgba(0, 0, 0, 0.6);
+      font-size: 14px;
+    }
+  }
+
+  // Menu styles
+  .delete-action {
+    color: #f44336;
+    
+    mat-icon {
+      color: #f44336;
+    }
+  }
+
+  // Responsive design
+  @media (max-width: 768px) {
+    padding: 16px;
+    
+    .header-card mat-card-header mat-card-title {
+      font-size: 20px;
+    }
+    
+    .actions-toolbar {
+      flex-direction: column;
+      
+      button {
+        width: 100%;
+      }
+    }
+    
+    .table-container {
+      .system-tasks-table {
+        font-size: 0.9em;
+        
+        .task-description {
+          max-width: 150px;
+        }
+      }
+    }
+    
+    .form-card {
+      max-width: 100%;
+      
+      .task-form .form-row {
+        flex-direction: column;
+        
+        .half-width,
+        .quarter-width {
+          min-width: 100%;
+        }
+      }
+    }
+  }
+
+  // Theme support
+  @media (prefers-color-scheme: dark) {
+    .resource-group {
+      background-color: #303030;
+      border-color: #424242;
+      
+      h4 {
+        color: #e0e0e0;
+      }
+    }
+    
+    .task-description {
+      color: rgba(255, 255, 255, 0.6);
+    }
+    
+    .no-data {
+      color: rgba(255, 255, 255, 0.6);
+    }
+  }
+
+  // Animation
+  .table-container,
+  .form-card {
+    animation: fadeIn 0.3s ease-in-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  // Status color indicators
+  .mat-mdc-chip {
+    &.mat-primary {
+      background-color: #1976d2;
+      color: white;
+    }
+    
+    &.mat-accent {
+      background-color: #ff4081;
+      color: white;
+    }
+    
+    &.mat-warn {
+      background-color: #f44336;
+      color: white;
+    }
+    
+    &.mat-success {
+      background-color: #4caf50;
+      color: white;
+    }
+    
+    &.mat-info {
+      background-color: #2196f3;
+      color: white;
+    }
+    
+    &.mat-secondary {
+      background-color: #757575;
+      color: white;
+    }
+  }
+
+  // Form validation
+  .mat-mdc-form-field {
+    .mat-mdc-form-field-error {
+      font-size: 0.75em;
+    }
+  }
+
+  // Accessibility improvements
+  .task-name mat-icon,
+  .actions-toolbar mat-icon {
+    &[aria-hidden="true"] {
+      // Ensure decorative icons are properly hidden from screenreaders
+    }
+  }
+
+  // Print styles
+  @media print {
+    .actions-toolbar,
+    .form-card mat-card-actions,
+    [matColumnDef="actions"] {
+      display: none;
+    }
+    
+    .system-tasks-table {
+      font-size: 12px;
+    }
+  }
+}
