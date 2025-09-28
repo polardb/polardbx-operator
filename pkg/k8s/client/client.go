@@ -29,8 +29,8 @@ type bypassCacheClient struct {
 	apiReader client.Reader
 }
 
-func (b *bypassCacheClient) Get(ctx context.Context, key client.ObjectKey, obj client.Object) error {
-	return b.apiReader.Get(ctx, key, obj)
+func (b *bypassCacheClient) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+	return b.apiReader.Get(ctx, key, obj, opts...)
 }
 
 func (b *bypassCacheClient) List(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {

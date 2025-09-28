@@ -1,0 +1,83 @@
+/* 全局页面标题样式 - 统一页面标题图标和字体 */
+
+// 页面标题图标统一样式
+.page-icon {
+  font-size: 24px !important;
+  color: #1890ff !important;
+}
+
+// 页面标题文字统一样式
+.page-title {
+  font-size: 20px !important;
+  font-weight: 600 !important;
+  color: rgba(0, 0, 0, 0.88) !important;
+  margin: 0 !important;
+}
+
+// 页面标题容器
+.page-header-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+// nz-page-header 中的标题样式
+.ant-page-header {
+  .page-icon {
+    font-size: 24px !important;
+    color: #1890ff !important;
+  }
+
+  .page-title {
+    font-size: 20px !important;
+    font-weight: 600 !important;
+    color: rgba(0, 0, 0, 0.88) !important;
+  }
+}
+
+// nz-card 中的标题样式
+.ant-card {
+  .ant-card-head-title {
+    .page-icon {
+      font-size: 24px !important;
+      color: #1890ff !important;
+    }
+
+    .page-title {
+      font-size: 20px !important;
+      font-weight: 600 !important;
+      color: rgba(0, 0, 0, 0.88) !important;
+    }
+  }
+}
+
+// 副标题样式
+.page-subtitle {
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.65);
+  margin: 0;
+}
+
+// 页面图标主题色变量
+:root {
+  --page-icon-color: #1890ff;
+  --page-title-color: rgba(0, 0, 0, 0.88);
+  --page-subtitle-color: rgba(0, 0, 0, 0.65);
+}
+
+// 特殊图标别名（确保图标一致性）
+.cluster-icon {
+  @extend .page-icon;
+}
+
+.title-icon {
+  @extend .page-icon;
+}
+
+// 向后兼容的类名
+.page-header {
+  .cluster-icon,
+  .title-icon {
+    @extend .page-icon;
+  }
+}

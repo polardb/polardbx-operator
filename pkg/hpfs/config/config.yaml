@@ -1,0 +1,14 @@
+sinks:
+  - name: default
+    type: oss
+    endpoint: xxx
+    accessKey: xxx
+    accessSecret: xxxxx
+    bucket: xxx
+  - name: default
+    type: sftp
+    host: xxxxx
+    port: 22
+    user: admin
+    password: xxxx
+    rootPath: /xxx

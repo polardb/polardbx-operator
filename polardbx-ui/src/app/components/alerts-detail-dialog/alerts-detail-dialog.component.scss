@@ -1,0 +1,324 @@
+.alerts-dialog {
+  .dialog-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 24px;
+    border-bottom: 1px solid #e0e0e0;
+    margin: -24px -24px 0 -24px;
+    
+    h2 {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 0;
+      font-size: 20px;
+      font-weight: 500;
+      
+      mat-icon {
+        color: #ff9800;
+      }
+    }
+  }
+
+  .dialog-content {
+    padding: 24px 0;
+    max-height: 60vh;
+    overflow-y: auto;
+  }
+
+  .dialog-actions {
+    padding: 16px 24px;
+    margin: 0 -24px -24px -24px;
+    border-top: 1px solid #e0e0e0;
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+  }
+}
+
+// 告警摘要卡片
+.summary-card {
+  margin-bottom: 24px;
+  
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 16px;
+    margin-top: 16px;
+  }
+  
+  .summary-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px;
+    border-radius: 8px;
+    text-align: center;
+    
+    &.critical {
+      background: #ffebee;
+      color: #c62828;
+    }
+    
+    &.warning {
+      background: #fff3e0;
+      color: #ef6c00;
+    }
+    
+    &.info {
+      background: #e3f2fd;
+      color: #1565c0;
+    }
+    
+    &.total {
+      background: #f3e5f5;
+      color: #7b1fa2;
+    }
+    
+    mat-icon {
+      font-size: 32px;
+      width: 32px;
+      height: 32px;
+      margin-bottom: 8px;
+    }
+    
+    .count {
+      font-size: 24px;
+      font-weight: bold;
+      margin-bottom: 4px;
+    }
+    
+    .label {
+      font-size: 12px;
+      opacity: 0.8;
+    }
+  }
+  
+  .alert-source {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 16px;
+    padding: 12px;
+    background: #f5f5f5;
+    border-radius: 4px;
+    font-size: 14px;
+    
+    mat-icon {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+    }
+  }
+}
+
+// 告警列表卡片
+.alerts-list-card {
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    
+    .filter-field {
+      min-width: 150px;
+    }
+  }
+  
+  .loading-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px;
+    
+    mat-progress-spinner {
+      margin-bottom: 16px;
+    }
+  }
+  
+  .no-alerts {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px;
+    text-align: center;
+    
+    mat-icon {
+      font-size: 64px;
+      width: 64px;
+      height: 64px;
+      color: #4caf50;
+      margin-bottom: 16px;
+    }
+    
+    h3 {
+      margin: 0 0 8px 0;
+      color: #4caf50;
+    }
+    
+    p {
+      margin: 0;
+      color: #666;
+    }
+  }
+  
+  .alerts-table {
+    .full-width-table {
+      width: 100%;
+    }
+    
+    .alert-name {
+      strong {
+        display: block;
+        margin-bottom: 4px;
+      }
+      
+      .alert-message {
+        font-size: 12px;
+        color: #666;
+        max-width: 300px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+    }
+    
+    .resolved-row {
+      opacity: 0.6;
+      text-decoration: line-through;
+    }
+  }
+}
+
+// 严重级别样式
+mat-chip {
+  &.severity-critical {
+    background-color: #ffcdd2;
+    color: #c62828;
+  }
+  
+  &.severity-warning {
+    background-color: #ffe0b2;
+    color: #ef6c00;
+  }
+  
+  &.severity-info {
+    background-color: #bbdefb;
+    color: #1565c0;
+  }
+  
+  &.status-firing {
+    background-color: #ffcdd2;
+    color: #c62828;
+  }
+  
+  &.status-pending {
+    background-color: #ffe0b2;
+    color: #ef6c00;
+  }
+  
+  &.status-resolved {
+    background-color: #c8e6c9;
+    color: #2e7d32;
+  }
+}
+
+// 响应式设计
+@media (max-width: 768px) {
+  .alerts-dialog {
+    .dialog-header {
+      padding: 12px 16px;
+      
+      h2 {
+        font-size: 18px;
+      }
+    }
+    
+    .dialog-content {
+      padding: 16px 0;
+    }
+    
+    .dialog-actions {
+      padding: 12px 16px;
+      flex-direction: column;
+      
+      button {
+        width: 100%;
+        margin: 4px 0;
+      }
+    }
+  }
+  
+  .summary-card {
+    .summary-grid {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+    
+    .summary-item {
+      padding: 12px;
+      
+      mat-icon {
+        font-size: 24px;
+        width: 24px;
+        height: 24px;
+      }
+      
+      .count {
+        font-size: 20px;
+      }
+    }
+  }
+  
+  .alerts-list-card {
+    .header-actions {
+      flex-direction: column;
+      align-items: stretch;
+      
+      .filter-field {
+        width: 100%;
+      }
+    }
+    
+    .alerts-table {
+      overflow-x: auto;
+      
+      .alert-name .alert-message {
+        max-width: 200px;
+      }
+    }
+  }
+}
+
+// 动画效果
+.alerts-dialog {
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+// 悬浮效果
+.summary-item {
+  transition: transform 0.2s ease;
+  
+  &:hover {
+    transform: translateY(-2px);
+  }
+}
+
+mat-card {
+  transition: box-shadow 0.2s ease;
+  
+  &:hover {
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.12);
+  }
+}

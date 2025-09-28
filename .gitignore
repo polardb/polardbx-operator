@@ -1,3 +1,44 @@
+# macOS
+.DS_Store
+
+# Editors/IDE
+.vscode/
+.idea/
+.cursor/
+.vercel/
+.trae/
+
+# Node/Frontend
+node_modules/
+polardbx-ui/node_modules/
+polardbx-ui/dist/
+
+# Go build/test artifacts
+*.out
+*.test
+*.exe
+polardbx-operator
+backend/test-backend
+backend/coverage.out
+backend/coverage.html
+backend/k8s_coverage.html
+backend/backend.log
+
+# Coverage/Reports
+coverage.out
+coverage.html
+k8s_coverage.html
+
+# Logs and temp
+*.log
+tmp/
+*.swp
+
+# Local kubeconfigs/secrets
+kubeconfig*
+new-kubeconfig.yaml
+*.b64
+*.oneline
 ### Java template
 # Compiled class file
 *.class
@@ -559,3 +600,13 @@ tools/xstore/venv
 docs/**
 /hack/make-rules/venv/
 /hack/make-rules/.idea/
+node_modules/
+polardbx-ui/node_modules/
+polardbx-ui/dist/
+polardbx-ui/.angular/
+polradbx-ui/node_modules/
+polardbx-operator
+backend/polardbx-ui-backend
+
+# Ignore root lockfile only
+/package-lock.json

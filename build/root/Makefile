@@ -173,7 +173,13 @@ unit-test:
 	@echo "$$UNIT_TEST_HELP_INFO"
 else
 unit-test:
-	@go test -v -short `go list ./... | grep -v "/third-party"`
+	@PKGS=`go list ./... | grep -v "/third-party" | grep -v "/test/e2e"`; \
+	if [ -n "$$PKGS" ]; then \
+		echo "Running unit tests for: $$PKGS"; \
+		go test -v -short $$PKGS; \
+	else \
+		echo "No unit-testable packages found (excluding third-party and test/e2e)"; \
+	fi
 endif
 
 define E2E_TEST_HELP_INFO

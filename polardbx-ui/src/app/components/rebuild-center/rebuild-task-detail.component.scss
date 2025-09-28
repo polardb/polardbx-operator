@@ -1,0 +1,439 @@
+.rebuild-task-detail-container {
+  padding: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+  background: #f5f5f5;
+  min-height: calc(100vh - 64px);
+}
+
+/* 页面头部 */
+.page-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 24px;
+  
+  .back-button {
+    margin-right: 16px;
+    display: flex;
+    align-items: center;
+    color: #1890ff;
+    transition: all 0.3s ease;
+    
+    &:hover {
+      color: #40a9ff;
+      background: rgba(24, 144, 255, 0.1);
+    }
+    
+    i {
+      margin-right: 8px;
+    }
+  }
+  
+  .page-title {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 600;
+    color: rgba(0, 0, 0, 0.85);
+  }
+}
+
+/* 调试卡片 */
+.debug-card {
+  margin-bottom: 16px;
+  border: 2px dashed #52c41a;
+  background: #f6ffed;
+  
+  h3 {
+    color: #52c41a;
+    margin-bottom: 16px;
+  }
+  
+  p {
+    margin: 8px 0;
+    font-family: 'Monaco', 'Consolas', monospace;
+    font-size: 13px;
+  }
+}
+
+/* 加载状态 */
+.loading-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 400px;
+}
+
+.loading-tip {
+  margin-top: 12px;
+  text-align: center;
+  color: rgba(0,0,0,0.65);
+  letter-spacing: 0.5px;
+}
+
+/* 任务内容区域 */
+.task-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* 任务头部卡片 */
+.task-header-card {
+  .task-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 16px;
+    
+    .task-info {
+      flex: 1;
+      
+      .task-title {
+        margin: 0 0 12px 0;
+        font-size: 20px;
+        font-weight: 600;
+        color: rgba(0, 0, 0, 0.85);
+        display: flex;
+        align-items: center;
+        
+        i {
+          margin-right: 8px;
+          color: #1890ff;
+          font-size: 24px;
+        }
+      }
+      
+      .task-meta {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+    }
+    
+    .task-actions {
+      button {
+        transition: all 0.3s ease;
+        
+        &:hover {
+          transform: translateY(-1px);
+        }
+      }
+    }
+  }
+  
+  .progress-section {
+    margin-top: 16px;
+    
+    .progress-text {
+      margin-top: 8px;
+      text-align: center;
+      color: rgba(0, 0, 0, 0.65);
+      font-size: 14px;
+    }
+  }
+}
+
+/* 详情标签页卡片 */
+.detail-tabs-card {
+  flex: 1;
+  
+  .tab-content {
+    padding: 24px 0;
+  }
+  
+  .action-buttons {
+    margin-top: 32px;
+    padding-top: 24px;
+    border-top: 1px solid #f0f0f0;
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    
+    button {
+      min-width: 120px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s ease;
+      
+      i {
+        margin-right: 6px;
+      }
+      
+      &:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      }
+    }
+  }
+}
+
+/* JSON 显示 */
+.json-display {
+  background: #f6f8fa;
+  border: 1px solid #e1e4e8;
+  border-radius: 6px;
+  padding: 16px;
+  font-family: 'Monaco', 'Consolas', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #24292e;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  max-height: 500px;
+  overflow-y: auto;
+  will-change: contents;
+}
+
+/* Ant Design 组件样式覆盖 */
+:host ::ng-deep {
+  /* 卡片样式 */
+  .ant-card {
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.09);
+    transition: all 0.3s ease;
+    
+    &:hover {
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+    }
+  }
+  
+  /* 标签页样式 */
+  .ant-tabs-card > .ant-tabs-nav .ant-tabs-tab {
+    border-radius: 6px 6px 0 0;
+    transition: all 0.3s ease;
+    
+    &:hover {
+      color: #1890ff;
+    }
+    
+    &.ant-tabs-tab-active {
+      background: #1890ff;
+      border-color: #1890ff;
+      
+      .ant-tabs-tab-btn {
+        color: white;
+      }
+    }
+  }
+  
+  /* 描述列表样式 */
+  .ant-descriptions-bordered .ant-descriptions-item-label {
+    background: #fafafa;
+    font-weight: 500;
+    color: rgba(0, 0, 0, 0.85);
+  }
+  
+  .ant-descriptions-bordered .ant-descriptions-item-content {
+    background: white;
+  }
+  
+  /* 步骤条样式 */
+  .ant-steps-vertical .ant-steps-item-description {
+    color: rgba(0, 0, 0, 0.65);
+    font-size: 13px;
+    margin-top: 4px;
+  }
+  
+  .ant-steps-item-process .ant-steps-item-icon {
+    background: #1890ff;
+    border-color: #1890ff;
+  }
+  
+  .ant-steps-item-finish .ant-steps-item-icon {
+    background: #52c41a;
+    border-color: #52c41a;
+  }
+  
+  .ant-steps-item-error .ant-steps-item-icon {
+    background: #ff4d4f;
+    border-color: #ff4d4f;
+  }
+  
+  /* 标签样式 */
+  .ant-tag {
+    border-radius: 4px;
+    font-weight: 500;
+    padding: 2px 8px;
+    font-size: 12px;
+  }
+  
+  /* 进度条样式 */
+  .ant-progress-line .ant-progress-bg {
+    border-radius: 4px;
+  }
+  
+  .ant-progress-success-bg {
+    background: linear-gradient(90deg, #52c41a, #73d13d);
+  }
+  
+  .ant-progress-bg {
+    background: linear-gradient(90deg, #1890ff, #40a9ff);
+  }
+  
+  /* 按钮样式 */
+  .ant-btn {
+    border-radius: 6px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    
+    &:not(:disabled):hover {
+      transform: translateY(-1px);
+    }
+  }
+  
+  /* 结果页样式 */
+  .ant-result {
+    padding: 48px 32px;
+  }
+  
+  .ant-result-title {
+    color: rgba(0, 0, 0, 0.85);
+    font-weight: 600;
+  }
+  
+  .ant-result-subtitle {
+    color: rgba(0, 0, 0, 0.65);
+  }
+  
+  /* 加载动画 */
+  .ant-spin-dot {
+    i {
+      background-color: #1890ff;
+    }
+  }
+  
+  .ant-spin-text {
+    color: rgba(0, 0, 0, 0.65);
+    font-size: 14px;
+  }
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .rebuild-task-detail-container {
+    padding: 16px;
+  }
+  
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    
+    .page-title {
+      font-size: 20px;
+    }
+  }
+  
+  .task-header {
+    flex-direction: column !important;
+    gap: 16px;
+    
+    .task-actions {
+      align-self: stretch;
+      
+      button {
+        width: 100%;
+      }
+    }
+  }
+  
+  .action-buttons {
+    flex-direction: column;
+    
+    button {
+      width: 100% !important;
+    }
+  }
+  
+  .debug-card {
+    p {
+      font-size: 12px;
+      word-break: break-all;
+    }
+  }
+  
+  .json-display {
+    font-size: 11px;
+    padding: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .rebuild-task-detail-container {
+    padding: 12px;
+  }
+  
+  .page-header .page-title {
+    font-size: 18px;
+  }
+  
+  .task-info .task-title {
+    font-size: 18px;
+    
+    i {
+      font-size: 20px;
+    }
+  }
+  
+  :host ::ng-deep {
+    .ant-descriptions {
+      .ant-descriptions-item-label,
+      .ant-descriptions-item-content {
+        padding: 8px 12px;
+        font-size: 13px;
+      }
+    }
+    
+    .ant-tabs-tab {
+      padding: 8px 12px;
+      font-size: 13px;
+    }
+    
+    .ant-result {
+      padding: 24px 16px;
+    }
+  }
+}
+
+/* 动画效果 */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.task-content {
+  animation: fadeIn 0.5s ease-out;
+}
+
+/* 打印样式 */
+@media print {
+  .rebuild-task-detail-container {
+    background: white;
+    padding: 0;
+  }
+  
+  .page-header .back-button,
+  .task-actions,
+  .action-buttons,
+  .debug-card {
+    display: none !important;
+  }
+  
+  :host ::ng-deep {
+    .ant-card {
+      box-shadow: none;
+      border: 1px solid #d9d9d9;
+    }
+    
+    .ant-tabs-nav {
+      display: none;
+    }
+    
+    .ant-tabs-content {
+      padding: 0;
+    }
+  }
+}

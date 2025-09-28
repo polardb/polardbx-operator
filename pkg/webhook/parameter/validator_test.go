@@ -39,7 +39,7 @@ func TestIntOrStringSupportedValues(t *testing.T) {
 			if strings.Contains(valueStr, k) {
 				nums := make([]int, 0)
 				for _, numStr := range numsCalculate {
-					nums = append(nums, calculate(strings.ReplaceAll(numStr, k, "")))
+					nums = append(nums, int(calculate(strings.ReplaceAll(numStr, k, ""))))
 				}
 				result, err = v.(func([]int) (int, error))(nums)
 				if err != nil {
@@ -52,7 +52,7 @@ func TestIntOrStringSupportedValues(t *testing.T) {
 			panic(fmt.Errorf("error format"))
 		}
 	} else {
-		result = calculate(numsCalculate[0])
+		result = int(calculate(numsCalculate[0]))
 	}
 
 	fmt.Println("result: ", result)

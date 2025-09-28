@@ -20,6 +20,10 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
+	"time"
+
 	polarxv1 "github.com/alibaba/polardbx-operator/api/v1"
 	xstorev1 "github.com/alibaba/polardbx-operator/api/v1/xstore"
 	"github.com/alibaba/polardbx-operator/pkg/k8s/control"
@@ -35,9 +39,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"strconv"
-	"strings"
-	"time"
 )
 
 func IsFromPodChosen(xstoreLeader *polarxv1.XStoreFollower) bool {
@@ -110,6 +111,11 @@ var TryLoadFromPod = NewStepBinder("TryLoadFromPod",
 		pod := corev1.Pod{}
 		err := rc.Client().Get(rc.BaseReconcileContext.Context(), podKey, &pod)
 		if err != nil {
+			// Add detailed error log to diagnose whether it's 404/permission/cache issue
+			flow.Logger().Error(err, "TryLoadFromPod: failed to Get from-pod",
+				"fromPodName", fromPodName,
+				"namespace", rc.Namespace(),
+				"key", podKey.String())
 			//changed status to failed
 			xstoreLearner := rc.MustGetXStoreFollower()
 			xstoreLearner.Status.Phase = xstorev1.FollowerPhaseFailed
@@ -127,6 +133,11 @@ var TryLoadTargetPod = NewStepBinder("TryLoadTargetPod", func(rc *xstorev1reconc
 	pod := corev1.Pod{}
 	err := rc.Client().Get(rc.BaseReconcileContext.Context(), podKey, &pod)
 	if err != nil {
+		// Add detailed error log to diagnose whether it's 404/permission/cache issue
+		flow.Logger().Error(err, "TryLoadTargetPod: failed to Get target-pod",
+			"targetPodName", targetPodName,
+			"namespace", rc.Namespace(),
+			"key", podKey.String())
 		//changed status to failed
 		xstoreFollower.Status.Phase = xstorev1.FollowerPhaseFailed
 		xstoreFollower.Status.Message = "The target-pod is not found."

@@ -51,14 +51,14 @@ type XStoreRestoreSpec struct {
 	// +optional
 	StorageProvider *polardbx.BackupStorageProvider `json:"storageProvider,omitempty"`
 
-	// Time defines the specified time of the restored data, in the format of 'yyyy-MM-dd HH:mm:ss'. Required.
+	// Time defines the specified time of the restored data, in the format of 'yyyy-MM-ddTHH:mm:ssZ'. Required.
 	Time string `json:"time,omitempty"`
 
 	// TimeZone defines the specified time zone of the restore time. Default is the location of current cluster.
 	// +optional
 	TimeZone string `json:"timezone,omitempty"`
 
-	PitrEndpoint string `json:"pitrEndpoiint,omitempty"`
+	PitrEndpoint string `json:"pitrEndpoint,omitempty"`
 
 	// BinlogSource defines the binlog datasource
 	// +optional

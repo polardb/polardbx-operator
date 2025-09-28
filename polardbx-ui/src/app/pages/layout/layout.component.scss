@@ -1,0 +1,183 @@
+.app-layout {
+  min-height: 100vh;
+}
+
+.menu-sider {
+  overflow: auto;
+  height: 100vh;
+  position: fixed;
+  inset-inline-start: 0;
+  top: 0;
+  bottom: 0;
+}
+
+.logo {
+  height: 64px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.3);
+  text-align: center;
+  border-bottom: 1px solid #f0f0f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  white-space: nowrap;
+  
+  .logo-full { color: #1890ff; font-size: 20px; line-height: 32px; font-weight: 600; }
+  .logo-mini { color: #1890ff; font-size: 18px; line-height: 32px; font-weight: 700; letter-spacing: .5px; display: none; }
+}
+
+.sider-menu { height: calc(100vh - 64px); border-right: 0; }
+
+.site-layout { transition: margin-left .2s; }
+
+.app-header {
+  background: #fff;
+  padding: 0 16px;
+  box-shadow: 0 1px 4px rgba(0, 21, 41, 0.08);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  height: 64px;
+  display: flex;
+  align-items: center;
+}
+
+.header-title { font-size: 16px; font-weight: 600; color: #223; }
+.spacer { flex: 1 1 auto; }
+
+/* 命名空间下拉在头部的对齐与紧凑样式 */
+.header-actions { 
+  display: flex; 
+  align-items: center; 
+  gap: 12px; 
+}
+
+.header-actions .label { 
+  color: rgba(0,0,0,.65); 
+  margin-right: 6px; 
+}
+
+/* 登录/登出按钮样式 */
+.login-btn, .reconnect-btn, .logout-btn { 
+  display: inline-flex; 
+  align-items: center; 
+  gap: 6px;
+  transition: all 0.3s ease;
+  font-weight: 500;
+}
+
+.login-btn {
+  &:hover {
+    color: #1890ff;
+    border-color: #1890ff;
+  }
+}
+
+.reconnect-btn {
+  margin-right: 8px;
+  
+  &:hover {
+    color: #52c41a;
+    border-color: #52c41a;
+  }
+}
+
+.logout-btn {
+  &:hover {
+    background-color: #ff4d4f;
+    border-color: #ff4d4f;
+    color: white;
+  }
+}
+
+.inner-content {
+  margin: 24px 16px 0;
+  background: #fff;
+  min-height: calc(100vh - 64px - 24px);
+  padding: 24px;
+  border-radius: 8px;
+}
+
+/* 全局布局样式 */
+:host ::ng-deep .ant-layout { background: #ffffff; }
+:host ::ng-deep .ant-layout-sider-children { display: flex; flex-direction: column; }
+
+/* 折叠时防止 Logo 文本被压缩；保持等宽并裁剪 */
+:host ::ng-deep .ant-layout-sider-collapsed .logo { padding: 16px 8px; }
+:host ::ng-deep .ant-layout-sider-collapsed .logo h1 {
+  font-size: 16px;
+  letter-spacing: .5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
+  transform: none;
+}
+
+/* 菜单样式优化 */
+:host ::ng-deep .ant-menu-light { background: transparent; }
+
+:host ::ng-deep .ant-menu-inline, 
+:host ::ng-deep .ant-menu-vertical, 
+:host ::ng-deep .ant-menu-vertical-left {
+  border-right: 0;
+}
+
+:host ::ng-deep .ant-menu-item {
+  margin: 4px 8px;
+  border-radius: 6px;
+}
+
+:host ::ng-deep .ant-menu-submenu {
+  .ant-menu-submenu-title {
+    margin: 4px 8px;
+    border-radius: 6px;
+  }
+}
+
+:host ::ng-deep .ant-menu-item:hover,
+:host ::ng-deep .ant-menu-submenu-title:hover {
+  color: #1890ff;
+}
+
+:host ::ng-deep .ant-menu-item-selected {
+  background-color: #e6f7ff;
+  border-radius: 6px;
+}
+
+:host ::ng-deep .ant-menu-submenu-selected .ant-menu-submenu-title {
+  color: #1890ff;
+}
+
+/* 响应式布局 */
+:host ::ng-deep .ant-layout-has-sider > .ant-layout,
+:host ::ng-deep .ant-layout-has-sider > .ant-layout-content {
+  overflow-x: hidden;
+}
+
+/* 修复Material残留样式 */
+.mat-toolbar.main-toolbar {
+  display: none;
+}
+
+/* 折叠时显示简写 Logo，避免文字被裁剪看不到 X */
+:host ::ng-deep .ant-layout-sider-collapsed .logo .logo-full { display: none; }
+:host ::ng-deep .ant-layout-sider-collapsed .logo .logo-mini { display: inline-block; }
+
+:host ::ng-deep .ant-menu .ant-menu-item,
+:host ::ng-deep .ant-menu .ant-menu-submenu-title {
+  display: flex;
+  align-items: center;
+}
+
+:host ::ng-deep .ant-menu .ant-menu-item .anticon,
+:host ::ng-deep .ant-menu .ant-menu-submenu-title .anticon {
+  width: 20px;
+  height: 20px;
+  line-height: 20px;
+  margin-right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+

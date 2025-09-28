@@ -18,6 +18,10 @@ spec:
       labels:
         app: {{ .Values.filebeat.name }}
     spec:
+      {{- if .Values.imagePullSecrets }}
+      imagePullSecrets:
+{{ toYaml .Values.imagePullSecrets | indent 8 }}
+      {{- end }}
       serviceAccountName:  {{ .Values.filebeat.name }}
       containers:
         - name: {{ .Values.filebeat.name }}
@@ -50,25 +54,25 @@ spec:
       volumes:
         - name: pod-path
           hostPath:
-            path: /var/lib/kubelet/pods/
+            path: {{ .Values.filebeat.hostEmplyDirPathPrefix }}/
         - name: dn-data
           hostPath:
-            path: /data/xstore
+            path: {{ .Values.filebeat.dnDataHostPathPrefix }}
         - name: filebeat-data-dir
           emptyDir: {}
         - name: filebeat-config-file
           configMap:
             name: filebeat-config
-            
-      {{- with .Values.logstash.nodeSelector }}
+      
+      {{- with .Values.filebeat.nodeSelector }}
       nodeSelector:
 {{ toYaml . | indent 8 }}
       {{- end }}
-      {{- with .Values.logstash.affinity }}
+      {{- with .Values.filebeat.affinity }}
       affinity:
 {{ toYaml . | indent 8 }}
       {{- end }}
-      {{- with .Values.logstash.tolerations }}
+      {{- with .Values.filebeat.tolerations }}
       tolerations:
 {{ toYaml . | indent 8 }}
       {{- end }}
