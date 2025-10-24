@@ -10,7 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// RegisterRoutes registers the entrypoint for the logical cluster domain (thin shell that forwards to existing handlers).
+// RegisterRoutes 统一注册“逻辑集群域”的入口（薄壳，转发到既有 handlers）。
 func RegisterRoutes(v1 *gin.RouterGroup) {
 	g := v1.Group("/polardbxclusters")
 

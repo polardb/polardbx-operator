@@ -9,7 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// BackupsService encapsulates XStore backup-related orchestration
+// BackupsService 封装 XStore 备份相关编排
 type BackupsService struct {
 	repo k8srepo.XStoreRepository
 }
@@ -101,7 +101,7 @@ func (s *BackupsService) Delete(c *gin.Context) {
 }
 
 func (s *BackupsService) ForceDelete(c *gin.Context) {
-    // Keep legacy behavior: directly remove finalizers
+	// 保持原行为：直接去掉 finalizers
 	cli, ok := util.K8sClientFromContext(c)
 	if !ok {
 		return

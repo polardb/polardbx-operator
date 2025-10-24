@@ -12,7 +12,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// GetAlertsSummary provides the same aggregation logic as the legacy cluster package to avoid keeping the old package.
+// GetAlertsSummary 提供和旧 cluster 包相同的汇总逻辑，避免保留旧包。
 func GetAlertsSummary(c *gin.Context) {
 	cli, ok := util.K8sClientFromContext(c)
 	if !ok {
@@ -61,7 +61,7 @@ func GetAlertsSummary(c *gin.Context) {
 		}
 	}
 
-	// fallback: approximate warning count based on K8s events
+	// fallback: 根据 events 估算 warning
 	var evList corev1.EventList
 	if err := cli.List(c.Request.Context(), &evList, client.InNamespace(ns)); err == nil {
 		warn := 0

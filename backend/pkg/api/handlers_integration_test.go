@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -17,8 +18,12 @@ import (
 	"github.com/stretchr/testify/suite"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/dynamic"
+	dynamicfake "k8s.io/client-go/dynamic/fake"
+	"k8s.io/client-go/kubernetes"
+	k8sfake "k8s.io/client-go/kubernetes/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	crfake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	monitor "polardbx-ui-backend/pkg/api/monitor"
 	parameters "polardbx-ui-backend/pkg/api/parameters"
@@ -60,7 +65,7 @@ func setupIntegrationTestRouter(k8sClientProvider k8s.ClientProvider) *gin.Engin
 	})
 
 	// Connect route
-	router.POST("/connect", Connect)
+	router.POST("/connect", KubeconfigAuthMiddleware(), Connect)
 
 	// API routes with middleware
 	v1 := router.Group("/api/v1")
@@ -119,7 +124,7 @@ func (suite *IntegrationTestSuite) SetupSuite() {
 	require.NoError(suite.T(), err)
 
 	// Setup fake k8s client
-	suite.fakeK8sClient = fake.NewClientBuilder().
+	suite.fakeK8sClient = crfake.NewClientBuilder().
 		WithScheme(suite.scheme).
 		Build()
 
@@ -127,6 +132,15 @@ func (suite *IntegrationTestSuite) SetupSuite() {
 	suite.mockClientProvider = &IntegrationMockClientProvider{}
 	suite.mockClientProvider.On("NewClientFromKubeconfig", mock.Anything).
 		Return(suite.fakeK8sClient, nil)
+
+	// Stub kubeconfig client factory to avoid real cluster calls
+	fakeClientset := k8sfake.NewSimpleClientset()
+	var dynClient dynamic.Interface = dynamicfake.NewSimpleDynamicClient(suite.scheme)
+	originalFactory := newAllClientsFromKubeconfig
+	newAllClientsFromKubeconfig = func(_ []byte) (client.Client, kubernetes.Interface, dynamic.Interface, error) {
+		return suite.fakeK8sClient, fakeClientset, dynClient, nil
+	}
+	suite.T().Cleanup(func() { newAllClientsFromKubeconfig = originalFactory })
 
 	// Setup router
 	suite.router = setupIntegrationTestRouter(suite.mockClientProvider)
@@ -150,14 +164,35 @@ func (suite *IntegrationTestSuite) TestHealthEndpoint() {
 }
 
 func (suite *IntegrationTestSuite) TestConnectEndpoint() {
+	kubeconfigYAML := `apiVersion: v1
+clusters:
+- cluster:
+    certificate-authority-data: Q0EtREFUQQ==
+    server: https://127.0.0.1:6443
+  name: test
+contexts:
+- context:
+    cluster: test
+    user: test
+  name: test
+current-context: test
+kind: Config
+preferences: {}
+users:
+- name: test
+  user:
+    client-certificate-data: Q0VSVF9EQVRB
+    client-key-data: S0VZX0RBVEE=
+`
+	kubeconfigB64 := base64.StdEncoding.EncodeToString([]byte(kubeconfigYAML))
 	connectData := map[string]string{
-		"kubeconfig": "YXBpVmVyc2lvbjogdjEKa2luZDogQ29uZmln", // base64 encoded dummy kubeconfig
+		"kubeconfig": kubeconfigB64,
 	}
 
 	jsonData, _ := json.Marshal(connectData)
 	req, _ := http.NewRequest("POST", "/connect", bytes.NewBuffer(jsonData))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Kubeconfig-B64", "YXBpVmVyc2lvbjogdjEKa2luZDogQ29uZmln")
+	req.Header.Set("X-Kubeconfig-B64", kubeconfigB64)
 
 	w := httptest.NewRecorder()
 	suite.router.ServeHTTP(w, req)

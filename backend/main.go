@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
 	"polardbx-ui-backend/pkg/api"
 	api_alerts "polardbx-ui-backend/pkg/api/alerts"
 	api_auth "polardbx-ui-backend/pkg/api/auth"
@@ -70,7 +71,7 @@ func main() {
 	v1 := r.Group("/api/v1")
 
 	// The connect endpoint is special, it establishes the client for subsequent requests
-	v1.POST("/connect", api.Connect)
+	v1.POST("/connect", api.KubeconfigAuthMiddleware(), api.Connect)
 
 	// JWT login endpoints (optional). When JWT_SECRET is set, protect routes with JWT.
 	v1.POST("/auth/login", api_auth.Login)
@@ -276,8 +277,10 @@ func main() {
 	// Grouped route logging for discoverability
 	api_router.LogGroupedRoutes(r)
 
-	for _, route := range r.Routes() {
-		log.Printf("Registered route: %s %s", route.Method, route.Path)
+	if os.Getenv("GIN_LOG_ROUTES") == "1" {
+		for _, route := range r.Routes() {
+			log.Printf("Registered route: %s %s", route.Method, route.Path)
+		}
 	}
 
 	if err := r.Run(":8080"); err != nil {

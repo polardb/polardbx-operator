@@ -44,7 +44,7 @@ func List(c *gin.Context) {
 						if msg == "" {
 							msg = a.Labels["alertname"]
 						}
-						// Normalize timestamp to RFC3339 string; Alertmanager StartsAt is already string
+						// 统一 timestamp 为 RFC3339 字符串；Alertmanager StartsAt 已为字符串
 						items = append(items, map[string]any{
 							"source":    "alertmanager",
 							"severity":  a.Labels["severity"],
@@ -73,7 +73,7 @@ func List(c *gin.Context) {
 			if ev.Type == corev1.EventTypeWarning {
 				sev = "warning"
 			}
-			// Normalize labels: always provide namespace/involvedObject; set cluster only when provided
+			// 统一 labels：始终提供 namespace/involvedObject；cluster 仅在传参时设置
 			labels := map[string]string{
 				"namespace":      ev.Namespace,
 				"reason":         ev.Reason,
@@ -82,7 +82,7 @@ func List(c *gin.Context) {
 			if cluster != "" {
 				labels["cluster"] = cluster
 			}
-			// Return timestamp consistently; keep time for legacy frontend compatibility
+			// 统一仅返回 timestamp，保留 time 以兼容旧前端
 			ts := ev.LastTimestamp.Time
 			if ts.IsZero() && !ev.EventTime.IsZero() {
 				ts = ev.EventTime.Time

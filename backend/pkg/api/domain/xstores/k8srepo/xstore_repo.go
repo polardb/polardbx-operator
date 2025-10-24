@@ -10,7 +10,7 @@ import (
 	"polardbx-ui-backend/pkg/k8s"
 )
 
-// XStoreRepository abstracts K8s access related to XStore, convenient for mocking and testing.
+// XStoreRepository 抽象 XStore 相关的 K8s 访问，便于 mock 与测试。
 type XStoreRepository interface {
 	// XStore core
 	List(ctx context.Context, cli client.Client, namespace string) ([]polardbxv1.XStore, error)
@@ -63,7 +63,7 @@ func (r *DefaultXStoreRepository) Delete(ctx context.Context, cli client.Client,
 }
 
 func (r *DefaultXStoreRepository) ListPods(ctx context.Context, cli client.Client, namespace, xstoreName string) ([]corev1.Pod, error) {
-    // The pods listing function is a non-context variant; keep as-is for now
+	// pods 列表函数是非 ctx 版本，这里保持现状
 	return k8s.ListPodsForPolarDBXCluster(cli, namespace, xstoreName)
 }
 

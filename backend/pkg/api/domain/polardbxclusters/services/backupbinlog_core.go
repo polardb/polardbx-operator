@@ -10,9 +10,8 @@ import (
 	"polardbx-ui-backend/pkg/api/util"
 )
 
-// Since BackupBinlog CRUD is implemented in existing modules, this file provides
-// a minimal direct K8s client implementation for now. It can be moved to pkg/k8s
-// later if convenient helper functions exist.
+// 由于 backupbinlog 的具体 CRUD 在现有模块实现中，这里先以直连 K8sClient 的最小实现承接，
+// 后续可以按需抽到 pkg/k8s（若存在便捷函数）。
 
 type BackupBinlogService struct{}
 

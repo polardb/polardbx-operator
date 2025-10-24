@@ -25,7 +25,7 @@ func setupRouterWithClientsForLogs(t *testing.T, cs *k8sfake.Clientset, _ runtim
 		if cs != nil {
 			c.Set("clientset", cs)
 		}
-        // Status only requires clientset
+		// Status 仅需要 clientset
 		c.Next()
 	})
 	v1.GET("/log-service/status", Status)
@@ -61,4 +61,4 @@ func TestLogServiceStatus_ExistsFlags(t *testing.T) {
 	}
 }
 
-// 404 scenarios are covered in e2e tests; not repeated here
+// 404 场景在 e2e 测试中已覆盖，这里不再重复

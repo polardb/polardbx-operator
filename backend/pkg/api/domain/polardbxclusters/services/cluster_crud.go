@@ -10,7 +10,7 @@ import (
 	"polardbx-ui-backend/pkg/api/util"
 )
 
-// --- Cluster CRUD (behavior remains unchanged) ---
+// --- Cluster CRUD (行为保持不变) ---
 
 func (s *ClusterService) List(c *gin.Context) {
 	cli, ok := util.K8sClientFromContext(c)

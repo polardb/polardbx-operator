@@ -69,7 +69,7 @@ func List(c *gin.Context) {
 	// List PrometheusRule resources
 	list, err := cli.Resource(prometheusRuleGVR).Namespace(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
-		// When the namespace does not exist or CRD is not installed, return 200 with empty list
+		// 当命名空间不存在或资源未安装时，返回空列表 200
 		if apierrors.IsNotFound(err) {
 			c.JSON(http.StatusOK, []PrometheusRule{})
 			return
@@ -179,7 +179,7 @@ func GetYAML(c *gin.Context) {
 	namespace := c.Param("namespace")
 	name := c.Param("name")
 
-	// Validate parameters first to avoid 500 due to missing client
+	// 先做参数校验，避免因缺少客户端而返回 500
 	if namespace == "" || name == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "namespace and name are required"})
 		return

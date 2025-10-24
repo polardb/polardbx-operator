@@ -173,7 +173,7 @@ func Status(c *gin.Context) {
 	if !ok {
 		return
 	}
-    // Monitoring components are deployed to polardbx-monitor by default; override via ?namespace=
+	// 监控组件默认部署在 polardbx-monitor，可通过 ?namespace= 覆盖
 	ns := util.DefaultNamespace(c, "polardbx-monitor")
 
 	checkDeploy := func(name string) (ready, desired int32, ok bool) {
@@ -247,13 +247,13 @@ func Uninstall(c *gin.Context) {
 func runIOPSBench(ctx context.Context, cs kubernetes.Interface, ns string) map[string]interface{} {
 	name := fmt.Sprintf("iops-bench-%d", rand.Intn(1_000_000))
 	script := strings.Join([]string{
-        // Do not use set -e to avoid early termination from dd/awk on some busybox variants
+		// 不使用 set -e，避免 dd/awk 在某些 busybox 变体返回非零直接终止
 		"export LC_ALL=C LANG=C",
 		"cd /data",
 		"COUNT=${COUNT:-50000}", // 50k ops @4k ≈ 200MB
 		"BS=${BS:-4096}",
 		"rm -f testfile || true",
-        // Try general oflag=dsync; fallback to conv=fdatasync; finally plain dd
+		// 尝试使用更通用的 oflag=dsync；若失败则回退到 conv=fdatasync；最终回退裸 dd
 		"OUT=$( (dd if=/dev/zero of=testfile bs=$BS count=$COUNT oflag=dsync 2>&1 || dd if=/dev/zero of=testfile bs=$BS count=$COUNT conv=fdatasync 2>&1 || dd if=/dev/zero of=testfile bs=$BS count=$COUNT 2>&1) | tail -1)",
 		"SEC=$(echo \"$OUT\" | awk -F', ' '{print $(NF-1)}' | awk '{print $1}')",
 		"if [ -z \"$SEC\" ]; then SEC=0; fi",
@@ -275,7 +275,7 @@ func runIOPSBench(ctx context.Context, cs kubernetes.Interface, ns string) map[s
 	}
 	_, err := cs.CoreV1().Pods(ns).Create(ctx, pod, metav1.CreateOptions{})
 	if err != nil {
-        return map[string]interface{}{"estimated": false, "ok": false, "message": "permission denied or failed to create Pod: " + err.Error()}
+		return map[string]interface{}{"estimated": false, "ok": false, "message": "无权限或创建 Pod 失败: " + err.Error()}
 	}
 	defer func() { _ = cs.CoreV1().Pods(ns).Delete(context.Background(), name, metav1.DeleteOptions{}) }()
 	// wait for completion
@@ -294,7 +294,7 @@ func runIOPSBench(ctx context.Context, cs kubernetes.Interface, ns string) map[s
 	logReq := cs.CoreV1().Pods(ns).GetLogs(name, &corev1.PodLogOptions{Container: "bench"})
 	rc, e := logReq.Stream(ctx)
 	if e != nil {
-        return map[string]interface{}{"estimated": false, "ok": false, "message": "failed to read benchmark logs: " + e.Error()}
+		return map[string]interface{}{"estimated": false, "ok": false, "message": "无法读取基准日志: " + e.Error()}
 	}
 	defer rc.Close()
 	b, _ := io.ReadAll(rc)
@@ -321,8 +321,8 @@ func runIOPSBench(ctx context.Context, cs kubernetes.Interface, ns string) map[s
 			}
 		}
 	}
-    // expected: {"write":{"bs":4096,"ops":50000,"seconds":1.23,"iops":40650}}
-    res := map[string]interface{}{"estimated": true, "ok": false, "message": "failed to parse output"}
+	// expected: {"write":{"bs":4096,"ops":50000,"seconds":1.23,"iops":40650}}
+	res := map[string]interface{}{"estimated": true, "ok": false, "message": "未能解析输出"}
 	if strings.HasPrefix(line, "{") {
 		// very small parser
 		ok := false
@@ -383,7 +383,7 @@ func runIOPSBench(ctx context.Context, cs kubernetes.Interface, ns string) map[s
 			"bs":        bs,
 		}
 	} else if raw != "" {
-        // Fallback: parse seconds directly from dd output and estimate IOPS using defaults
+		// Fallback: parse seconds directly from dd output and estimate IOPS using defaults
 		re := regexp.MustCompile(`([0-9]+\.?[0-9]*)\s*s`)
 		matches := re.FindAllStringSubmatch(raw, -1)
 		if len(matches) > 0 {
@@ -392,15 +392,15 @@ func runIOPSBench(ctx context.Context, cs kubernetes.Interface, ns string) map[s
 				const defaultOps = 50000
 				const defaultBS = 4096
 				estIOPS := int64(float64(defaultOps) / sec)
-                res = map[string]interface{}{
-                    "estimated": true,
-                    "ok":        estIOPS > 0,
-                    "iops":      estIOPS,
-                    "seconds":   sec,
-                    "ops":       defaultOps,
-                    "bs":        defaultBS,
-                    "message":   "estimated from dd output (fallback)",
-                }
+				res = map[string]interface{}{
+					"estimated": true,
+					"ok":        estIOPS > 0,
+					"iops":      estIOPS,
+					"seconds":   sec,
+					"ops":       defaultOps,
+					"bs":        defaultBS,
+					"message":   "根据 dd 输出估算 (fallback)",
+				}
 			}
 		}
 	}
@@ -439,9 +439,9 @@ func Preflight(c *gin.Context) {
 
 	now := time.Now().UTC().Format(time.RFC3339)
 
-    // IOPS benchmark: placeholder per product decision.
-    // If later needed, re-enable runIOPSBench and replace the placeholder below.
-    iops := gin.H{"estimated": false, "ok": false, "message": "placeholder: please check disk IOPS in the monitoring system"}
+	// IOPS benchmark: switched to placeholder per product decision
+	// If later needed, re-enable runIOPSBench and replace the placeholder below.
+	iops := gin.H{"estimated": false, "ok": false, "message": "占位：请在监控系统查看磁盘 IOPS"}
 
 	c.JSON(http.StatusOK, gin.H{
 		"timestamp": now,
@@ -456,7 +456,7 @@ func Preflight(c *gin.Context) {
 			"controllerTime": now,
 			"skewAssessed":   false,
 			"ok":             true,
-            "message":        "clock skew not validated (placeholder)",
+			"message":        "未校验集群节点时钟漂移（占位）",
 		},
 		"iops": iops,
 	})
@@ -470,7 +470,7 @@ func BootstrapStatus(c *gin.Context) {
 	}
 
 	jobName := c.Query("jobName")
-    // Install Job is in the installer namespace, default polardbx-operator-system
+	// 安装 Job 位于安装器命名空间，默认 polardbx-operator-system
 	namespace := util.DefaultNamespace(c, "polardbx-operator-system")
 
 	if jobName == "" {
@@ -546,7 +546,7 @@ func BootstrapLogs(c *gin.Context) {
 	}
 
 	jobName := c.Query("jobName")
-    // Install Job is in the installer namespace, default polardbx-operator-system
+	// 安装 Job 位于安装器命名空间，默认 polardbx-operator-system
 	namespace := util.DefaultNamespace(c, "polardbx-operator-system")
 	tailLines := int64(100) // Default to last 100 lines
 

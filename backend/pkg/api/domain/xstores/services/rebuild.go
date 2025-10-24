@@ -16,15 +16,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// RebuildService: migrate Status first; other entrypoints will be orchestrated later
+// RebuildService：先迁移 Status，其他入口后续编排
 type RebuildService struct {
 	repo k8srepo.XStoreRepository
 }
 
 func NewRebuildService() *RebuildService { return &RebuildService{repo: k8srepo.NewXStoreRepository()} }
 
-// For tests: create XStoreFollower CR from path params and simplified body
-// Body example: {"name":"rebuild-logger-x1","xStoreName":"xstore1"}
+// 兼容测试需求：根据路径参数与简化体创建 XStoreFollower CR
+// 请求体示例：{"name":"rebuild-logger-x1","xStoreName":"xstore1"}
 func (s *RebuildService) Logger(c *gin.Context) {
 	createFollowerWithRole(c, polardbxv1xstore.FollowerRole("logger"))
 }
@@ -56,7 +56,7 @@ func (s *RebuildService) Status(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"namespace": ns, "xstore": xname, "active": items})
 }
 
-// Wait polls until the follower reaches a terminal phase (success/failed/deleting) with timeout and interval support.
+// Wait 轮询等待指定 follower 进入结束态（成功/失败/删除中），支持超时与间隔。
 func (s *RebuildService) Wait(c *gin.Context) {
 	cli, ok := util.K8sClientFromContext(c)
 	if !ok {
@@ -90,7 +90,7 @@ func (s *RebuildService) Wait(c *gin.Context) {
 	}
 }
 
-// Progress returns current follower status/message for external polling convenience.
+// Progress: 简单返回当前 follower 的状态与消息，便于外部轮询。
 func (s *RebuildService) Progress(c *gin.Context) {
 	cli, ok := util.K8sClientFromContext(c)
 	if !ok {
@@ -110,7 +110,7 @@ func (s *RebuildService) Progress(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"name": f.Name, "phase": string(f.Status.Phase), "message": f.Status.Message, "targetPod": f.Status.TargetPodName})
 }
 
-// Cancel deletes the XStoreFollower task
+// Cancel: 取消（删除）XStoreFollower 任务
 func (s *RebuildService) Cancel(c *gin.Context) {
 	cli, ok := util.K8sClientFromContext(c)
 	if !ok {
@@ -119,7 +119,7 @@ func (s *RebuildService) Cancel(c *gin.Context) {
 	ns := c.Param("namespace")
 	xstoreName := c.Param("name")
 
-    // Find all Follower tasks related to the given XStore
+	// 查找该 XStore 相关的所有 Follower 任务
 	followers, err := s.repo.ListFollowers(c.Request.Context(), cli, ns)
 	if err != nil {
 		util.HandleK8sError(c, "failed to list followers", err)
@@ -129,7 +129,7 @@ func (s *RebuildService) Cancel(c *gin.Context) {
 	var targetFollower *polardbxv1.XStoreFollower
 	for _, f := range followers {
 		if f.Spec.XStoreName == xstoreName {
-            // Find a non-terminal task
+			// 找到非终态的任务
 			if f.Status.Phase != polardbxv1xstore.FollowerPhaseSuccess &&
 				f.Status.Phase != polardbxv1xstore.FollowerPhaseFailed &&
 				f.Status.Phase != polardbxv1xstore.FollowerPhaseDeleting {
@@ -144,7 +144,7 @@ func (s *RebuildService) Cancel(c *gin.Context) {
 		return
 	}
 
-    // Delete the XStoreFollower task
+	// 删除 XStoreFollower 任务
 	if err := s.repo.DeleteFollower(c.Request.Context(), cli, ns, targetFollower.Name); err != nil {
 		util.HandleK8sError(c, "failed to cancel rebuild task", err)
 		return
@@ -157,7 +157,7 @@ func (s *RebuildService) Cancel(c *gin.Context) {
 	})
 }
 
-// Helper: create XStoreFollower with specified role
+// 内部帮助方法：根据角色创建 XStoreFollower
 func createFollowerWithRole(c *gin.Context, role polardbxv1xstore.FollowerRole) {
 	cli, ok := util.K8sClientFromContext(c)
 	if !ok {
@@ -194,7 +194,7 @@ func createFollowerWithRole(c *gin.Context, role polardbxv1xstore.FollowerRole) 
 	obj.Spec.XStoreName = xstoreName
 	obj.Spec.Role = role
 	obj.Spec.Local = false
-    // Auto-pick target pod (prefer pods with follower role and in Running phase)
+	// 自动选择目标 Pod（优先 follower 角色且 Running 的 Pod）
 	if obj.Spec.TargetPodName == "" || obj.Spec.FromPodName == "" {
 		var pods corev1.PodList
 		if err := cli.List(c.Request.Context(), &pods, client.InNamespace(ns)); err == nil {

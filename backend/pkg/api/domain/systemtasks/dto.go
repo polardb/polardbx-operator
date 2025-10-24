@@ -1,3 +1,3 @@
 package systemtasks
 
-// Domain DTO placeholder: input/output types for internal orchestration or composite scenarios.
+// 领域 DTO 占位：内部编排或复合场景用的输入输出。

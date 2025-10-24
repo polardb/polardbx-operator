@@ -42,7 +42,7 @@ func TestMonitoringStatus_ExistsFlags(t *testing.T) {
 	var resp map[string]any
 	_ = json.Unmarshal(w.Body.Bytes(), &resp)
 	comps := resp["components"].(map[string]any)
-    // In an empty cluster, exists may be false; the field should still be present
+	// 在空集群 exists 可能为 false，至少字段应存在
 	if _, ok := comps["prometheus"].(map[string]any)["exists"]; !ok {
 		t.Fatalf("prometheus.exists field not present")
 	}

@@ -45,9 +45,12 @@ export class ApiService {
   }
 
   private withNs(params?: HttpParams): HttpParams {
+    const base = params || new HttpParams();
     const stored = (localStorage.getItem('activeNamespace') || '').trim();
-    const ns = stored || 'polardbx-operator-system';
-    return (params || new HttpParams()).set('namespace', ns);
+    if (stored) {
+      return base.set('namespace', stored);
+    }
+    return base;
   }
 
   // 验证连接

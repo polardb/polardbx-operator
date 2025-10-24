@@ -14,6 +14,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
 import { CommonModule } from '@angular/common';
+import { finalize } from 'rxjs/operators';
 
 @Component({
   selector: 'app-connect',
@@ -158,7 +159,11 @@ export class ConnectComponent {
     }
 
     this.isConnecting = true;
-    this.apiService.connect(this.kubeconfig).subscribe({
+    this.apiService.connect(this.kubeconfig)
+      .pipe(finalize(() => {
+        this.isConnecting = false;
+      }))
+      .subscribe({
       next: () => {
         console.log('API连接成功，开始保存kubeconfig和跳转...');
         // 保存 kubeconfig 到 localStorage
@@ -186,9 +191,6 @@ export class ConnectComponent {
           duration: 6000,
           panelClass: ['error-snackbar']
         });
-      },
-      complete: () => {
-        this.isConnecting = false;
       }
     });
   }

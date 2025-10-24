@@ -70,7 +70,7 @@ func TestRunRestoreFlow_Fails_WhenClientMissing(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/n/a", nil)
 
 	RunRestoreFlow(c)
-    // May return 401 (middleware auth), or 200 + failed (local validation)
+	// 可能返回 401（中间件校验），或 200 + failed（本地校验）
 	if w.Code == http.StatusOK {
 		var rr map[string]any
 		_ = json.Unmarshal(w.Body.Bytes(), &rr)
@@ -84,7 +84,7 @@ func TestRunRestoreFlow_Fails_WhenParamsInvalid(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-    // Missing required namespace/name
+	// 缺少必要的 namespace/name
 	RunRestoreFlow(c)
 	if w.Code == http.StatusOK {
 		var rr map[string]any

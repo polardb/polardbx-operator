@@ -85,11 +85,11 @@ func saveList(c *gin.Context, cm *corev1.ConfigMap, list []Strategy) error {
 
 func List(c *gin.Context) {
 	cm, err := getStore(c)
-    if err != nil {
-        // Frontend compatibility: return empty list instead of 500 to avoid page crash
-        c.JSON(http.StatusOK, gin.H{"total": 0, "items": []any{}, "warning": "strategy store not accessible", "details": err.Error()})
-        return
-    }
+	if err != nil {
+		// 兼容前端：返回空列表而不是 500，避免页面崩溃
+		c.JSON(http.StatusOK, gin.H{"total": 0, "items": []any{}, "warning": "strategy store not accessible", "details": err.Error()})
+		return
+	}
 	if cm == nil {
 		c.JSON(http.StatusOK, gin.H{"total": 0, "items": []any{}})
 		return

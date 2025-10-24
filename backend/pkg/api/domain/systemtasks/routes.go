@@ -4,7 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// RegisterRoutes registers the entrypoint for the platform system tasks domain (thin shell forwarding to existing handlers).
+// RegisterRoutes 统一注册“平台任务域”的入口（薄壳，转发到既有 handlers）。
 func RegisterRoutes(v1 *gin.RouterGroup) {
 	g := v1.Group("/systemtasks")
 	g.GET("", List)

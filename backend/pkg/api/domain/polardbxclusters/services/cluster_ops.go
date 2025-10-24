@@ -12,12 +12,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ClusterService aggregates cluster-related orchestration.
+// ClusterService 聚合与集群相关的编排。
 type ClusterService struct{}
 
 func NewClusterService() *ClusterService { return &ClusterService{} }
 
-// UpdateLogConfig: minimal implementation, builds a JSON Patch and calls K8s.
+// UpdateLogConfig：最小实现，构造 JSON Patch 并调用 K8s。
 func (s *ClusterService) UpdateLogConfig(ctx context.Context, c *gin.Context) error {
 	cli, ok := util.K8sClientFromContext(c)
 	if !ok {
@@ -64,7 +64,7 @@ func (s *ClusterService) UpdateLogConfig(ctx context.Context, c *gin.Context) er
 	return nil
 }
 
-// Scale: minimal implementation, builds a replicas JSON Patch.
+// Scale：最小实现，构造 replicas JSON Patch。
 func (s *ClusterService) Scale(ctx context.Context, c *gin.Context) error {
 	cli, ok := util.K8sClientFromContext(c)
 	if !ok {
@@ -105,7 +105,7 @@ func (s *ClusterService) Scale(ctx context.Context, c *gin.Context) error {
 	return nil
 }
 
-// Upgrade: minimal implementation, sets target version and optional strategy.
+// Upgrade：最小实现，设置目标版本与可选策略。
 func (s *ClusterService) Upgrade(ctx context.Context, c *gin.Context) error {
 	cli, ok := util.K8sClientFromContext(c)
 	if !ok {
@@ -131,6 +131,6 @@ func (s *ClusterService) Upgrade(ctx context.Context, c *gin.Context) error {
 		return nil
 	}
 	log.Printf("ops Upgrade ok duration=%s", time.Since(start))
-	c.JSON(http.StatusOK, gin.H{"message": "Cluster upgrade initiated successfully", "upgrade": gin.H{"targetVersion": req.TargetVersion, "strategy": req.Strategy, "status": "started"}})
+	c.JSON(http.StatusOK, gin.H{"message": "Cluster upgrade initiated successfully", "upgrade": gin.H{"targetVersion": req.TargetVersion, "strategy": req.Strategy, "status": "升级已启动"}})
 	return nil
 }
