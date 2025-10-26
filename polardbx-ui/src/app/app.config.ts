@@ -1,4 +1,4 @@
-import { ApplicationConfig, provideZoneChangeDetection } from '@angular/core';
+import { ApplicationConfig, importProvidersFrom, provideZoneChangeDetection } from '@angular/core';
 import { provideRouter } from '@angular/router';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
@@ -8,6 +8,8 @@ import { provideNzConfig } from 'ng-zorro-antd/core/config';
 import { LOCALE_ID } from '@angular/core';
 import { registerLocaleData } from '@angular/common';
 import zh from '@angular/common/locales/zh';
+import { NzMessageModule } from 'ng-zorro-antd/message';
+import { NzModalModule } from 'ng-zorro-antd/modal';
 
 registerLocaleData(zh);
 import {
@@ -46,6 +48,7 @@ import {
   GlobalOutline,
   ClockCircleOutline,
   CheckCircleOutline,
+  CheckCircleFill,
   ExclamationCircleOutline,
   CloseCircleOutline,
   CloseOutline,
@@ -113,6 +116,7 @@ export const appConfig: ApplicationConfig = {
     provideNzConfig({
       tabs: { nzAnimated: false }
     }),
+    importProvidersFrom(NzMessageModule, NzModalModule),
     provideNzIcons([
       MenuFoldOutline,
       MenuUnfoldOutline,
@@ -149,6 +153,7 @@ export const appConfig: ApplicationConfig = {
       GlobalOutline,
       ClockCircleOutline,
       CheckCircleOutline,
+      CheckCircleFill,
       ExclamationCircleOutline,
       CloseCircleOutline,
       CloseOutline,

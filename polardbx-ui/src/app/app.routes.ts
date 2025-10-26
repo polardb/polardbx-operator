@@ -160,7 +160,7 @@ export const routes: Routes = [
             path: 'monitoring',
             loadComponent: () => import('./components/monitoring-hub/monitoring-hub.component').then(m => m.MonitoringHubComponent),
             children: [
-              { path: '', redirectTo: 'install', pathMatch: 'full' },
+              { path: '', redirectTo: 'overview', pathMatch: 'full' },
               { path: 'overview', loadComponent: () => import('./components/monitoring-overview/monitoring-overview.component').then(m => m.MonitoringOverviewComponent) },
               { path: 'config', loadComponent: () => import('./components/monitor-management/monitor-management.component').then(m => m.MonitorManagementComponent) },
               // 旧的安装向导（模拟版）重定向到新的 enable-wizard
@@ -168,6 +168,8 @@ export const routes: Routes = [
               { path: 'enable-wizard', loadComponent: () => import('./components/monitoring-enable-wizard/monitoring-enable-wizard.component').then(m => m.MonitoringEnableWizardComponent) },
               { path: 'health', loadComponent: () => import('./components/monitoring-health/monitoring-health.component').then(m => m.MonitoringHealthComponent) },
               { path: 'preflight', loadComponent: () => import('./components/monitoring-preflight/monitoring-preflight.component').then(m => m.MonitoringPreflightComponent) },
+              { path: 'dashboards', loadComponent: () => import('./components/monitoring-dashboard-templates/monitoring-dashboard-templates.component').then(m => m.MonitoringDashboardTemplatesComponent) },
+              { path: 'alert-templates', loadComponent: () => import('./components/monitoring-alert-rule-templates/monitoring-alert-rule-templates.component').then(m => m.MonitoringAlertRuleTemplatesComponent) },
               { path: 'grafana', loadComponent: () => import('./components/grafana-embed/grafana-embed.component').then(m => m.GrafanaEmbedComponent) },
               { path: 'alerts', loadComponent: () => import('./components/alerts-aggregation/alerts-aggregation.component').then(m => m.AlertsAggregationComponent) },
               { path: 'alerts-mgr', loadComponent: () => import('./components/alerts-management/alerts-management.component').then(m => m.AlertsManagementComponent) },

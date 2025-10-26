@@ -93,42 +93,38 @@
       
       <li nz-submenu nzTitle="运维管理" nzIcon="setting">
         <ul>
-          <li nz-menu-item routerLink="/operations/monitoring/enable-wizard" nzMatchRouter>
+          <li nz-menu-item routerLink="/operations/monitoring/enable-wizard" nzMatchRouter [nzMatchRouterExact]="true">
             <nz-icon nzType="dashboard"></nz-icon>
             <span>监控安装向导</span>
           </li>
-          <li nz-menu-item routerLink="/operations/logs/install" nzMatchRouter>
+          <li nz-menu-item routerLink="/operations/logs/install" nzMatchRouter [nzMatchRouterExact]="true">
             <nz-icon nzType="container"></nz-icon>
             <span>日志采集安装向导</span>
           </li>
  
           <li nz-submenu nzTitle="参数与调优" nzIcon="sliders">
             <ul>
-              <li nz-menu-item routerLink="/operations/parameter-templates" nzMatchRouter>
+              <li nz-menu-item routerLink="/operations/parameter-templates" nzMatchRouter [nzMatchRouterExact]="true">
                 <nz-icon nzType="control"></nz-icon>
                 <span>参数模板</span>
-              </li>
-              <li nz-menu-item routerLink="/operations/cluster-knobs" nzMatchRouter>
-                <nz-icon nzType="api"></nz-icon>
-                <span>集群调优（todo）</span>
               </li>
             </ul>
           </li>
 
           <li nz-submenu nzTitle="运维助手" nzIcon="tool">
             <ul>
-              <li nz-menu-item routerLink="/operations/diagnostics" nzMatchRouter>
+              <li nz-menu-item routerLink="/operations/diagnostics" nzMatchRouter [nzMatchRouterExact]="true">
                 <nz-icon nzType="file-search"></nz-icon>
                 <span>诊断与排障</span>
               </li>
-              <li nz-menu-item routerLink="/operations/runbook-slo" nzMatchRouter>
+              <li nz-menu-item routerLink="/operations/runbook-slo" nzMatchRouter [nzMatchRouterExact]="true">
                 <nz-icon nzType="book"></nz-icon>
                 <span>Runbook / SLO</span>
               </li>
             </ul>
           </li>
 
-          <li nz-menu-item routerLink="/operations/settings" nzMatchRouter>
+          <li nz-menu-item routerLink="/operations/settings" nzMatchRouter [nzMatchRouterExact]="true">
             <nz-icon nzType="control"></nz-icon>
             <span>阈值与设置</span>
           </li>

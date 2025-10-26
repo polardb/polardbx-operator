@@ -12,11 +12,13 @@ import (
 	"time"
 
 	"polardbx-ui-backend/pkg/api/util"
+	"polardbx-ui-backend/pkg/config"
 
 	"github.com/gin-gonic/gin"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -142,7 +144,7 @@ func Bootstrap(c *gin.Context) {
 					AutomountServiceAccountToken: func(b bool) *bool { return &b }(true),
 					Containers: []corev1.Container{{
 						Name:            "helm",
-						Image:           "alpine/helm:3.12.3",
+						Image:           config.GetGlobalConfig().GetHelmImage(),
 						ImagePullPolicy: corev1.PullIfNotPresent,
 						Command:         []string{"sh", "-c", command},
 					}},
@@ -176,6 +178,17 @@ func Status(c *gin.Context) {
 	// 监控组件默认部署在 polardbx-monitor，可通过 ?namespace= 覆盖
 	ns := util.DefaultNamespace(c, "polardbx-monitor")
 
+	namespaceExists := true
+	namespaceError := ""
+	if err := cli.Get(c.Request.Context(), client.ObjectKey{Name: ns}, &corev1.Namespace{}); err != nil {
+		if apierrors.IsNotFound(err) {
+			namespaceExists = false
+		} else {
+			namespaceExists = false
+			namespaceError = err.Error()
+		}
+	}
+
 	checkDeploy := func(name string) (ready, desired int32, ok bool) {
 		dep := appsv1.Deployment{}
 		if err := cli.Get(c.Request.Context(), client.ObjectKey{Namespace: ns, Name: name}, &dep); err == nil {
@@ -190,45 +203,187 @@ func Status(c *gin.Context) {
 		}
 		return 0, 0, false
 	}
-	checkService := func(name string) bool {
-		svc := corev1.Service{}
-		return cli.Get(c.Request.Context(), client.ObjectKey{Namespace: ns, Name: name}, &svc) == nil
+	checkService := func(name string) (*corev1.Service, bool) {
+		svc := &corev1.Service{}
+		ok := cli.Get(c.Request.Context(), client.ObjectKey{Namespace: ns, Name: name}, svc) == nil
+		return svc, ok
 	}
 
-	prom := gin.H{"ready": false}
+	checkCRD := func(name, display string) gin.H {
+		crd := &apiextensionsv1.CustomResourceDefinition{}
+		err := cli.Get(c.Request.Context(), client.ObjectKey{Name: name}, crd)
+		if err != nil {
+			resp := gin.H{
+				"name":          name,
+				"displayName":   display,
+				"exists":        false,
+				"established":   false,
+				"namesAccepted": false,
+			}
+			if !apierrors.IsNotFound(err) {
+				resp["error"] = err.Error()
+			}
+			return resp
+		}
+
+		established := false
+		namesAccepted := false
+		conditions := make([]gin.H, 0, len(crd.Status.Conditions))
+		for _, cond := range crd.Status.Conditions {
+			if cond.Type == apiextensionsv1.Established && cond.Status == apiextensionsv1.ConditionTrue {
+				established = true
+			}
+			if cond.Type == apiextensionsv1.NamesAccepted && cond.Status == apiextensionsv1.ConditionTrue {
+				namesAccepted = true
+			}
+			conditions = append(conditions, gin.H{
+				"type":               string(cond.Type),
+				"status":             string(cond.Status),
+				"reason":             cond.Reason,
+				"message":            cond.Message,
+				"lastTransitionTime": cond.LastTransitionTime,
+			})
+		}
+
+		versions := make([]gin.H, 0, len(crd.Spec.Versions))
+		for _, ver := range crd.Spec.Versions {
+			versions = append(versions, gin.H{
+				"name":    ver.Name,
+				"served":  ver.Served,
+				"storage": ver.Storage,
+			})
+		}
+
+		shortNames := make([]string, len(crd.Spec.Names.ShortNames))
+		copy(shortNames, crd.Spec.Names.ShortNames)
+
+		return gin.H{
+			"name":           name,
+			"displayName":    display,
+			"exists":         true,
+			"group":          crd.Spec.Group,
+			"kind":           crd.Spec.Names.Kind,
+			"plural":         crd.Spec.Names.Plural,
+			"singular":       crd.Spec.Names.Singular,
+			"shortNames":     shortNames,
+			"scope":          string(crd.Spec.Scope),
+			"versions":       versions,
+			"storedVersions": crd.Status.StoredVersions,
+			"established":    established,
+			"namesAccepted":  namesAccepted,
+			"conditions":     conditions,
+		}
+	}
+
+	// Helper to generate access URL for service
+	generateServiceAccessURL := func(svcName string) string {
+		svc, ok := checkService(svcName)
+		if !ok {
+			return ""
+		}
+
+		// LoadBalancer: return external IP if available
+		if svc.Spec.Type == corev1.ServiceTypeLoadBalancer {
+			if len(svc.Status.LoadBalancer.Ingress) > 0 {
+				ingress := svc.Status.LoadBalancer.Ingress[0]
+				if ingress.Hostname != "" {
+					return fmt.Sprintf("http://%s", ingress.Hostname)
+				}
+				if ingress.IP != "" {
+					return fmt.Sprintf("http://%s", ingress.IP)
+				}
+			}
+		}
+
+		// NodePort: return first node IP + port (user needs to know node IP)
+		if svc.Spec.Type == corev1.ServiceTypeNodePort {
+			for _, port := range svc.Spec.Ports {
+				if port.NodePort > 0 {
+					// Return instruction: user should find node IP and use it
+					return fmt.Sprintf("NodePort: %d (需要使用 <node-ip>:%d 访问)", port.NodePort, port.NodePort)
+				}
+			}
+		}
+
+		// ClusterIP: return port-forward instruction
+		if svc.Spec.Type == corev1.ServiceTypeClusterIP {
+			for _, port := range svc.Spec.Ports {
+				return fmt.Sprintf("port-forward svc/%s -n %s %d:3000", svcName, ns, port.Port)
+			}
+		}
+
+		return ""
+	}
+
+	prom := gin.H{"ready": false, "readyReplicas": nil, "replicas": nil, "service": false, "exists": false}
 	if r, d, ok := checkStateful("prometheus-k8s"); ok {
-		prom = gin.H{"ready": r == d, "readyReplicas": r, "replicas": d}
+		prom["ready"] = r == d
+		prom["readyReplicas"] = r
+		prom["replicas"] = d
+	} else if r, d, ok := checkStateful("kube-prometheus-stack-prometheus"); ok {
+		prom["ready"] = r == d
+		prom["readyReplicas"] = r
+		prom["replicas"] = d
 	}
-	if !prom["ready"].(bool) {
-		if r, d, ok := checkStateful("kube-prometheus-stack-prometheus"); ok {
-			prom = gin.H{"ready": r == d, "readyReplicas": r, "replicas": d}
-		}
+	promSvc, promExists := checkService("prometheus-k8s")
+	if !promExists {
+		_, promExists = checkService("kube-prometheus-stack-prometheus")
+		promSvc, _ = checkService("kube-prometheus-stack-prometheus")
 	}
-	prom["service"] = checkService("prometheus-k8s") || checkService("kube-prometheus-stack-prometheus")
-	prom["exists"] = prom["readyReplicas"] != nil || prom["service"].(bool)
+	prom["service"] = promExists
+	prom["exists"] = prom["readyReplicas"] != nil || promExists
+	if promExists {
+		prom["accessUrl"] = generateServiceAccessURL(promSvc.Name)
+	}
 
-	graf := gin.H{"ready": false}
+	graf := gin.H{"ready": false, "readyReplicas": nil, "replicas": nil, "service": false, "exists": false}
 	if r, d, ok := checkDeploy("grafana"); ok {
-		graf = gin.H{"ready": r == d, "readyReplicas": r, "replicas": d}
+		graf["ready"] = r == d
+		graf["readyReplicas"] = r
+		graf["replicas"] = d
+	} else if r, d, ok := checkDeploy("kube-prometheus-stack-grafana"); ok {
+		graf["ready"] = r == d
+		graf["readyReplicas"] = r
+		graf["replicas"] = d
 	}
-	if !graf["ready"].(bool) {
-		if r, d, ok := checkDeploy("kube-prometheus-stack-grafana"); ok {
-			graf = gin.H{"ready": r == d, "readyReplicas": r, "replicas": d}
-		}
+	grafSvc, grafExists := checkService("grafana")
+	if !grafExists {
+		_, grafExists = checkService("kube-prometheus-stack-grafana")
+		grafSvc, _ = checkService("kube-prometheus-stack-grafana")
 	}
-	graf["service"] = checkService("grafana") || checkService("kube-prometheus-stack-grafana")
-	graf["exists"] = graf["readyReplicas"] != nil || graf["service"].(bool)
+	graf["service"] = grafExists
+	graf["exists"] = graf["readyReplicas"] != nil || grafExists
+	if grafExists {
+		graf["accessUrl"] = generateServiceAccessURL(grafSvc.Name)
+	}
 
-	am := gin.H{"configured": checkService("alertmanager-main") || checkService("kube-prometheus-stack-alertmanager")}
-	am["exists"] = am["configured"].(bool)
+	am := gin.H{"configured": false}
+	_, amExists := checkService("alertmanager-main")
+	if !amExists {
+		_, amExists = checkService("kube-prometheus-stack-alertmanager")
+	}
+	am["configured"] = amExists
+	am["exists"] = amExists
+
+	crds := gin.H{
+		"serviceMonitor":  checkCRD("servicemonitors.monitoring.coreos.com", "ServiceMonitor"),
+		"polardbxMonitor": checkCRD("polardbxmonitors.polardbx.aliyun.com", "PolarDBXMonitor"),
+	}
+	prereq := gin.H{
+		"generatedAt": time.Now().UTC().Format(time.RFC3339),
+		"crds":        crds,
+	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"namespace": ns,
+		"namespace":       ns,
+		"namespaceExists": namespaceExists,
+		"namespaceError":  namespaceError,
 		"components": gin.H{
 			"prometheus":   prom,
 			"grafana":      graf,
 			"alertmanager": am,
 		},
+		"prerequisites": prereq,
 	})
 }
 

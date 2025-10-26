@@ -1,0 +1,84 @@
+{
+  "lastUpdated": "2025-10-25T00:00:00Z",
+  "categories": [
+    {
+      "id": "polardbx-cn",
+      "name": "PolarDB-X CN",
+      "description": "Cluster Node (CN) 连接数、慢 SQL、错误率等核心指标。"
+    },
+    {
+      "id": "polardbx-dn",
+      "name": "PolarDB-X DN",
+      "description": "存储节点连接资源、防止 DN 过载的关键指标。"
+    },
+    {
+      "id": "polardbx-cdc",
+      "name": "PolarDB-X CDC",
+      "description": "Dumper 延迟等 CDC 关键链路可观测性。"
+    },
+    {
+      "id": "node-resources",
+      "name": "节点资源",
+      "description": "节点 CPU、内存、磁盘、IO 资源利用监控。"
+    },
+    {
+      "id": "recording",
+      "name": "Recording Rules",
+      "description": "Prometheus 录制规则，为复杂指标计算提供复用。"
+    }
+  ],
+  "templates": [
+    {
+      "name": "polardbx-alert-rules-polardbx-cn",
+      "title": "PolarDB-X CN 运行态监控",
+      "description": "覆盖 CN 节点连接数、慢 SQL、错误 SQL 等高优先级告警。",
+      "category": "polardbx-cn",
+      "severity": "critical",
+      "recommended": true,
+      "tags": ["cn", "连接", "慢SQL", "错误率"],
+      "docLink": "https://doc.polardbx.com/zh/operator/ops/monitor/alerts.html",
+      "defaultNamespace": "polardbx-monitor"
+    },
+    {
+      "name": "polardbx-alert-rules-polardbx-dn",
+      "title": "PolarDB-X DN 资源守护",
+      "description": "关注 DN 连接占用、慢 SQL、max_connections 等瓶颈指标。",
+      "category": "polardbx-dn",
+      "severity": "warning",
+      "tags": ["dn", "连接", "slow query"],
+      "recommended": true,
+      "docLink": "https://doc.polardbx.com/zh/operator/ops/monitor/alerts.html",
+      "defaultNamespace": "polardbx-monitor"
+    },
+    {
+      "name": "polardbx-alert-rules-polardbx-cdc",
+      "title": "PolarDB-X CDC 延迟监控",
+      "description": "监控 CDC dumper 延迟，提前发现链路阻塞问题。",
+      "category": "polardbx-cdc",
+      "severity": "warning",
+      "tags": ["cdc", "delay"],
+      "docLink": "https://doc.polardbx.com/zh/operator/ops/monitor/alerts.html",
+      "defaultNamespace": "polardbx-monitor"
+    },
+    {
+      "name": "polardbx-alert-rules-polardbx-node-resources",
+      "title": "PolarDB-X 节点资源告警",
+      "description": "提供节点 CPU、内存、磁盘、IO 等资源监控告警。",
+      "category": "node-resources",
+      "severity": "warning",
+      "tags": ["node", "cpu", "memory", "disk", "io"],
+      "docLink": "https://doc.polardbx.com/zh/operator/ops/monitor/node.html",
+      "defaultNamespace": "polardbx-monitor"
+    },
+    {
+      "name": "prometheus-polardbx-rules-polardbx-rules",
+      "title": "PolarDB-X Recording Rules",
+      "description": "提供 PolarDB-X 关键指标的 Recording Rule，便于 Grafana / 告警复用。",
+      "category": "recording",
+      "severity": "info",
+      "tags": ["recording", "performance"],
+      "docLink": "https://doc.polardbx.com/zh/operator/ops/monitor/alerts.html",
+      "defaultNamespace": "polardbx-monitor"
+    }
+  ]
+}

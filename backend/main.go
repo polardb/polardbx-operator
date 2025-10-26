@@ -70,6 +70,12 @@ func main() {
 	// API v1 group
 	v1 := r.Group("/api/v1")
 
+	// Public endpoints that don't require kubeconfig authentication
+	v1.GET("/image-registry/config", api_settings.GetImageRegistryConfig)
+	v1.PUT("/image-registry/config", api_settings.UpdateImageRegistryConfig)
+	v1.GET("/image-registry/presets", api_settings.GetAvailableRegistries)
+	v1.POST("/image-registry/test", api_settings.TestImageRegistry)
+
 	// The connect endpoint is special, it establishes the client for subsequent requests
 	v1.POST("/connect", api.KubeconfigAuthMiddleware(), api.Connect)
 
@@ -144,6 +150,9 @@ func main() {
 		v1.GET("/prometheus-rules", api_prometheusrule.List)                          // PrometheusRule resources
 		v1.GET("/prometheus-rules/:namespace/:name/yaml", api_prometheusrule.GetYAML) // Get YAML
 		v1.POST("/prometheus-rules/validate", api_prometheusrule.ValidateRule)        // Validate YAML
+		v1.GET("/prometheus-rules/templates", api_prometheusrule.ListTemplates)
+		v1.GET("/prometheus-rules/templates/:name", api_prometheusrule.GetTemplate)
+		v1.POST("/prometheus-rules/apply", api_prometheusrule.ApplyTemplate)
 
 		// Pre-change safety checklist
 		v1.GET("/clusters/:namespace/:name/prechange-check", domain_pxc.GetPrechangeChecklist)
@@ -236,6 +245,8 @@ func main() {
 
 		// Monitoring / Grafana（保持原实现）
 		v1.POST("/monitoring/bootstrap", api_monitoring.Bootstrap)
+		v1.GET("/monitoring/bootstrap/status", api_monitoring.BootstrapStatus)
+		v1.GET("/monitoring/bootstrap/logs", api_monitoring.BootstrapLogs)
 		v1.GET("/monitoring/status", api_monitoring.Status)
 		v1.GET("/monitoring/preflight", api_monitoring.Preflight)
 		v1.DELETE("/monitoring/uninstall", api_monitoring.Uninstall)
@@ -245,6 +256,8 @@ func main() {
 		v1.GET("/monitoring/grafana/dashboards", api_grafana.ListDashboards)
 		v1.GET("/monitoring/grafana/dashboards/:name/versions", api_grafana.ListDashboardVersions)
 		v1.POST("/monitoring/grafana/dashboards/:name/rollback", api_grafana.RollbackDashboard)
+		v1.GET("/monitoring/grafana/templates", api_grafana.ListTemplates)
+		v1.GET("/monitoring/grafana/templates/:name", api_grafana.GetTemplate)
 
 		// BackupBinlog routes（改由 domain handlers 接管，路径保持不变）
 		v1.GET("/backup-binlogs", domain_pxc.ListBackupBinlogs)

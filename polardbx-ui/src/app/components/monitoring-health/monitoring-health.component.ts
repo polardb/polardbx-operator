@@ -166,6 +166,7 @@ export class MonitoringHealthComponent implements OnInit {
   loading = false;
   rows: { component: string; ready: boolean; detail?: string }[] = [];
   cols = ['component', 'ready', 'detail'];
+  private readonly monitoringNamespaceFallback = 'polardbx-monitor';
 
   constructor(private api: ApiService) {}
 
@@ -173,23 +174,163 @@ export class MonitoringHealthComponent implements OnInit {
 
   reload() {
     this.loading = true;
+    this.rows = [];
+    
+    console.log('[监控健康] 开始重新加载状态');
+    
     this.api.getSystemContext().subscribe({
       next: (ctx) => {
-        const ns = ctx?.defaultNamespace;
-        this.api.getMonitoringStatus(ns || undefined).subscribe({
-          next: (s: any) => {
-            const comp = s?.components || {};
+        const rawNamespace = (ctx?.defaultNamespace || '').trim();
+        const candidateNamespace = this.normalizeNamespace(rawNamespace);
+        // 始终显式传递 polardbx-monitor，避免后端使用 kubeconfig 默认命名空间
+        const requestNamespace = this.monitoringNamespaceFallback;
+
+        console.log('[监控健康] 系统上下文:', {
+          rawNamespace,
+          candidateNamespace,
+          requestNamespace,
+          fallback: this.monitoringNamespaceFallback
+        });
+
+        this.api.getMonitoringStatus(requestNamespace).subscribe({
+          next: (status: any) => {
+            console.log('[监控健康] 监控状态响应:', status);
+            
+            const namespace = status?.namespace || candidateNamespace || this.monitoringNamespaceFallback;
+            const namespaceExists = status?.namespaceExists !== false;
+            const namespaceError = status?.namespaceError ? `：${status.namespaceError}` : '';
+            const prereq = status?.prerequisites;
+            const comp = status?.components || {};
+
+            console.log('[监控健康] 解析后的状态:', {
+              namespace,
+              namespaceExists,
+              components: Object.keys(comp),
+              prerequisites: prereq ? Object.keys(prereq) : []
+            });
+
             this.rows = [
-              { component: 'Prometheus', ready: !!comp?.prometheus?.ready, detail: `readyReplicas=${comp?.prometheus?.readyReplicas ?? '-'} / replicas=${comp?.prometheus?.replicas ?? '-'}` },
-              { component: 'Grafana', ready: !!comp?.grafana?.ready, detail: `readyReplicas=${comp?.grafana?.readyReplicas ?? '-'} / replicas=${comp?.grafana?.replicas ?? '-'}` },
-              { component: 'Alertmanager', ready: !!comp?.alertmanager?.configured, detail: comp?.alertmanager?.configured ? '配置已发现' : '未配置' }
-            ];
+              {
+                component: '命名空间',
+                ready: namespaceExists,
+                detail: namespaceExists
+                  ? `正在检查 ${namespace}`
+                  : `未找到命名空间 ${namespace}${namespaceError}`
+              },
+              this.formatComponentRow('Prometheus', comp?.prometheus, {
+                missingMessage: '未发现 Prometheus StatefulSet',
+                namespace,
+                namespaceExists
+              }),
+              this.formatComponentRow('Grafana', comp?.grafana, {
+                missingMessage: '未发现 Grafana Deployment',
+                namespace,
+                namespaceExists
+              }),
+              {
+                component: 'Alertmanager',
+                ready: !!comp?.alertmanager?.configured,
+                detail: comp?.alertmanager?.configured ? 'Service 已配置' : '未配置 Alertmanager Service'
+              }
+            ].filter((row): row is { component: string; ready: boolean; detail?: string } => !!row);
+
+            if (prereq?.crds) {
+              const monitorCRD = prereq.crds.polardbxMonitor;
+              if (monitorCRD) {
+                this.rows.push({
+                  component: 'PolarDBXMonitor CRD',
+                  ready: !!monitorCRD.exists && !!monitorCRD.established,
+                  detail: monitorCRD.exists ? 'CRD 已建立' : '未发现 CRD polardbxmonitors.polardbx.aliyun.com'
+                });
+              }
+              const serviceMonitorCRD = prereq.crds.serviceMonitor;
+              if (serviceMonitorCRD) {
+                this.rows.push({
+                  component: 'ServiceMonitor CRD',
+                  ready: !!serviceMonitorCRD.exists && !!serviceMonitorCRD.established,
+                  detail: serviceMonitorCRD.exists ? 'CRD 已建立' : '未发现 CRD servicemonitors.monitoring.coreos.com'
+                });
+              }
+            }
+
+            console.log('[监控健康] 最终行数据:', this.rows);
           },
-          error: () => { this.rows = []; this.loading = false; },
+          error: (err) => {
+            console.error('[监控健康] 获取监控状态失败:', err);
+            this.rows = [];
+            this.loading = false;
+          },
           complete: () => { this.loading = false; }
         });
       },
-      error: () => { this.rows = []; this.loading = false; }
+      error: (err) => {
+        console.error('[监控健康] 获取系统上下文失败:', err);
+        this.rows = [];
+        this.loading = false;
+      }
     });
   }
-}
+
+  private normalizeNamespace(namespace: string): string {
+    if (!namespace) {
+      return this.monitoringNamespaceFallback;
+    }
+    const lowered = namespace.toLowerCase();
+    if (['default', 'kube-system', 'polardbx-operator-system'].includes(lowered)) {
+      return this.monitoringNamespaceFallback;
+    }
+    return namespace;
+  }
+
+  private formatComponentRow(
+    component: string,
+    target: any,
+    options: { missingMessage: string; namespace: string; namespaceExists: boolean }
+  ): { component: string; ready: boolean; detail?: string } | null {
+    console.log(`[监控健康] formatComponentRow - ${component}:`, {
+      target,
+      namespaceExists: options.namespaceExists,
+      readyReplicas: target?.readyReplicas,
+      service: target?.service,
+      ready: target?.ready
+    });
+
+    if (!options.namespaceExists) {
+      return {
+        component,
+        ready: false,
+        detail: `无法检查，命名空间 ${options.namespace} 不存在`
+      };
+    }
+
+    if (!target || (target.readyReplicas == null && !target.service)) {
+      console.warn(`[监控健康] ${component} 检测失败 - 条件不满足:`, {
+        targetExists: !!target,
+        readyReplicasNull: target?.readyReplicas == null,
+        noService: !target?.service
+      });
+      return { component, ready: false, detail: options.missingMessage };
+    }
+
+    const ready = !!target.ready;
+    const readyReplicas = target.readyReplicas ?? '-';
+    const replicas = target.replicas ?? '-';
+    const access = target.accessUrl || (target.service ? '已发现 Service' : '');
+    const segments = [`readyReplicas=${readyReplicas} / replicas=${replicas}`];
+    if (access) {
+      segments.push(typeof access === 'string' ? access : String(access));
+    }
+    
+    console.log(`[监控健康] ${component} 格式化结果:`, {
+      ready,
+      readyReplicas,
+      replicas,
+      access
+    });
+
+    return {
+      component,
+      ready,
+      detail: segments.join(' | ')
+    };
+  }}

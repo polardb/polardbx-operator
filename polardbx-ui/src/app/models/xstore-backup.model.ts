@@ -74,34 +74,16 @@ export interface XStoreBackupSpec {
 }
 
 export interface XStoreBackupStatus {
-  readonly phase?: string;                      // Current phase: Pending, Running, Completed, Failed
-  readonly stage?: string;                      // Current stage within phase
-  readonly conditions?: Array<{
-    type: string;
-    status: string;
-    lastTransitionTime?: string;
-    lastUpdateTime?: string;
-    reason?: string;
-    message?: string;
-  }>;
-  readonly observedGeneration?: number;
-  readonly startTime?: string;                  // Backup start time
-  readonly completionTime?: string;             // Backup completion time
-  readonly backupSize?: number;                 // Size of backup in bytes
-  readonly compressedSize?: number;             // Compressed size in bytes
-  readonly progress?: {
-    percentage?: number;
-    estimatedTimeRemaining?: string;
-    bytesTransferred?: number;
-    totalBytes?: number;
-  };
-  readonly lastSuccessfulBackup?: string;       // Last successful backup time
-  readonly failureCount?: number;               // Number of failed backup attempts
-  readonly backupLocation?: string;             // Storage location of backup
-  readonly checksum?: string;                   // Backup checksum for integrity
-}
-
-export interface XStoreBackup {
+  phase?: 'New' | 'FullBackuping' | 'BackupCollecting' | 'BinlogBackuping' | 'BinlogWaiting' | 'MetadataBackuping' | 'Finished' | 'Failed' | 'Deleting' | '';
+  startTime?: string;
+  endTime?: string;
+  targetPod?: string;
+  commitIndex?: number;
+  storageName?: string;
+  backupRootPath?: string;
+  backupSetTimestamp?: string;
+  message?: string;
+}export interface XStoreBackup {
   readonly apiVersion?: string;
   readonly kind?: string;
   readonly metadata: {

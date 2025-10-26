@@ -9,6 +9,19 @@ import { PolarDBXBackup } from '../../models/backup.model';
 import { NamespaceService } from '../../services/namespace.service';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
+import { BackupPhase, BackupProgressMetadata, BackupSubPhase } from '../../models/backup-progress.model';
+import { BackupProgressIndicatorComponent } from '../backup-progress-indicator/backup-progress-indicator.component';
+import { BackupType } from '../../utils/backup-progress-strategies';
+import { 
+  mapBackupPhaseToUIStatus, 
+  isBackupRunning, 
+  isBackupCompletedStatus,
+  isBackupFailedStatus,
+  getPhaseDisplayLabel,
+  getPhaseStatusColor,
+  getPhaseStatusStyle,
+  canDeleteBackup
+} from '../../models/enums/backup-phase-helpers';
 
 // Ant Design Zorro imports
 import { NzCardModule } from 'ng-zorro-antd/card';
@@ -64,7 +77,8 @@ import { NzDrawerModule } from 'ng-zorro-antd/drawer';
     NzStatisticModule,
     NzDescriptionsModule,
     NzAlertModule,
-    NzDrawerModule
+    NzDrawerModule,
+    BackupProgressIndicatorComponent
   ],
   template: `
     <div class="backup-management-container">
@@ -213,12 +227,12 @@ import { NzDrawerModule } from 'ng-zorro-antd/drawer';
                             <div class="backup-name-cell">
                               <span class="resource-name">{{ backup.metadata.name }}</span>
                               <div *ngIf="isRunningEx(backup)" class="progress-indicator">
-                                <nz-progress 
-                                  [nzPercent]="0" 
-                                  nzStatus="active" 
-                                  [nzShowInfo]="false" 
-                                  [nzStrokeWidth]="2">
-                                </nz-progress>
+                                <app-backup-progress-indicator
+                                  [metadata]="toBackupMetadata(backup)"
+                                  [type]="BackupType.POLARDBX"
+                                  size="small"
+                                  [showDetails]="false">
+                                </app-backup-progress-indicator>
                       </div>
                       </div>
                           </td>
@@ -232,12 +246,12 @@ import { NzDrawerModule } from 'ng-zorro-antd/drawer';
                           </td>
                           <td>
                             <div class="progress-cell">
-                              <nz-progress 
-                                [nzPercent]="getProgressPercent(backup)" 
-                                [nzStatus]="getProgressStatus(backup)"
-                                [nzSize]="'small'"
-                                [nzFormat]="progressFormat">
-                              </nz-progress>
+                              <app-backup-progress-indicator
+                                [metadata]="toBackupMetadata(backup)"
+                                [type]="BackupType.POLARDBX"
+                                size="small"
+                                [showDetails]="false">
+                              </app-backup-progress-indicator>
                             </div>
                           </td>
                           <td>
@@ -567,10 +581,12 @@ import { NzDrawerModule } from 'ng-zorro-antd/drawer';
                 </nz-tag>
               </nz-descriptions-item>
               <nz-descriptions-item nzTitle="进度">
-                <nz-progress 
-                  [nzPercent]="getProgressPercent(selectedBackup)" 
-                  [nzStatus]="getProgressStatus(selectedBackup)">
-                </nz-progress>
+                <app-backup-progress-indicator
+                  [metadata]="toBackupMetadata(selectedBackup)"
+                  [type]="BackupType.POLARDBX"
+                  size="small"
+                  [showDetails]="true">
+                </app-backup-progress-indicator>
               </nz-descriptions-item>
               <nz-descriptions-item nzTitle="存储连通性">
                 <nz-tag 
@@ -767,6 +783,7 @@ export class BackupManagementComponent implements OnInit, OnDestroy {
   
   loadingService = inject(LoadingService);
   LoadingKeys = LoadingKeys;
+  BackupType = BackupType;
 
   backups: PolarDBXBackup[] = [];
   availableNamespaces: string[] = [];
@@ -775,9 +792,13 @@ export class BackupManagementComponent implements OnInit, OnDestroy {
   selectedBackup: PolarDBXBackup | null = null;
   detailsDrawerVisible = false;
   currentNamespace = 'default';
-    grafanaURL = '';
+  grafanaURL = '';
   selectedTabIndex = 0;
   createStepIndex = 0;
+  
+  // 全局存储连通性状态
+  globalStorageStatus: 'ok' | 'error' | 'unknown' = 'unknown';
+  globalStorageDetail = '';
     
   createForm: FormGroup = this.fb.group({
     name: ['', [Validators.pattern(/^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/)]],
@@ -794,7 +815,7 @@ export class BackupManagementComponent implements OnInit, OnDestroy {
     return percent === 100 ? '完成' : `${percent}%`;
   };
 
-    ngOnInit(): void {
+  ngOnInit(): void {
     this.namespaceService.activeNamespace$
       .pipe(takeUntil(this.destroy$))
       .subscribe((namespace: string | null) => {
@@ -802,12 +823,11 @@ export class BackupManagementComponent implements OnInit, OnDestroy {
         this.createForm.patchValue({ namespace: this.currentNamespace });
         this.loadBackups();
         this.loadClusters();
+        this.loadGlobalStorageStatus(); // 加载存储连通性状态
       });
 
     this.loadNamespaces();
-    }
-
-    ngOnDestroy(): void {
+  }    ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -838,6 +858,28 @@ export class BackupManagementComponent implements OnInit, OnDestroy {
       console.error('加载命名空间失败:', error);
       this.availableNamespaces = ['default'];
     }
+  }
+
+  // 加载全局存储连通性状态
+  loadGlobalStorageStatus(): void {
+    this.apiService.getBackupOverview({ 
+      namespace: this.currentNamespace, 
+      evaluateConnectivity: true 
+    }).subscribe({
+      next: (res) => {
+        this.globalStorageStatus = res?.kpi?.storageConnectivityStatus || 'unknown';
+        this.globalStorageDetail = res?.kpi?.storageConnectivity || '';
+        console.log('[Backup Management] Storage Status:', {
+          status: this.globalStorageStatus,
+          detail: this.globalStorageDetail
+        });
+      },
+      error: (error) => {
+        console.error('加载存储连通性状态失败:', error);
+        this.globalStorageStatus = 'unknown';
+        this.globalStorageDetail = '无法获取状态';
+      }
+    });
   }
 
   async loadClusters(): Promise<void> {
@@ -1013,100 +1055,200 @@ export class BackupManagementComponent implements OnInit, OnDestroy {
   }
 
   getCompletedBackupsCount(): number {
-    return this.backups.filter(backup => backup.status?.phase === 'Completed').length;
+    return this.backups.filter(backup => isBackupCompletedStatus(backup.status?.phase)).length;
   }
 
   getFailedBackupsCount(): number {
-    return this.backups.filter(backup => backup.status?.phase === 'Failed').length;
+    return this.backups.filter(backup => isBackupFailedStatus(backup.status?.phase)).length;
   }
 
   // 状态和显示方法
     isRunningEx(backup: PolarDBXBackup): boolean {
-    return backup.status?.phase === 'Running' || backup.status?.phase === 'Pending';
+    return isBackupRunning(backup.status?.phase);
+  }
+
+  toBackupMetadata(backup: PolarDBXBackup): BackupProgressMetadata {
+    const phase = this.mapToBackupPhase(backup.status?.phase);
+    const startTime = backup.status?.startTime || undefined;
+    const completionTime = backup.status?.endTime || backup.status?.completionTime || undefined;
+    const percentage = this.getProgressPercent(backup);
+    
+    return {
+      phase,
+      subPhase: this.mapToBackupSubPhase(backup.status?.phase),
+      startTime,
+      completionTime,
+      progress: {
+        percentage: this.normalizePercentage(percentage),
+        processedBytes: undefined,
+        totalBytes: undefined,
+        processedFiles: undefined,
+        totalFiles: undefined,
+        transferRate: undefined
+      },
+      errorMessage: backup.status?.phase === 'Failed' ? backup.status?.message : undefined,
+      warnings: [],
+      message: backup.status?.message
+    };
+  }
+
+  private mapToBackupPhase(phase?: string): BackupPhase {
+    switch (phase) {
+      case 'Completed':
+      case 'Finished':  // 后端可能返回 Finished
+        return 'Completed';
+      case 'Failed':
+        return 'Failed';
+      case 'Running':
+        return 'Running';
+      case 'Pending':
+        return 'Pending';
+      default:
+        // 如果没有 phase，根据其他信息推断
+        return 'Pending';
+    }
+  }
+
+  private mapToBackupSubPhase(phase?: string): BackupSubPhase | undefined {
+    // PolarDBX backups don't have detailed sub-phases in the current model
+    // Return undefined for now
+    return undefined;
+  }
+
+  private normalizePercentage(value: number | undefined): number {
+    if (value === undefined || value === null || isNaN(value)) {
+      return 0;
+    }
+    return Math.max(0, Math.min(100, Math.round(value)));
   }
 
   canForceDelete(backup: PolarDBXBackup): boolean {
-    return backup.status?.phase !== 'Failed' && backup.status?.phase !== 'Completed';
+    return canDeleteBackup(backup.status?.phase);
   }
 
   mapPhaseText(backup: PolarDBXBackup): string {
-    const phase = backup.status?.phase;
-    switch (phase) {
-      case 'Running': return '运行中';
-      case 'Completed': return '已完成';
-      case 'Failed': return '失败';
-      case 'Pending': return '等待中';
-      default: return '未知';
-    }
+    return getPhaseDisplayLabel(backup.status?.phase);
   }
 
   getBackupStatusColor(backup: PolarDBXBackup): string {
-    const phase = backup.status?.phase;
-    switch (phase) {
-      case 'Running': return 'processing';
-      case 'Completed': return 'success';
-      case 'Failed': return 'error';
-      case 'Pending': return 'default';
-      default: return 'default';
-    }
+    return getPhaseStatusColor(backup.status?.phase);
   }
 
   getProgressPercent(backup: PolarDBXBackup): number {
     // 临时返回固定值，实际需要根据 backup status 的实际字段调整
-    if (backup.status?.phase === 'Running') {
+    if (isBackupRunning(backup.status?.phase)) {
       return 50; // 运行中显示 50%
     }
-    if (backup.status?.phase === 'Completed') {
+    if (isBackupCompletedStatus(backup.status?.phase)) {
       return 100; // 完成显示 100%
     }
     return 0; // 其他状态显示 0%
   }
 
   getProgressStatus(backup: PolarDBXBackup): 'success' | 'exception' | 'active' | 'normal' {
-    const phase = backup.status?.phase;
-    switch (phase) {
-      case 'Completed': return 'success';
-      case 'Failed': return 'exception';
-      case 'Running': return 'active';
-      default: return 'normal';
-    }
+    return getPhaseStatusStyle(backup.status?.phase) as 'success' | 'exception' | 'active' | 'normal';
   }
 
   formatSize(backup: PolarDBXBackup): string {
-    // 临时返回固定值，实际需要根据 backup status 的实际字段调整
-    if (backup.status?.phase === 'Completed') {
-      return '1.2 GB'; // 示例大小
+    // PolarDBX 备份的大小信息不在主对象中
+    // 而是需要从关联的 XStore 备份中计算
+    // 当前暂时显示备份路径或 XStore 数量作为提示
+    const xstoreCount = backup.status?.xstores?.length || 0;
+    if (xstoreCount > 0) {
+      return `${xstoreCount} 个 XStore`;
     }
+    
+    // 如果未来后端添加了汇总大小字段，可以这样读取：
+    const status = backup.status as any;
+    const totalSize = status?.totalBackupSize || status?.backupSize;
+    if (totalSize && typeof totalSize === 'number' && totalSize > 0) {
+      return this.formatBytes(totalSize);
+    }
+    
     return '-';
+  }
+
+  private formatBytes(bytes: number): string {
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    if (bytes === 0) return '0 B';
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    const value = bytes / Math.pow(1024, i);
+    return `${value.toFixed(2)} ${sizes[i]}`;
   }
 
   formatDate(dateString?: string): string {
     if (!dateString) return '-';
     return new Date(dateString).toLocaleString('zh-CN');
   }
+  
+  // 获取备份完成时间（使用实际的 endTime 字段）
+  getCompletionTime(backup: PolarDBXBackup): string {
+    const endTime = backup.status?.endTime || backup.status?.completionTime;
+    return this.formatDate(endTime);
+  }
+  
+  // 获取备份持续时间
+  getDuration(backup: PolarDBXBackup): string {
+    const startTime = backup.status?.startTime;
+    const endTime = backup.status?.endTime || backup.status?.completionTime;
+    
+    if (!startTime || !endTime) return '-';
+    
+    try {
+      const start = new Date(startTime).getTime();
+      const end = new Date(endTime).getTime();
+      const durationMs = end - start;
+      
+      const seconds = Math.floor(durationMs / 1000);
+      const minutes = Math.floor(seconds / 60);
+      const hours = Math.floor(minutes / 60);
+      
+      if (hours > 0) {
+        return `${hours}小时${minutes % 60}分钟`;
+      } else if (minutes > 0) {
+        return `${minutes}分钟${seconds % 60}秒`;
+      } else {
+        return `${seconds}秒`;
+      }
+    } catch (e) {
+      return '-';
+    }
+  }
 
   getStorageConnectivityText(backup: PolarDBXBackup): string {
-    // 临时返回固定值，实际需要根据 backup status 的实际字段调整
-    if (backup.status?.phase === 'Completed') {
+    const phase = backup.status?.phase;
+    
+    // 优先使用全局状态，结合备份阶段判断
+    if (this.globalStorageStatus === 'ok' || isBackupCompletedStatus(phase)) {
       return '连通正常';
+    } else if (this.globalStorageStatus === 'error') {
+      return '连通异常';
+    } else if (isBackupRunning(phase)) {
+      return '检测中';
     }
-    return '检测中';
+    return '未知';
   }
 
   getStorageConnectivityColor(backup: PolarDBXBackup): string {
-    // 临时返回固定值，实际需要根据 backup status 的实际字段调整
-    if (backup.status?.phase === 'Completed') {
+    if (this.globalStorageStatus === 'ok' || isBackupCompletedStatus(backup.status?.phase)) {
       return 'success';
+    } else if (this.globalStorageStatus === 'error') {
+      return 'error';
+    } else if (isBackupRunning(backup.status?.phase)) {
+      return 'processing';
     }
-    return 'processing';
+    return 'default';
   }
 
   getStorageConnectivityTooltip(backup: PolarDBXBackup): string {
-    // 临时返回固定值，实际需要根据 backup status 的实际字段调整
-    if (backup.status?.phase === 'Completed') {
-      return '存储连接正常，备份可以正常写入';
+    if (this.globalStorageStatus === 'ok' || isBackupCompletedStatus(backup.status?.phase)) {
+      return `存储连接正常 (${this.globalStorageDetail || '备份已完成'})`;
+    } else if (this.globalStorageStatus === 'error') {
+      return `存储连接异常: ${this.globalStorageDetail || '未知错误'}`;
+    } else if (isBackupRunning(backup.status?.phase)) {
+      return '备份进行中，正在检测存储连通性';
     }
-    return '正在检测存储连通性';
+    return '存储连通性未知';
   }
 
   private markFormGroupTouched(formGroup: FormGroup): void {

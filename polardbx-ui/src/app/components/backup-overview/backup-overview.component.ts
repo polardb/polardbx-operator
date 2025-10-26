@@ -345,6 +345,7 @@ export class BackupOverviewComponent implements OnInit {
     this.api.getBackupOverview({ namespace: 'default', evaluateConnectivity: true, connectivityMode: 'present' })
       .subscribe({
         next: (res) => {
+          console.log('[Backup Overview] API Response:', res);
           this.kpi = res?.kpi || {};
           this.generatedAt = res?.generatedAt || '';
           this.loading = false;
@@ -368,16 +369,19 @@ export class BackupOverviewComponent implements OnInit {
 
   getConnectivityColor(): string {
     const status = this.kpi?.storageConnectivityStatus;
+    if (!status || status === 'unknown') return 'blue';
     return status === 'ok' ? 'green' : 'red';
   }
 
   getConnectivityText(): string {
     const status = this.kpi?.storageConnectivityStatus;
+    if (!status || status === 'unknown') return '检测中';
     return status === 'ok' ? '正常' : '异常';
   }
 
   getConnectivityIcon(): string {
     const status = this.kpi?.storageConnectivityStatus;
+    if (!status || status === 'unknown') return 'loading';
     return status === 'ok' ? 'check-circle' : 'close-circle';
   }
 
@@ -385,7 +389,9 @@ export class BackupOverviewComponent implements OnInit {
     const status = this.kpi?.storageConnectivityStatus;
     const connectivity = this.kpi?.storageConnectivity ?? 'unknown';
     
-    if (status === 'ok') {
+    if (!status || status === 'unknown') {
+      return '正在检测存储连通性...';
+    } else if (status === 'ok') {
       return `存储连接正常 (${connectivity})`;
     } else {
       return `存储连接异常 (${connectivity})`;

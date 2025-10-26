@@ -4,6 +4,7 @@ export * as BackupScheduleModel from './backup-schedule.model';
 export * as ClusterModel from './cluster.model';
 export * as LogCollectorModel from './log-collector.model';
 export * as MonitorModel from './monitor.model';
+export * as MonitoringDashboardModel from './monitoring-dashboard.model';
 export * as ParameterTemplateModel from './parameter-template.model';
 export * as PodModel from './pod.model';
 export * as RestoreModel from './restore.model';

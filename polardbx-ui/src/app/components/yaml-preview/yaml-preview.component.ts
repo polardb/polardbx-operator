@@ -1,32 +1,55 @@
-import { Component, Input, OnInit, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
+import {
+  Component,
+  Input,
+  ChangeDetectionStrategy,
+  ChangeDetectorRef,
+  ViewChild,
+  ElementRef,
+  OnChanges,
+  SimpleChanges,
+  OnDestroy,
+  NgZone,
+  inject
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { NzCardModule } from 'ng-zorro-antd/card';
-import { FormsModule } from '@angular/forms';
 import { NzButtonModule } from 'ng-zorro-antd/button';
 import { NzIconModule } from 'ng-zorro-antd/icon';
 import { NzMessageService } from 'ng-zorro-antd/message';
 import { NzAlertModule } from 'ng-zorro-antd/alert';
 import { NzSpinModule } from 'ng-zorro-antd/spin';
-import { NzCodeEditorModule } from 'ng-zorro-antd/code-editor';
+import { NzCodeEditorService } from 'ng-zorro-antd/code-editor';
+import { Subscription } from 'rxjs';
+import type { editor, IDisposable } from 'monaco-editor';
+
+type Monaco = typeof import('monaco-editor');
+
+interface MonacoAmdRequire {
+  (modules: string[], onLoad: (...args: unknown[]) => void, onError?: (err: unknown) => void): void;
+  (module: string): unknown;
+}
+
+interface MonacoWindow extends Window {
+  monaco?: Monaco;
+  require?: MonacoAmdRequire;
+}
 
 @Component({
   selector: 'app-yaml-preview',
   standalone: true,
   imports: [
     CommonModule,
-    FormsModule,
     NzCardModule,
     NzButtonModule,
     NzIconModule,
     NzAlertModule,
-    NzSpinModule,
-    NzCodeEditorModule
+    NzSpinModule
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="yaml-preview">
       <nz-card 
-        nzTitle="YAML 预览"
+        [nzTitle]="cardTitle"
         [nzExtra]="actionTemplate"
         class="preview-card">
         
@@ -81,13 +104,14 @@ import { NzCodeEditorModule } from 'ng-zorro-antd/code-editor';
           </nz-alert>
 
           <div class="yaml-container" *ngIf="yamlContent">
-            <nz-code-editor
-              class="yaml-editor"
-              [ngModel]="yamlContent"
-              [nzLoading]="loading"
-              [nzEditorOption]="editorOptions"
-              (ngModelChange)="onYamlChange($event)">
-            </nz-code-editor>
+            <div 
+              class="yaml-editor" 
+              #editorContainer
+              *ngIf="!usePlainRenderer && !fallbackMode">
+            </div>
+            <pre
+              *ngIf="usePlainRenderer || fallbackMode"
+              class="plain-preview">{{ yamlContent }}</pre>
           </div>
 
           <div class="empty-content" *ngIf="!yamlContent && !loading">
@@ -149,6 +173,21 @@ import { NzCodeEditorModule } from 'ng-zorro-antd/code-editor';
       border-radius: 6px;
     }
 
+    .plain-preview {
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: 'SFMono-Regular', 'Monaco', 'Menlo', 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      background: #0d1117;
+      color: #d4d4d4;
+      padding: 16px;
+      border-radius: 6px;
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      min-height: 400px;
+      overflow: auto;
+    }
+
     .empty-content {
       display: flex;
       align-items: center;
@@ -179,13 +218,27 @@ import { NzCodeEditorModule } from 'ng-zorro-antd/code-editor';
     }
   `]
 })
-export class YamlPreviewComponent implements OnInit {
+export class YamlPreviewComponent implements OnChanges, OnDestroy {
   @Input() yamlContent = '';
   @Input() filename = 'config.yaml';
   @Input() loading = false;
   @Input() readonly = false;
   @Input() showValidateButton = false;
+  @Input() language: string = 'yaml';
   @Input() validateFunction?: (yaml: string) => Promise<{ success: boolean; message: string }>;
+  @Input() cardTitle = 'YAML 预览';
+  @Input() usePlainRenderer = false;
+
+  @ViewChild('editorContainer')
+  set editorContainer(container: ElementRef<HTMLDivElement> | undefined) {
+    if (container) {
+      this.editorHost = container;
+      this.initializeEditor();
+    } else {
+      this.disposeEditor();
+      this.editorHost = undefined;
+    }
+  }
 
   copying = false;
   downloading = false;
@@ -193,34 +246,57 @@ export class YamlPreviewComponent implements OnInit {
   errorMessage = '';
   validationResult: { success: boolean; message: string } | null = null;
 
-  editorOptions: any = {
-    theme: 'vs',
-    language: 'yaml',
-    readOnly: false,
-    minimap: { enabled: false },
-    scrollBeyondLastLine: false,
-    fontSize: 13,
-    lineNumbers: 'on',
-    folding: true,
-    automaticLayout: true,
-    wordWrap: 'on',
-    wrappingIndent: 'indent'
-  };
+  private readonly message = inject(NzMessageService);
+  private readonly cdr = inject(ChangeDetectorRef);
+  private readonly codeEditorService = inject(NzCodeEditorService);
+  private readonly ngZone = inject(NgZone);
 
-  constructor(
-    private message: NzMessageService,
-    private cdr: ChangeDetectorRef
-  ) {}
+  private editorHost?: ElementRef<HTMLDivElement>;
+  private monaco?: Monaco;
+  private editorInstance?: editor.IStandaloneCodeEditor;
+  private editorDisposables: IDisposable[] = [];
+  private suppressModelChange = false;
+  private monacoInitSubscription?: Subscription;
+  private pendingContent = '';
+  private yamlLanguageLoaded = false;
+  private initializingEditor = false;
+  private currentLanguage = 'yaml';
+  fallbackMode = false;
 
-  ngOnInit(): void {
-    this.editorOptions.readOnly = this.readonly;
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['usePlainRenderer']) {
+      console.log('[YAML预览] usePlainRenderer 变化:', this.usePlainRenderer);
+      if (this.usePlainRenderer) {
+        this.enableFallback();
+      } else if (this.fallbackMode) {
+        this.fallbackMode = false;
+        this.initializeEditor();
+      }
+    }
+
+    if (changes['yamlContent']) {
+      console.log('[YAML预览] yamlContent 变化:', {
+        length: this.yamlContent?.length || 0,
+        hasContent: !!this.yamlContent,
+        firstChars: this.yamlContent?.substring(0, 50)
+      });
+      this.pendingContent = this.yamlContent || '';
+      this.setEditorValue(this.pendingContent);
+    }
+
+    if (changes['readonly'] && !changes['readonly'].firstChange) {
+      this.updateReadonlyState();
+    }
+
+    if (changes['language'] && !changes['language'].firstChange) {
+      this.updateLanguage();
+    }
   }
 
-  onYamlChange(content: string): void {
-    if (!this.readonly) {
-      this.yamlContent = content;
-      this.clearValidationResult();
-    }
+  ngOnDestroy(): void {
+    this.monacoInitSubscription?.unsubscribe();
+    this.monacoInitSubscription = undefined;
+    this.disposeEditor();
   }
 
   async copyToClipboard(): Promise<void> {
@@ -250,7 +326,8 @@ export class YamlPreviewComponent implements OnInit {
 
     this.downloading = true;
     try {
-      const blob = new Blob([this.yamlContent], { type: 'text/yaml' });
+      const mime = this.language === 'json' ? 'application/json' : 'text/yaml';
+      const blob = new Blob([this.yamlContent], { type: mime });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -312,5 +389,234 @@ export class YamlPreviewComponent implements OnInit {
   clearError(): void {
     this.errorMessage = '';
     this.cdr.markForCheck();
+  }
+
+  private initializeEditor(): void {
+    if (this.editorInstance || !this.editorHost || this.initializingEditor || this.fallbackMode || this.usePlainRenderer) {
+      return;
+    }
+
+    if (typeof window === 'undefined') {
+      this.enableFallback('Monaco 编辑器仅在浏览器环境下可用');
+      return;
+    }
+
+    this.initializingEditor = true;
+    this.monacoInitSubscription?.unsubscribe();
+    this.monacoInitSubscription = this.codeEditorService.requestToInit().subscribe({
+      next: () => {
+        this.monacoInitSubscription?.unsubscribe();
+        this.monacoInitSubscription = undefined;
+
+        const monacoGlobal = (window as unknown as MonacoWindow).monaco;
+        if (!monacoGlobal) {
+          this.enableFallback('Monaco 编辑器资源加载失败');
+          this.initializingEditor = false;
+          return;
+        }
+
+        this.monaco = monacoGlobal;
+
+        this.ensureLanguageSupport(monacoGlobal, this.language || 'yaml')
+          .then(() => {
+            try {
+              this.createEditor(monacoGlobal);
+            } catch (err) {
+              console.error('创建 Monaco 编辑器失败，回退到纯文本模式:', err);
+              this.enableFallback('Monaco 编辑器初始化失败，已切换到纯文本模式');
+            } finally {
+              this.initializingEditor = false;
+            }
+          })
+          .catch(error => {
+            console.error('加载 Monaco YAML 支持失败:', error);
+            this.enableFallback('无法加载语法高亮资源，已切换为纯文本显示');
+            this.initializingEditor = false;
+          });
+      },
+      error: error => {
+        console.error('初始化 Monaco Editor 失败:', error);
+        this.enableFallback('无法加载编辑器资源，已切换为纯文本模式');
+        this.initializingEditor = false;
+      }
+    });
+  }
+
+  private ensureLanguageSupport(monacoGlobal: Monaco, language: string): Promise<void> {
+    if (language !== 'yaml') {
+      return Promise.resolve();
+    }
+
+    if (this.yamlLanguageLoaded) {
+      return Promise.resolve();
+    }
+
+    const loaderWindow = window as unknown as MonacoWindow;
+    const amdRequire = loaderWindow.require;
+    if (amdRequire) {
+      return new Promise((resolve, reject) => {
+        amdRequire(
+          ['vs/basic-languages/yaml/yaml.contribution'],
+          () => {
+            this.yamlLanguageLoaded = true;
+            resolve();
+          },
+          (err: unknown) => {
+            reject(err);
+          }
+        );
+      });
+    }
+
+    if (monacoGlobal.languages.getLanguages().some(lang => lang.id === 'yaml')) {
+      this.yamlLanguageLoaded = true;
+    }
+
+    return Promise.resolve();
+  }
+
+  private createEditor(monacoGlobal: Monaco): void {
+    const hostElement = this.editorHost?.nativeElement;
+    if (!hostElement) {
+      return;
+    }
+
+    const initialValue = this.pendingContent || this.yamlContent || '';
+    const language = this.language || 'yaml';
+
+    this.ngZone.runOutsideAngular(() => {
+      this.editorInstance = monacoGlobal.editor.create(hostElement, {
+        value: initialValue,
+        language,
+        theme: 'vs',
+        readOnly: this.readonly,
+        minimap: { enabled: false },
+        scrollBeyondLastLine: false,
+        fontSize: 13,
+        lineNumbers: 'on',
+        folding: true,
+        automaticLayout: true,
+        wordWrap: 'on',
+        wrappingIndent: 'indent'
+      });
+
+      this.editorDisposables.push(
+        this.editorInstance.onDidChangeModelContent(() => this.handleEditorContentChange())
+      );
+    });
+
+    this.setEditorValue(initialValue);
+    this.updateReadonlyState();
+    this.currentLanguage = language;
+    this.updateLanguage();
+    this.ngZone.run(() => this.cdr.markForCheck());
+  }
+
+  private handleEditorContentChange(): void {
+    if (this.readonly || !this.editorInstance || this.suppressModelChange) {
+      return;
+    }
+
+    const value = this.editorInstance.getValue();
+    if (value === this.yamlContent) {
+      return;
+    }
+
+    this.ngZone.run(() => {
+      this.yamlContent = value;
+      this.clearValidationResult();
+      this.cdr.markForCheck();
+    });
+  }
+
+  private setEditorValue(content: string): void {
+    this.pendingContent = content ?? '';
+
+    if (!this.editorInstance) {
+      return;
+    }
+
+    const current = this.editorInstance.getValue();
+    if (current === this.pendingContent) {
+      return;
+    }
+
+    this.suppressModelChange = true;
+    this.editorInstance.setValue(this.pendingContent);
+    this.suppressModelChange = false;
+  }
+
+  private updateReadonlyState(): void {
+    if (!this.editorInstance) {
+      return;
+    }
+
+    this.editorInstance.updateOptions({ readOnly: this.readonly });
+  }
+
+  private updateLanguage(): void {
+    const targetLanguage = this.language || 'yaml';
+    if (targetLanguage === this.currentLanguage) {
+      return;
+    }
+
+    if (!this.monaco || !this.editorInstance) {
+      this.currentLanguage = targetLanguage;
+      return;
+    }
+
+    this.ensureLanguageSupport(this.monaco, targetLanguage)
+      .then(() => {
+        const model = this.editorInstance?.getModel();
+        if (model) {
+          this.monaco!.editor.setModelLanguage(model, targetLanguage);
+          this.currentLanguage = targetLanguage;
+        }
+      })
+      .catch(error => {
+        console.error('切换代码语言失败:', error);
+      });
+  }
+
+  private disposeEditor(): void {
+    // 先清理事件监听器，避免触发不必要的回调
+    this.editorDisposables.forEach(disposable => {
+      try {
+        disposable.dispose();
+      } catch (err: any) {
+        // 忽略 "Canceled" 错误，这是正常的清理过程
+        if (err?.message !== 'Canceled') {
+          console.warn('释放编辑器监听器失败:', err);
+        }
+      }
+    });
+    this.editorDisposables = [];
+
+    if (this.editorInstance) {
+      try {
+        this.editorInstance.dispose();
+      } catch (err: any) {
+        // Monaco 编辑器在 dispose 时可能抛出 "Canceled" 错误，这是正常现象
+        // 只有非预期的错误才需要警告
+        if (err?.message !== 'Canceled') {
+          console.warn('释放 Monaco 编辑器失败:', err);
+        }
+      }
+      this.editorInstance = undefined;
+    }
+
+    this.initializingEditor = false;
+  }
+
+  private enableFallback(message?: string): void {
+    if (this.fallbackMode) {
+      return;
+    }
+    this.fallbackMode = true;
+    this.disposeEditor();
+    if (message) {
+      this.message.info(message);
+    }
+    this.ngZone.run(() => this.cdr.markForCheck());
   }
 }

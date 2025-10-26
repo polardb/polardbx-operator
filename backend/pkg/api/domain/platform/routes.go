@@ -24,6 +24,12 @@ func RegisterRoutes(v1 *gin.RouterGroup) {
 	p.GET("/grafana/dashboards", GrafanaListDashboards)
 	p.GET("/grafana/dashboards/:name/versions", GrafanaListVersions)
 	p.POST("/grafana/dashboards/:name/rollback", GrafanaRollback)
+	p.GET("/grafana/templates", GrafanaListTemplates)
+	p.GET("/grafana/templates/:name", GrafanaGetTemplate)
+	// PrometheusRule templates
+	p.GET("/prometheus-rules/templates", PrometheusRuleListTemplates)
+	p.GET("/prometheus-rules/templates/:name", PrometheusRuleGetTemplate)
+	p.POST("/prometheus-rules/templates/apply", PrometheusRuleApplyTemplate)
 	// Logs
 	p.POST("/logs/query", LogsQuery)
 	p.GET("/logs/presets", LogsPresets)

@@ -17,6 +17,8 @@ import { XStoreBackup, CreateXStoreBackupRequest } from '../models/xstore-backup
 import { PolarDBXClusterKnobs, PolarDBXClusterKnobsList, CreateClusterKnobsRequest } from '../models/cluster-knobs.model';
 import { RestoreClusterRequest, PITRRequest, RestoreStatusResponse, RestoreJob, RestoreResponse, PITRResponse, CancelRestoreResponse } from '../models/restore.model';
 import { PolarDBXBackupBinlog, CreateBackupBinlogRequest, UpdateBackupBinlogRequest } from '../models/backup-binlog.model';
+import { GrafanaTemplateSummary, GrafanaTemplateDetail } from '../models/monitoring-dashboard.model';
+import { AlertRuleTemplateSummary, AlertRuleTemplateDetail, ApplyAlertRuleTemplatePayload, ApplyAlertRuleTemplateResponse } from '../models/monitoring-alert-template.model';
 import { ErrorHandlerService } from './error-handler.service';
 import { LoadingService, LoadingKeys } from './loading.service';
 import { PerformanceService } from './performance.service';
@@ -31,7 +33,9 @@ export class ApiService {
   private loadingService = inject(LoadingService);
   private performanceService = inject(PerformanceService);
 
-  private baseUrl = 'http://localhost:8080/api/v1';
+  // 使用相对路径，避免硬编码 localhost
+  // 生产环境部署时会使用同一域名的 /api/v1
+  private baseUrl = '/api/v1';
 
   private getHeaders(): HttpHeaders {
     let headers = new HttpHeaders({ 'Content-Type': 'application/json' });
@@ -1564,7 +1568,7 @@ export class ApiService {
   // -----------------------------
   getMonitoringStatus(namespace?: string): Observable<any> {
     const url = `${this.baseUrl}/monitoring/status`;
-    const params = namespace ? new HttpParams().set('namespace', namespace) : this.withNs();
+    const params = namespace ? new HttpParams().set('namespace', namespace) : new HttpParams();
     return this.handleRequest(
       this.http.get(url, { headers: this.getHeaders(), params }),
       LoadingKeys.MONITOR_LIST,
@@ -1632,7 +1636,8 @@ export class ApiService {
       this.http.get(url, { headers: this.getHeaders(), params }),
       LoadingKeys.MONITOR_LIST,
       '/logs/bootstrap/status',
-      'GET'
+      'GET',
+      { silent: true }
     );
   }
 
@@ -1648,7 +1653,8 @@ export class ApiService {
       this.http.get(url, { headers: this.getHeaders(), params }),
       LoadingKeys.MONITOR_LIST,
       '/logs/bootstrap/logs',
-      'GET'
+      'GET',
+      { silent: true }
     );
   }
 
@@ -1662,25 +1668,30 @@ export class ApiService {
     );
   }
 
+  // Alias for consistency
+  uninstallMonitoring(namespace?: string): Observable<any> {
+    return this.monitoringUninstall(namespace);
+  }
+
   // -----------------------------
   // Grafana
   // -----------------------------
   getGrafanaConfig(): Observable<any> {
-    const url = `${this.baseUrl}/monitoring/grafana/config`;
+  const url = `${this.baseUrl}/platform/grafana/config`;
     return this.handleRequest(
       this.http.get(url, { headers: this.getHeaders() }),
       LoadingKeys.MONITOR_LIST,
-      '/monitoring/grafana/config',
+  '/platform/grafana/config',
       'GET'
     );
   }
 
   putGrafanaConfig(cfg: any): Observable<any> {
-    const url = `${this.baseUrl}/monitoring/grafana/config`;
+  const url = `${this.baseUrl}/platform/grafana/config`;
     return this.handleRequest(
       this.http.put(url, cfg, { headers: this.getHeaders() }),
       LoadingKeys.MONITOR_UPDATE,
-      '/monitoring/grafana/config',
+  '/platform/grafana/config',
       'PUT'
     );
   }
@@ -1708,43 +1719,94 @@ export class ApiService {
     );
   }
 
-  syncGrafanaDashboards(payload: { dashboards: { name: string; json: string }[] }): Observable<any> {
-    const url = `${this.baseUrl}/monitoring/grafana/dashboards/sync`;
+  syncGrafanaDashboards(payload: { dashboards: Record<string, string>; overwrite?: boolean }): Observable<any> {
+  const url = `${this.baseUrl}/platform/grafana/dashboards/sync`;
     return this.handleRequest(
       this.http.post(url, payload, { headers: this.getHeaders() }),
-      LoadingKeys.MONITOR_UPDATE,
-      '/monitoring/grafana/dashboards/sync',
+      LoadingKeys.GRAFANA_TEMPLATE_IMPORT,
+  '/platform/grafana/dashboards/sync',
+      'POST'
+    );
+  }
+
+  listGrafanaTemplates(): Observable<{ items: GrafanaTemplateSummary[]; directory: string }> {
+  const url = `${this.baseUrl}/platform/grafana/templates`;
+    return this.handleRequest(
+      this.http.get<{ items: GrafanaTemplateSummary[]; directory: string }>(url, { headers: this.getHeaders() }),
+      LoadingKeys.GRAFANA_TEMPLATE_LIST,
+  '/platform/grafana/templates',
+      'GET'
+    );
+  }
+
+  getGrafanaTemplate(name: string, opts?: { silent?: boolean }): Observable<GrafanaTemplateDetail> {
+  const url = `${this.baseUrl}/platform/grafana/templates/${encodeURIComponent(name)}`;
+    return this.handleRequest(
+      this.http.get<GrafanaTemplateDetail>(url, { headers: this.getHeaders() }),
+      LoadingKeys.GRAFANA_TEMPLATE_DETAIL,
+  `/platform/grafana/templates/${name}`,
+      'GET',
+      opts
+    );
+  }
+
+  listAlertRuleTemplates(): Observable<{ items: AlertRuleTemplateSummary[]; directory: string }> {
+    const url = `${this.baseUrl}/prometheus-rules/templates`;
+    return this.handleRequest(
+      this.http.get<{ items: AlertRuleTemplateSummary[]; directory: string }>(url, { headers: this.getHeaders() }),
+      LoadingKeys.ALERT_TEMPLATE_LIST,
+      '/prometheus-rules/templates',
+      'GET'
+    );
+  }
+
+  getAlertRuleTemplate(name: string): Observable<AlertRuleTemplateDetail> {
+    const url = `${this.baseUrl}/prometheus-rules/templates/${encodeURIComponent(name)}`;
+    return this.handleRequest(
+      this.http.get<AlertRuleTemplateDetail>(url, { headers: this.getHeaders() }),
+      LoadingKeys.ALERT_TEMPLATE_DETAIL,
+      `/prometheus-rules/templates/${name}`,
+      'GET'
+    );
+  }
+
+  applyAlertRuleTemplate(payload: ApplyAlertRuleTemplatePayload): Observable<ApplyAlertRuleTemplateResponse> {
+    const url = `${this.baseUrl}/prometheus-rules/apply`;
+    return this.handleRequest(
+      this.http.post<ApplyAlertRuleTemplateResponse>(url, payload, { headers: this.getHeaders() }),
+      LoadingKeys.ALERT_TEMPLATE_APPLY,
+      '/prometheus-rules/apply',
       'POST'
     );
   }
 
   // Grafana dashboards versioning
   listDashboards(): Observable<{ items: { name: string; versions: number }[] }> {
-    const url = `${this.baseUrl}/monitoring/grafana/dashboards`;
+  const url = `${this.baseUrl}/platform/grafana/dashboards`;
     return this.handleRequest(
       this.http.get<{ items: { name: string; versions: number }[] }>(url, { headers: this.getHeaders() }),
       LoadingKeys.MONITOR_LIST,
-      '/monitoring/grafana/dashboards',
+  '/platform/grafana/dashboards',
       'GET'
     );
   }
 
   listDashboardVersions(name: string): Observable<{ name: string; versions: number[] }> {
-    const url = `${this.baseUrl}/monitoring/grafana/dashboards/${encodeURIComponent(name)}/versions`;
+  const url = `${this.baseUrl}/platform/grafana/dashboards/${encodeURIComponent(name)}/versions`;
     return this.handleRequest(
       this.http.get<{ name: string; versions: number[] }>(url, { headers: this.getHeaders() }),
       LoadingKeys.MONITOR_LIST,
-      `/monitoring/grafana/dashboards/${name}/versions`,
+  `/platform/grafana/dashboards/${name}/versions`,
       'GET'
     );
   }
 
   rollbackDashboard(name: string, version: number): Observable<any> {
-    const url = `${this.baseUrl}/monitoring/grafana/dashboards/${encodeURIComponent(name)}/rollback`;
+  const url = `${this.baseUrl}/platform/grafana/dashboards/${encodeURIComponent(name)}/rollback`;
     return this.handleRequest(
       this.http.post(url, { version }, { headers: this.getHeaders() }),
       LoadingKeys.MONITOR_UPDATE,
-      `/monitoring/grafana/dashboards/${name}/rollback`,
+  `/platform/grafana/dashboards/${name}/rollback`,
       'POST'
     );
   }
@@ -2116,6 +2178,41 @@ export class ApiService {
       LoadingKeys.LOG_STRATEGY,
       `/log-strategies/${id}/apply`,
       'POST'
+    );
+  }
+
+  // ==================== 镜像源配置 API ====================
+
+  getImageRegistryPresets(): Observable<any[]> {
+    return this.handleRequest(
+      this.http.get<any[]>(`${this.baseUrl}/image-registry/presets`, {
+        headers: this.getHeaders()
+      }),
+      LoadingKeys.SYSTEM,
+      '/image-registry/presets',
+      'GET'
+    );
+  }
+
+  getImageRegistryConfig(): Observable<any> {
+    return this.handleRequest(
+      this.http.get<any>(`${this.baseUrl}/image-registry/config`, {
+        headers: this.getHeaders()
+      }),
+      LoadingKeys.SYSTEM,
+      '/image-registry/config',
+      'GET'
+    );
+  }
+
+  setImageRegistryConfig(config: any): Observable<any> {
+    return this.handleRequest(
+      this.http.put<any>(`${this.baseUrl}/image-registry/config`, config, {
+        headers: this.getHeaders()
+      }),
+      LoadingKeys.SYSTEM,
+      '/image-registry/config',
+      'PUT'
     );
   }
 

@@ -1,40 +1,37 @@
 // 全局通知样式
 
-// SnackBar 样式
-.success-snackbar {
+// SnackBar 样式已切换为 NG-ZORRO 消息样式，保留类名兼容旧代码
+.success-snackbar,
+.ant-message-notice-success .ant-message-notice-content {
   background-color: #4caf50 !important;
-  color: white !important;
-  
-  .mat-mdc-snack-bar-action {
-    color: #c8e6c9 !important;
-  }
+  color: #fff !important;
 }
 
-.error-snackbar {
+.error-snackbar,
+.ant-message-notice-error .ant-message-notice-content {
   background-color: #f44336 !important;
-  color: white !important;
-  
-  .mat-mdc-snack-bar-action {
-    color: #ffcdd2 !important;
-  }
+  color: #fff !important;
 }
 
-.warning-snackbar {
+.warning-snackbar,
+.ant-message-notice-warning .ant-message-notice-content {
   background-color: #ff9800 !important;
-  color: white !important;
-  
-  .mat-mdc-snack-bar-action {
-    color: #ffe0b2 !important;
-  }
+  color: #fff !important;
 }
 
-.info-snackbar {
+.info-snackbar,
+.ant-message-notice-info .ant-message-notice-content,
+.ant-message-notice .ant-message-notice-content.loading-message {
   background-color: #2196f3 !important;
-  color: white !important;
-  
-  .mat-mdc-snack-bar-action {
-    color: #bbdefb !important;
-  }
+  color: #fff !important;
+}
+
+.ant-message-notice .ant-message-notice-content {
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 // 确保 SnackBar 在最顶层
@@ -269,4 +266,33 @@
       color: #bdbdbd;
     }
   }
+}
+
+.notification-modal-content {
+  p {
+    margin: 0 0 12px 0;
+    color: rgba(0, 0, 0, 0.88);
+    line-height: 1.5;
+  }
+
+  pre {
+    margin: 0;
+    padding: 12px;
+    background: #f5f5f5;
+    border-radius: 6px;
+    max-height: 320px;
+    overflow: auto;
+    font-size: 12px;
+    line-height: 1.4;
+  }
+}
+
+.notification-modal-danger .ant-btn-primary {
+  background-color: #f5222d;
+  border-color: #f5222d;
+}
+
+.notification-modal-danger .ant-btn-primary:hover {
+  background-color: #cf1322;
+  border-color: #cf1322;
 }

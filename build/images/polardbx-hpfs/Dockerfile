@@ -14,7 +14,7 @@
 
 # Build the init command
 ARG IMAGE_SOURCE
-FROM ${IMAGE_SOURCE}${IMAGE_SOURCE:+"/"}golang:1.21.1 as builder
+FROM ${IMAGE_SOURCE}${IMAGE_SOURCE:+"/"}golang:1.21 as builder
 
 WORKDIR /workspace
 

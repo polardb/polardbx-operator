@@ -2,7 +2,6 @@ package prometheusrule
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -222,120 +221,18 @@ func ValidateRule(c *gin.Context) {
 		YAML string `json:"yaml"`
 	}
 
-	if err := c.ShouldBindJSON(&payload); err != nil || payload.YAML == "" {
+	if err := c.ShouldBindJSON(&payload); err != nil || strings.TrimSpace(payload.YAML) == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "YAML content is required"})
 		return
 	}
 
-	// Parse YAML to validate structure
-	var obj unstructured.Unstructured
-	if err := yaml.Unmarshal([]byte(payload.YAML), &obj.Object); err != nil {
-		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"message": "Invalid YAML format: " + err.Error(),
-		})
-		return
-	}
-
-	// Basic validation checks
-	errors := []string{}
-	warnings := []string{}
-
-	// Check basic fields
-	if obj.GetAPIVersion() != "monitoring.coreos.com/v1" {
-		errors = append(errors, "apiVersion should be 'monitoring.coreos.com/v1'")
-	}
-	if obj.GetKind() != "PrometheusRule" {
-		errors = append(errors, "kind should be 'PrometheusRule'")
-	}
-	if obj.GetName() == "" {
-		errors = append(errors, "metadata.name is required")
-	}
-
-	// Validate spec.groups
-	if groups, found, _ := unstructured.NestedSlice(obj.Object, "spec", "groups"); found {
-		if len(groups) == 0 {
-			warnings = append(warnings, "No rule groups defined")
-		}
-
-		for i, groupInterface := range groups {
-			if groupMap, ok := groupInterface.(map[string]interface{}); ok {
-				groupName, hasName := groupMap["name"].(string)
-				if !hasName || groupName == "" {
-					errors = append(errors, fmt.Sprintf("Group %d: name is required", i))
-					continue
-				}
-
-				if rulesInterface, ok := groupMap["rules"].([]interface{}); ok {
-					if len(rulesInterface) == 0 {
-						warnings = append(warnings, fmt.Sprintf("Group '%s': No rules defined", groupName))
-						continue
-					}
-
-					for j, ruleInterface := range rulesInterface {
-						if ruleMap, ok := ruleInterface.(map[string]interface{}); ok {
-							// Check required fields
-							expr, hasExpr := ruleMap["expr"].(string)
-							if !hasExpr || expr == "" {
-								errors = append(errors, fmt.Sprintf("Group '%s', Rule %d: expr is required", groupName, j))
-								continue
-							}
-
-							// Rule must have either alert or record
-							_, hasAlert := ruleMap["alert"].(string)
-							_, hasRecord := ruleMap["record"].(string)
-							if !hasAlert && !hasRecord {
-								errors = append(errors, fmt.Sprintf("Group '%s', Rule %d: either 'alert' or 'record' must be specified", groupName, j))
-							}
-							if hasAlert && hasRecord {
-								errors = append(errors, fmt.Sprintf("Group '%s', Rule %d: cannot have both 'alert' and 'record'", groupName, j))
-							}
-
-							// Basic PromQL syntax check (very basic)
-							if hasExpr && expr != "" {
-								if !isValidPromQLBasic(expr) {
-									warnings = append(warnings, fmt.Sprintf("Group '%s', Rule %d: potentially invalid PromQL expression", groupName, j))
-								}
-							}
-						}
-					}
-				} else {
-					errors = append(errors, fmt.Sprintf("Group '%s': rules field must be an array", groupName))
-				}
-			}
-		}
-	} else {
-		errors = append(errors, "spec.groups is required")
-	}
-
-	success := len(errors) == 0
-	message := "Validation passed"
-	if !success {
-		message = "Validation failed"
-	} else if len(warnings) > 0 {
-		message = "Validation passed with warnings"
-	}
-
-	var details []map[string]string
-	for _, err := range errors {
-		details = append(details, map[string]string{
-			"level":   "error",
-			"message": err,
-		})
-	}
-	for _, warn := range warnings {
-		details = append(details, map[string]string{
-			"level":   "warning",
-			"message": warn,
-		})
-	}
-
+	_, outcome := runRuleValidation(payload.YAML)
 	response := gin.H{
-		"success": success,
-		"message": message,
+		"success": outcome.Success,
+		"message": outcome.Message,
 	}
-	if len(details) > 0 {
-		response["details"] = details
+	if len(outcome.Details) > 0 {
+		response["details"] = outcome.Details
 	}
 
 	c.JSON(http.StatusOK, response)

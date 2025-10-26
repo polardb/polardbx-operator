@@ -20,7 +20,7 @@ import { NzSwitchModule } from 'ng-zorro-antd/switch';
 import { WizardShellComponent, WizardStep, WizardAction } from '../wizard-shell/wizard-shell.component';
 import { ApiService } from '../../services/api.service';
 import { GlobalInstallProgressService } from '../../services/global-install-progress.service';
-import { firstValueFrom, lastValueFrom } from 'rxjs';
+import { firstValueFrom } from 'rxjs';
  
 
 interface PreflightCheck {
@@ -72,18 +72,28 @@ const MAX_STATE_AGE_HOURS = 24;
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-wizard-shell
-      title="日志采集安装向导"
-      subtitle="一站式安装和配置 PolarDB-X LogCollector 日志采集堆栈"
-      titleIcon="cluster"
-      [namespace]="form.value.namespace"
-      [objectName]="getObjectName()"
-      objectLabel="命名空间"
-      docLink="https://doc.polardbx.com/operator/ops/logcollector/1-logcollector.html"
-      [steps]="wizardSteps"
-      [currentStepIndex]="currentStep"
-      [actions]="getStepActions()"
-      [loading]="stepLoading">
+    <div class="log-collector-wizard">
+      <div class="page-header">
+        <div class="header-content">
+          <h1 class="page-title">
+            <i nz-icon nzType="file-text" class="page-icon"></i>
+            日志采集安装向导
+          </h1>
+          <p class="subtitle">一站式安装日志采集堆栈，统一收集 PolarDB-X 集群日志</p>
+        </div>
+      </div>
+      
+      <app-wizard-shell
+        title="日志采集向导"
+        subtitle="配置日志采集组件"
+        [namespace]="form.value.namespace"
+        [objectName]="getObjectName()"
+        objectLabel="采集器"
+        docLink="https://doc.polardbx.com/operator/ops/logcollector/1-logcollector.html"
+        [steps]="wizardSteps"
+        [currentStepIndex]="currentStep"
+        [actions]="getStepActions()"
+        [loading]="stepLoading">
 
       <!-- 步骤1：环境检查 -->
       <ng-template #step1Template>
@@ -91,12 +101,16 @@ const MAX_STATE_AGE_HOURS = 24;
           <nz-alert 
             nzType="info"
             nzMessage="环境检查"
-            nzDescription="检查 Kubernetes 环境和必要的组件状态，确保日志采集系统安装前置条件满足。"
+            nzDescription="检查 Kubernetes 环境和日志采集组件依赖，确保安装前置条件满足。"
             nzShowIcon
             class="step-alert">
           </nz-alert>
 
-          <div class="precheck-section">
+          <div class="config-section">
+            <h4>
+              <i nz-icon nzType="safety-certificate"></i>
+              环境预检
+            </h4>
             <nz-spin [nzSpinning]="checkingEnvironment">
               <div class="precheck-items">
                 <div class="precheck-item" *ngFor="let check of preflightChecks">
@@ -136,146 +150,309 @@ const MAX_STATE_AGE_HOURS = 24;
         </div>
       </ng-template>
 
-      <!-- 步骤2：采集参数（命名空间） -->
+      <!-- 步骤2：采集参数 -->
       <ng-template #step2Template>
         <div class="step-content">
           <nz-alert 
             nzType="info"
             nzMessage="配置采集参数"
-            nzDescription="设置日志采集组件的目标命名空间。安装使用 Helm，输出配置请在 ConfigMap 编辑。"
+            nzDescription="设置日志采集堆栈的部署命名空间和基本参数。"
             nzShowIcon
             class="step-alert">
           </nz-alert>
 
-          <form [formGroup]="form" class="config-form">
-            <nz-row [nzGutter]="16">
-              <nz-col [nzSpan]="12">
-                <nz-form-item>
-                  <nz-form-label [nzSpan]="6" nzRequired>命名空间</nz-form-label>
-                  <nz-form-control [nzSpan]="18">
-                    <input nz-input formControlName="namespace" placeholder="日志采集组件部署的命名空间" />
-                  </nz-form-control>
-                </nz-form-item>
-              </nz-col>
-            </nz-row>
-          </form>
+          <div class="config-section">
+            <h4>
+              <i nz-icon nzType="setting"></i>
+              基础配置
+            </h4>
+            <form [formGroup]="form" class="config-form">
+              <nz-row [nzGutter]="16">
+                <nz-col [nzSpan]="12">
+                  <nz-form-item>
+                    <nz-form-label [nzSpan]="6" nzRequired>命名空间</nz-form-label>
+                    <nz-form-control [nzSpan]="18">
+                      <input nz-input formControlName="namespace" placeholder="例如: polardbx-log" />
+                    </nz-form-control>
+                  </nz-form-item>
+                </nz-col>
+              </nz-row>
+            </form>
+          </div>
         </div>
       </ng-template>
 
-      <!-- 步骤3：命令预览（Helm 与 ConfigMap） -->
+      <!-- 步骤3：命令预览 -->
       <ng-template #step3Template>
         <div class="step-content">
           <nz-alert 
             nzType="info"
             nzMessage="安装命令预览"
-            nzDescription="通过 Helm 安装日志采集组件，Logstash 输出在 ConfigMap 中配置。"
+            nzDescription="查看并复制 Helm 安装命令，支持手动或自动执行。"
             nzShowIcon
             class="step-alert">
           </nz-alert>
-          <h4>添加仓库（可选）</h4>
-          <pre class="code-block">{{ getHelmRepoAddCommand() }}</pre>
-          <button nz-button nzType="default" (click)="copyToClipboard(getHelmRepoAddCommand())">
-            <i nz-icon nzType="copy"></i> 复制
-          </button>
+          
+          <div class="config-section">
+            <h4>
+              <i nz-icon nzType="code"></i>
+              添加 Helm 仓库（可选）
+            </h4>
+            <div class="command-block">
+              <pre>{{ getHelmRepoAddCommand() }}</pre>
+              <button 
+                nz-button 
+                nzType="dashed" 
+                nzSize="small"
+                (click)="copyToClipboard(getHelmRepoAddCommand())">
+                <i nz-icon nzType="copy"></i>
+                复制命令
+              </button>
+            </div>
+          </div>
 
-          <h4 style="margin-top:16px;">安装组件</h4>
-          <pre class="code-block">{{ getHelmInstallCommand(form.value.namespace) }}</pre>
-          <button nz-button nzType="default" (click)="copyToClipboard(getHelmInstallCommand(form.value.namespace))">
-            <i nz-icon nzType="copy"></i> 复制
-          </button>
+          <div class="config-section">
+            <h4>
+              <i nz-icon nzType="rocket"></i>
+              安装日志采集堆栈
+            </h4>
+            <div class="command-block">
+              <pre>{{ getHelmInstallCommand(form.value.namespace) }}</pre>
+              <button 
+                nz-button 
+                nzType="dashed" 
+                nzSize="small"
+                (click)="copyToClipboard(getHelmInstallCommand(form.value.namespace))">
+                <i nz-icon nzType="copy"></i>
+                复制命令
+              </button>
+            </div>
+          </div>
 
-          <h4 style="margin-top:16px;">查看组件状态</h4>
-          <pre class="code-block">{{ getKubectlGetPodsCommand(form.value.namespace) }}</pre>
-          <button nz-button nzType="default" (click)="copyToClipboard(getKubectlGetPodsCommand(form.value.namespace))">
-            <i nz-icon nzType="copy"></i> 复制
-          </button>
+          <div class="config-section">
+            <h4>
+              <i nz-icon nzType="eye"></i>
+              查看组件状态
+            </h4>
+            <div class="command-block">
+              <pre>{{ getKubectlGetPodsCommand(form.value.namespace) }}</pre>
+              <button 
+                nz-button 
+                nzType="dashed" 
+                nzSize="small"
+                (click)="copyToClipboard(getKubectlGetPodsCommand(form.value.namespace))">
+                <i nz-icon nzType="copy"></i>
+                复制命令
+              </button>
+            </div>
+          </div>
 
-          <h4 style="margin-top:16px;">配置 Logstash 输出（ElasticSearch 等）</h4>
-          <pre class="code-block">kubectl edit configmap logstash-pipeline -n {{ form.value.namespace }}</pre>
-          <button nz-button nzType="default" (click)="copyToClipboard('kubectl edit configmap logstash-pipeline -n ' + form.value.namespace)">
-            <i nz-icon nzType="copy"></i> 复制
-          </button>
+          <div class="config-section">
+            <h4>
+              <i nz-icon nzType="setting"></i>
+              配置 Logstash 输出
+            </h4>
+            <p style="color: rgba(0, 0, 0, 0.65); font-size: 13px; margin-bottom: 12px;">
+              安装完成后，编辑 ConfigMap 配置 Elasticsearch 等输出目标。
+            </p>
+            <div class="command-block">
+              <pre>kubectl edit configmap logstash-pipeline -n {{ form.value.namespace }}</pre>
+              <button 
+                nz-button 
+                nzType="dashed" 
+                nzSize="small"
+                (click)="copyToClipboard('kubectl edit configmap logstash-pipeline -n ' + form.value.namespace)">
+                <i nz-icon nzType="copy"></i>
+                复制命令
+              </button>
+            </div>
+          </div>
         </div>
       </ng-template>
 
-      <!-- 步骤4：应用与验证 -->
+      <!-- 步骤4：测试与应用 -->
       <ng-template #step4Template>
         <div class="step-content">
-          <div *ngIf="!installJob && !applyResult" class="apply-options">
-            <nz-alert 
-              nzType="info"
-              nzMessage="选择安装方式"
-              nzDescription="您可以选择自动安装或手动执行 kubectl 命令。"
-              nzShowIcon
-              class="step-alert">
-            </nz-alert>
-
-            <div class="option-cards">
-              <div class="option-card" (click)="applyConfiguration()">
-                <i nz-icon nzType="play-circle" class="option-icon"></i>
-                <h4>自动安装</h4>
-                <p>系统将自动创建和配置日志采集组件</p>
-              </div>
-              <div class="option-card" (click)="showKubectlInstructions()">
-                <i nz-icon nzType="code" class="option-icon"></i>
-                <h4>手动安装</h4>
-                <p>获取 Helm/kubectl 命令自行执行安装</p>
-              </div>
-            </div>
-          </div>
-
-          <!-- 安装进度 -->
-          <div *ngIf="installJob" class="install-progress">
-            <nz-alert 
-              nzType="info"
-              nzMessage="正在安装日志采集组件"
-              [nzDescription]="'任务: ' + installJob.jobName + ' (命名空间: ' + installJob.namespace + ')'"
-              nzShowIcon
-              class="step-alert">
-            </nz-alert>
-
-            <div class="progress-actions">
-              <button nz-button nzType="default" (click)="viewInstallLogs()">
-                <i nz-icon nzType="eye"></i>
-                查看安装日志
-              </button>
-            </div>
-          </div>
-
-          <!-- 安装结果 -->
           <nz-result 
-            *ngIf="applyResult"
-            [nzStatus]="applyResult.success ? 'success' : 'error'"
-            [nzTitle]="applyResult.success ? '安装成功' : '安装失败'"
-            [nzSubTitle]="applyResult.message">
+            [nzStatus]="applyResult?.success ? 'success' : (applyResult ? 'error' : 'info')"
+            [nzTitle]="getResultTitle()"
+            [nzSubTitle]="getResultSubtitle()">
             
-            <div nz-result-extra *ngIf="applyResult.success">
+            <div nz-result-content *ngIf="!applyResult && !installJob && !verifying">
+              <div class="test-section">
+                <h4>安装方式选择</h4>
+                <nz-alert 
+                  nzType="info"
+                  nzMessage="选择安装方式"
+                  nzDescription="推荐使用自动安装，系统将自动配置日志采集堆栈。也可以手动执行命令。"
+                  nzShowIcon
+                  class="test-alert">
+                </nz-alert>
+
+                <div class="test-actions">
+                  <button 
+                    nz-button 
+                    nzType="primary"
+                    (click)="applyConfiguration()"
+                    [nzLoading]="applying">
+                    <i nz-icon nzType="play-circle"></i>
+                    自动安装
+                  </button>
+                  <button 
+                    nz-button 
+                    nzType="default"
+                    (click)="showKubectlInstructions()">
+                    <i nz-icon nzType="code"></i>
+                    查看手动命令
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 安装进度 & 日志 -->
+            <div nz-result-content *ngIf="(!applyResult && installJob) || (verifying && !applyResult)">
+              <div class="install-progress-grid">
+                <div class="progress-card">
+                  <h4>
+                    <i nz-icon nzType="rocket"></i>
+                    安装任务状态
+                  </h4>
+
+                  <ng-container *ngIf="installJob && !verifying; else verifyingBlock">
+                    <nz-spin [nzSpinning]="true" nzTip="正在安装日志采集组件...">
+                      <div class="progress-summary">
+                        <p>任务名称：{{ installJob.jobName }}</p>
+                        <p>命名空间：{{ installJob.namespace }}</p>
+                        <p class="job-phase">当前状态：{{ jobPhase || '运行中' }}</p>
+                        <p *ngIf="jobMessage" class="job-message">{{ jobMessage }}</p>
+                      </div>
+                    </nz-spin>
+                  </ng-container>
+
+                  <ng-template #verifyingBlock>
+                    <nz-alert
+                      nzType="info"
+                      nzShowIcon
+                      nzMessage="正在验证组件状态"
+                      [nzDescription]="latestComponentStatus ? 'Filebeat：' + latestComponentStatus.filebeat + ' · Logstash：' + latestComponentStatus.logstash : '正在获取组件状态…'">
+                    </nz-alert>
+                  </ng-template>
+
+                  <div class="progress-actions">
+                    <button nz-button nzType="default" (click)="viewInstallLogs()" [disabled]="!installJob">
+                      <i nz-icon nzType="file-text"></i>
+                      查看安装日志
+                    </button>
+                  </div>
+                </div>
+
+                <div class="log-card">
+                  <div class="log-card-header">
+                    <h4>
+                      <i nz-icon nzType="file-text"></i>
+                      实时安装日志
+                    </h4>
+                    <button nz-button nzType="link" nzSize="small" (click)="startLogStreaming()" *ngIf="installJob">
+                      <i nz-icon nzType="sync"></i>
+                      刷新
+                    </button>
+                  </div>
+                  <nz-spin [nzSpinning]="installLogLoading" nzTip="加载日志...">
+                    <pre class="live-log" *ngIf="installLogLines.length; else emptyLog">{{ installLogLines.join('\n') }}</pre>
+                    <ng-template #emptyLog>
+                      <div class="empty-log">暂未获取到日志内容</div>
+                    </ng-template>
+                  </nz-spin>
+                </div>
+              </div>
+            </div>
+
+            <div nz-result-extra *ngIf="applyResult?.success">
               <button nz-button nzType="primary" (click)="goToLogsDashboard()">
                 <i nz-icon nzType="dashboard"></i>
-                日志仪表盘
+                查看日志
               </button>
               <button nz-button nzType="default" (click)="restart()">
-                <i nz-icon nzType="undo"></i>
-                重新开始
+                <i nz-icon nzType="plus"></i>
+                重新配置
               </button>
             </div>
             
-            <div nz-result-extra *ngIf="!applyResult.success">
+            <div nz-result-extra *ngIf="applyResult && !applyResult.success">
               <button nz-button nzType="primary" (click)="retryApply()">
                 <i nz-icon nzType="reload"></i>
                 重试安装
               </button>
-              <button nz-button nzType="default" (click)="restart()">
-                <i nz-icon nzType="undo"></i>
-                重新开始
+              <button nz-button nzType="default" (click)="goToPrevStep()">
+                <i nz-icon nzType="left"></i>
+                上一步
+              </button>
+              <button nz-button nzType="default" (click)="viewInstallLogs()">
+                <i nz-icon nzType="file-text"></i>
+                查看日志
               </button>
             </div>
           </nz-result>
         </div>
       </ng-template>
-    </app-wizard-shell>
+      </app-wizard-shell>
+    </div>
   `,
   styles: [`
+    .log-collector-wizard {
+      padding: 16px;
+      background: #f5f5f5;
+      min-height: 100vh;
+    }
+
+    /* 覆盖 wizard-shell 的深色背景 */
+    :deep(.wizard-shell) {
+      background: transparent !important;
+    }
+    
+    :deep(.wizard-body) {
+      background: transparent !important;
+    }
+    
+    :deep(.wizard-header) {
+      background: white !important;
+    }
+    
+    :deep(.wizard-footer) {
+      background: white !important;
+    }
+
+    .page-header {
+      margin-bottom: 16px;
+    }
+
+    .header-content {
+      max-width: 1120px;
+      margin: 0 auto;
+    }
+
+    .page-title {
+      font-size: 20px !important;
+      font-weight: 600 !important;
+      color: rgba(0, 0, 0, 0.88) !important;
+      margin: 0 !important;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .page-icon {
+      font-size: 24px !important;
+      color: #1890ff !important;
+    }
+
+    .subtitle {
+      color: rgba(0, 0, 0, 0.65);
+      font-size: 14px;
+      margin: 4px 0 0 36px;
+    }
+  `,
+  `
     .step-content {
       padding: 0;
     }
@@ -285,25 +462,51 @@ const MAX_STATE_AGE_HOURS = 24;
     }
 
     .config-form {
-      margin: 0;
-    }
-
-    .config-section {
       margin-bottom: 24px;
     }
 
+    .config-section {
+      margin-bottom: 32px;
+      padding: 20px;
+      background: #fafafa;
+      border: 1px solid #e8e8e8;
+      border-radius: 8px;
+    }
+
     .config-section h4 {
-      margin: 0 0 16px 0;
+      margin: 0 0 20px 0;
       color: rgba(0, 0, 0, 0.85);
       font-size: 16px;
       font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .command-block {
+      position: relative;
+      background: #f6f8fa;
+      border: 1px solid #e1e4e8;
+      border-radius: 6px;
+      padding: 12px;
+      margin-bottom: 16px;
+    }
+
+    .command-block pre {
+      margin: 0 0 12px 0;
+      font-family: 'SFMono-Regular', 'Monaco', 'Menlo', 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.4;
+      color: #24292e;
+      word-wrap: break-word;
+      white-space: pre-wrap;
+    }
+
+    .command-block button {
+      margin-top: 8px;
     }
 
     // 环境检查样式
-    .precheck-section {
-      margin: 16px 0;
-    }
-
     .precheck-items {
       display: flex;
       flex-direction: column;
@@ -314,7 +517,7 @@ const MAX_STATE_AGE_HOURS = 24;
       padding: 16px;
       border: 1px solid #e8e8e8;
       border-radius: 8px;
-      background: #fafafa;
+      background: white;
     }
 
     .check-header {
@@ -445,9 +648,128 @@ const MAX_STATE_AGE_HOURS = 24;
       white-space: pre-wrap;
     }
 
+    .install-progress-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .progress-card,
+    .log-card {
+      background: #fff;
+      border: 1px solid #e8e8e8;
+      border-radius: 8px;
+      padding: 20px;
+      width: 100%;
+    }
+
+    .progress-card {
+      order: 1;
+    }
+
+    .log-card {
+      order: 2;
+    }
+
+    .progress-card h4,
+    .log-card h4 {
+      margin: 0 0 16px 0;
+      color: rgba(0, 0, 0, 0.85);
+      font-size: 16px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .progress-summary p {
+      margin: 0 0 8px 0;
+      color: rgba(0, 0, 0, 0.65);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .progress-actions {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid #f0f0f0;
+    }
+
+    .job-phase {
+      color: rgba(0, 0, 0, 0.85);
+      font-weight: 500;
+    }
+
+    .job-message {
+      color: rgba(0, 0, 0, 0.6);
+      font-size: 12px;
+      margin-top: 4px;
+    }
+
+    .log-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .live-log {
+      background: #0b1a33;
+      color: #d6f4ff;
+      font-family: 'SFMono-Regular', 'Monaco', 'Menlo', 'Courier New', monospace;
+      font-size: 12px;
+      line-height: 1.5;
+      border-radius: 6px;
+      padding: 12px;
+      max-height: 450px;
+      min-height: 300px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+
+    .empty-log {
+      text-align: center;
+      color: rgba(0, 0, 0, 0.45);
+      padding: 24px 0;
+      font-size: 13px;
+    }
+
+    .test-section {
+      padding: 20px;
+    }
+
+    .test-section h4 {
+      margin: 0 0 16px 0;
+      color: rgba(0, 0, 0, 0.85);
+      font-size: 16px;
+      font-weight: 500;
+    }
+
+    .test-alert {
+      margin-bottom: 20px;
+    }
+
+    .test-actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .test-actions button {
+      min-width: 140px;
+    }
+
     @media (max-width: 768px) {
       .option-cards {
         grid-template-columns: 1fr;
+      }
+
+      .test-actions {
+        flex-direction: column;
+      }
+
+      .test-actions button {
+        width: 100%;
       }
     }
   `]
@@ -477,20 +799,21 @@ export class LogCollectorInstallComponent implements OnInit, AfterViewInit, OnDe
   applyResult: { success: boolean; message: string; failureReason?: string } | null = null;
 
   // 安装状态
-  installing = false;
-  installStep = 0;
-  installCompleted = false;
   installSuccess = false;
-  installLogs: any[] = [];
-  installDuration = '';
   verifying = false;
   verifyAttempts = 0;
   verifyMaxAttempts = 10;
   private verifyTimer?: any;
+  installLogLines: string[] = [];
+  installLogLoading = false;
+  private logPollingTimer?: any;
+  private lastLogSnapshot = '';
+  applying = false;
+  jobPhase: string | null = null;
+  jobMessage: string | null = null;
+  latestComponentStatus: { filebeat: string; logstash: string; updatedAt: number } | null = null;
   installJob: { jobName: string; namespace: string; targetNs?: string; instructions?: string } | null = null;
   
-  private installStartTime?: Date;
-
   // 部署配置
   private deploymentConfigs = {
     default: {
@@ -564,10 +887,14 @@ export class LogCollectorInstallComponent implements OnInit, AfterViewInit, OnDe
 
   ngOnDestroy(): void {
     this.stopJobStatusPolling();
+    this.stopLogStreaming();
+    this.clearVerifyTimer();
   }
 
   // 新的环境检查方法，与监控向导风格一致
-  runPreflightCheck(): void {
+  async runPreflightCheck(): Promise<void> {
+    const namespace = this.form.value.namespace || 'polardbx-logcollector';
+
     this.checkingEnvironment = true;
     this.preflightChecks = [
       {
@@ -575,7 +902,7 @@ export class LogCollectorInstallComponent implements OnInit, AfterViewInit, OnDe
         description: '检查 RBAC 权限和命名空间访问',
         status: 'pending',
         result: '检查中...',
-        command: 'kubectl auth can-i create pods --namespace=polardbx-logcollector'
+        command: `kubectl auth can-i create pods --namespace=${namespace}`
       },
       {
         name: '日志采集组件',
@@ -584,52 +911,103 @@ export class LogCollectorInstallComponent implements OnInit, AfterViewInit, OnDe
         result: '检查中...'
       },
       {
-        name: 'Elasticsearch 连通性',
-        description: '验证与 Elasticsearch 的网络连通性',
+        name: '输出配置',
+        description: '检查 Logstash 输出与管道配置',
         status: 'pending',
         result: '检查中...',
-        command: 'kubectl run test-es --rm -i --image=curlimages/curl -- curl -s http://elasticsearch:9200/_cluster/health'
+        command: `kubectl get configmap logstash-pipeline -n ${namespace}`
       }
     ];
 
     this.cdr.detectChanges();
 
-    // 模拟检查过程
-    setTimeout(() => {
-      this.preflightChecks[0].status = 'success';
-      this.preflightChecks[0].result = '权限检查通过';
-      this.cdr.detectChanges();
-    }, 1000);
+    // 1. Dry-run 校验权限
+    try {
+      await firstValueFrom(this.api.logsBootstrap({ mode: 'managed', namespace, dryRun: true }));
+      this.updatePreflightCheck(0, 'success', 'Dry-run 成功，具备安装所需权限');
+    } catch (error) {
+      this.updatePreflightCheck(0, 'error', `权限检查失败：${this.extractErrorMessage(error)}`);
+    }
 
-    setTimeout(() => {
-      // 使用实际的日志服务状态检查
-      this.api.getLogServiceStatus().subscribe({
-        next: (res: any) => {
-          const components = res?.components || {};
-          const fb = components?.filebeat || {};
-          const ls = components?.logstash || {};
-          const hasComponents = Object.keys(components).length > 0;
-          
-          this.preflightChecks[1].status = hasComponents ? 'success' : 'warning';
-          this.preflightChecks[1].result = hasComponents 
-            ? '组件已部署' 
-            : '组件未部署（将在安装过程中创建）';
-          this.cdr.detectChanges();
-        },
-        error: () => {
-          this.preflightChecks[1].status = 'warning';
-          this.preflightChecks[1].result = '无法获取组件状态';
-          this.cdr.detectChanges();
-        }
-      });
-    }, 2000);
+    // 2. 组件状态
+    let logServiceStatus: any | null = null;
+    try {
+      logServiceStatus = await firstValueFrom(this.api.getLogServiceStatus());
+      const state = (logServiceStatus?.state || logServiceStatus?.status || '').toLowerCase();
+      const summary = this.summarizeComponentStatus(logServiceStatus?.components);
+      const status: PreflightCheck['status'] = state === 'running'
+        ? 'success'
+        : state === 'not_installed'
+          ? 'warning'
+          : 'warning';
+      const result = summary || '未检测到日志采集组件（安装后将自动创建）';
+      this.updatePreflightCheck(1, status, result);
+    } catch (error) {
+      this.updatePreflightCheck(1, 'warning', `无法获取组件状态：${this.extractErrorMessage(error)}`);
+    }
 
-    setTimeout(() => {
-      this.preflightChecks[2].status = 'warning';
-      this.preflightChecks[2].result = '请手动验证 ES 连通性';
-      this.checkingEnvironment = false;
-      this.cdr.detectChanges();
-    }, 3000);
+    // 3. 输出/管道配置
+    if (logServiceStatus) {
+      const pipelineExists = !!logServiceStatus.pipelineConfigMapExists;
+      const result = pipelineExists
+        ? '检测到 Logstash pipeline 配置，请确认输出目标连通性'
+        : '未发现 Logstash 输出配置，安装后可在命令预览步骤查看配置示例';
+      const status: PreflightCheck['status'] = pipelineExists ? 'success' : 'warning';
+      this.updatePreflightCheck(2, status, result);
+    } else {
+      this.updatePreflightCheck(2, 'warning', '输出配置检查依赖组件状态，请先完成前置检查');
+    }
+
+    this.checkingEnvironment = false;
+    this.saveState();
+    this.cdr.detectChanges();
+  }
+
+  private updatePreflightCheck(index: number, status: PreflightCheck['status'], result: string): void {
+    if (!this.preflightChecks[index]) {
+      return;
+    }
+    this.preflightChecks[index] = {
+      ...this.preflightChecks[index],
+      status,
+      result
+    };
+    this.cdr.markForCheck();
+  }
+
+  private extractErrorMessage(error: any): string {
+    const raw = error?.error || error;
+    if (typeof raw === 'string') {
+      return raw;
+    }
+    return raw?.error || raw?.message || error?.message || '未知错误';
+  }
+
+  private summarizeComponentStatus(components: any): string {
+    if (!components) {
+      return '';
+    }
+    const parts: string[] = [];
+    if (components.filebeat) {
+      parts.push(this.formatComponentStatus('Filebeat', components.filebeat));
+    }
+    if (components.logstash) {
+      parts.push(this.formatComponentStatus('Logstash', components.logstash));
+    }
+    return parts.filter(Boolean).join(' · ');
+  }
+
+  private formatComponentStatus(name: string, info: any): string {
+    if (!info) {
+      return '';
+    }
+    const status = info.status || '未知';
+    const ready = info?.replicas?.ready;
+    const total = info?.replicas?.total;
+    if (typeof ready === 'number' && typeof total === 'number' && total > 0) {
+      return `${name}: ${status} (${ready}/${total})`;
+    }
+    return `${name}: ${status}`;
   }
 
   // WizardShell 需要的方法
@@ -706,6 +1084,32 @@ export class LogCollectorInstallComponent implements OnInit, AfterViewInit, OnDe
     return typeLabels[type] || type;
   }
 
+  getResultTitle(): string {
+    if (this.applyResult) {
+      return this.applyResult.success ? '安装成功' : '安装失败';
+    }
+    if (this.verifying) {
+      return '正在验证组件状态';
+    }
+    if (this.installJob) {
+      return '安装进行中';
+    }
+    return '准备安装';
+  }
+
+  getResultSubtitle(): string {
+    if (this.applyResult) {
+      return this.applyResult.message;
+    }
+    if (this.verifying) {
+      return '已完成安装任务，正在检测 Filebeat / Logstash 组件运行状态';
+    }
+    if (this.installJob) {
+      return '正在安装日志采集堆栈，请稍候...';
+    }
+    return '选择安装方式，开始部署日志采集组件';
+  }
+
   copyToClipboard(text: string): void {
     navigator.clipboard.writeText(text).then(() => {
       this.message.success('命令已复制到剪贴板');
@@ -778,20 +1182,6 @@ export class LogCollectorInstallComponent implements OnInit, AfterViewInit, OnDe
     return this.deploymentConfigs[type as keyof typeof this.deploymentConfigs] || this.deploymentConfigs.default;
   }
 
-  getInstallStepDescription(step: number): string {
-    if (step < this.installStep) return '已完成';
-    if (step === this.installStep) return '进行中...';
-    return '等待中';
-  }
-
-  getInstalledComponents(): string[] {
-    const components: string[] = [];
-    if (this.form.value.enableFilebeat) components.push('Filebeat');
-    if (this.form.value.enableLogstash) components.push('Logstash');
-    if (this.form.value.enableElasticsearch) components.push('Elasticsearch');
-    return components;
-  }
-
   nextStep(): void {
     if (this.currentStep < 3) {
       this.currentStep++;
@@ -810,6 +1200,14 @@ export class LogCollectorInstallComponent implements OnInit, AfterViewInit, OnDe
   // 应用配置方法
   applyConfiguration(): void {
     this.stepLoading = true;
+    this.applying = true;
+    this.applyResult = null;
+    this.verifying = false;
+    this.installLogLines = [];
+    this.installLogLoading = false;
+  this.jobPhase = null;
+  this.jobMessage = null;
+  this.latestComponentStatus = null;
     
     // 使用真实的日志收集安装 API
     const config = this.form.value;
@@ -822,6 +1220,7 @@ export class LogCollectorInstallComponent implements OnInit, AfterViewInit, OnDe
     // 若已有 installJob，避免重复触发，直接继续轮询/查看
     if (this.installJob?.jobName) {
       this.stepLoading = false;
+      this.applying = false;
       this.startJobStatusPolling();
       this.cdr.detectChanges();
       return;
@@ -833,8 +1232,14 @@ export class LogCollectorInstallComponent implements OnInit, AfterViewInit, OnDe
         const comps = s?.components || {};
         const exists = !!(comps?.filebeat?.exists || comps?.logstash?.exists || (comps?.filebeat && comps?.filebeat?.status !== 'not_found') || (comps?.logstash && comps?.logstash?.status !== 'not_found'));
         if (exists) {
-          this.message.info('检测到日志组件已安装，已跳过安装。可直接查看状态或日志。');
+          this.message.success('检测到日志采集组件已安装，无需重复部署');
+          this.applyResult = {
+            success: true,
+            message: '日志采集组件已存在，可直接前往日志总览查看数据。'
+          };
           this.stepLoading = false;
+          this.applying = false;
+          this.saveState();
           this.cdr.detectChanges();
           return;
         }
@@ -851,6 +1256,10 @@ export class LogCollectorInstallComponent implements OnInit, AfterViewInit, OnDe
           instructions: res?.instructions
         };
 
+        this.lastLogSnapshot = '';
+        this.installLogLines = [];
+        this.installLogLoading = true;
+
         this.message.success('安装任务已启动');
         
         // 报告到全局进度服务
@@ -858,8 +1267,10 @@ export class LogCollectorInstallComponent implements OnInit, AfterViewInit, OnDe
         
         // 启动状态轮询
         this.startJobStatusPolling();
+        this.startLogStreaming();
         
         this.stepLoading = false;
+        this.applying = false;
         this.saveState();
         this.cdr.detectChanges();
           },
@@ -867,6 +1278,7 @@ export class LogCollectorInstallComponent implements OnInit, AfterViewInit, OnDe
             const msg = error?.error?.error || error?.error?.message || error?.message || '安装触发失败';
             this.applyResult = { success: false, message: `安装失败: ${msg}`, failureReason: msg };
             this.stepLoading = false;
+            this.applying = false;
             this.saveState();
             this.cdr.detectChanges();
           }
@@ -880,10 +1292,15 @@ export class LogCollectorInstallComponent implements OnInit, AfterViewInit, OnDe
             const jobNamespace = res?.namespace || 'polardbx-operator-system';
             const targetNs = res?.targetNs || config.namespace;
             this.installJob = { jobName, namespace: jobNamespace, targetNs, instructions: res?.instructions };
+                this.lastLogSnapshot = '';
+                this.installLogLines = [];
+                this.installLogLoading = true;
             this.message.success('安装任务已启动');
             this.globalProgress.reportLogsInstall(jobName, jobNamespace, targetNs);
             this.startJobStatusPolling();
+            this.startLogStreaming();
             this.stepLoading = false;
+                this.applying = false;
             this.saveState();
             this.cdr.detectChanges();
           },
@@ -891,6 +1308,7 @@ export class LogCollectorInstallComponent implements OnInit, AfterViewInit, OnDe
             const msg = error?.error?.error || error?.error?.message || error?.message || '安装触发失败';
             this.applyResult = { success: false, message: `安装失败: ${msg}`, failureReason: msg };
             this.stepLoading = false;
+                this.applying = false;
             this.saveState();
             this.cdr.detectChanges();
           }
@@ -929,7 +1347,21 @@ export class LogCollectorInstallComponent implements OnInit, AfterViewInit, OnDe
   }
 
   viewInstallLogs(): void {
-    if (!this.installJob) return;
+    if (!this.installJob) {
+      if (this.installLogLines.length) {
+        const cached = this.installLogLines.join('\n');
+        this.modal.create({
+          nzTitle: '安装日志（缓存）',
+          nzContent: `<pre style="background: #f6f8fa; padding: 12px; border-radius: 6px; max-height: 400px; overflow-y: auto;">${cached}</pre>`,
+          nzWidth: 800,
+          nzFooter: [
+            { label: '复制日志', onClick: () => { this.copyToClipboard(cached); return true; } },
+            { label: '关闭', onClick: () => true }
+          ]
+        });
+      }
+      return;
+    }
 
     this.api.logsBootstrapLogs(this.installJob.jobName, this.installJob.namespace).subscribe({
       next: (res: any) => {
@@ -939,6 +1371,7 @@ export class LogCollectorInstallComponent implements OnInit, AfterViewInit, OnDe
           nzContent: `<pre style="background: #f6f8fa; padding: 12px; border-radius: 6px; max-height: 400px; overflow-y: auto;">${content}</pre>`,
           nzWidth: 800,
           nzFooter: [
+            { label: '复制日志', onClick: () => { this.copyToClipboard(content); return true; } },
             { label: '关闭', onClick: () => true }
           ]
         });
@@ -947,6 +1380,57 @@ export class LogCollectorInstallComponent implements OnInit, AfterViewInit, OnDe
         this.message.error('获取安装日志失败');
       }
     });
+  }
+
+  startLogStreaming(): void {
+    if (!this.installJob?.jobName?.trim()) {
+      console.warn('[LogCollector] startLogStreaming called but installJob.jobName is empty/missing', this.installJob);
+      this.installLogLoading = false;
+      return;
+    }
+
+    this.stopLogStreaming();
+    this.installLogLoading = true;
+
+    const pollLogs = (initial = false) => {
+      if (!this.installJob?.jobName?.trim()) {
+        console.warn('[LogCollector] pollLogs guard: installJob.jobName is empty', this.installJob);
+        this.installLogLoading = false;
+        return;
+      }
+
+      console.debug('[LogCollector] Polling logs:', { jobName: this.installJob.jobName, namespace: this.installJob.namespace });
+      this.api.logsBootstrapLogs(this.installJob.jobName, this.installJob.namespace).subscribe({
+        next: (res: any) => {
+          const normalized = this.normalizeLogsResponse(res);
+          if (normalized !== this.lastLogSnapshot) {
+            this.lastLogSnapshot = normalized;
+          }
+          this.installLogLines = this.lastLogSnapshot
+            ? this.lastLogSnapshot.split(/\r?\n/)
+            : [];
+          this.installLogLoading = false;
+          this.cdr.markForCheck();
+        },
+        error: () => {
+          if (initial) {
+            this.installLogLoading = false;
+            this.cdr.markForCheck();
+          }
+        }
+      });
+    };
+
+    pollLogs(true);
+    this.logPollingTimer = setInterval(() => pollLogs(), 4000);
+  }
+
+  private stopLogStreaming(): void {
+    if (this.logPollingTimer) {
+      clearInterval(this.logPollingTimer);
+      this.logPollingTimer = undefined;
+    }
+    this.installLogLoading = false;
   }
 
   // 规范化后端返回的日志对象，避免 [object Object]
@@ -963,171 +1447,24 @@ export class LogCollectorInstallComponent implements OnInit, AfterViewInit, OnDe
   retryApply(): void {
     this.applyResult = null;
     this.installJob = null;
+    this.verifying = false;
+    this.stopLogStreaming();
+    this.clearVerifyTimer();
+    this.installLogLines = [];
+    this.lastLogSnapshot = '';
+    this.jobPhase = null;
+    this.jobMessage = null;
+    this.latestComponentStatus = null;
+    this.applying = false;
     this.cdr.detectChanges();
   }
 
-  startInstallation(): void {
-    this.installing = true;
-    this.installStep = 0;
-    this.installLogs = [];
-    this.installStartTime = new Date();
-    this.addLog('info', '开始安装 PolarDB-X LogCollector...');
-
-    // 使用真实的日志收集安装 API
-    const ns = this.form.value.namespace || 'polardbx-logcollector';
-    const deployment = this.form.value.deploymentType || 'default';
-
-    const requestBody = {
-      mode: 'managed' as 'managed',
-      dryRun: false,
-      enableFilebeat: this.form.value.enableFilebeat || true,
-      enableLogstash: this.form.value.enableLogstash || true,
-      deploymentType: deployment
-    };
-
-    // 已存在任务则不重复创建
-    if (this.installJob?.jobName) {
-      this.simulateInstallation();
-      this.saveState();
-      return;
+  goToPrevStep(): void {
+    if (this.currentStep > 0) {
+      this.currentStep--;
+      this.applyResult = null;
+      this.cdr.markForCheck();
     }
-
-    // 若组件已存在则不创建
-    this.api.getLogServiceStatus().subscribe({
-      next: (s: any) => {
-        const comps = s?.components || {};
-        const exists = !!(comps?.filebeat?.exists || comps?.logstash?.exists || (comps?.filebeat && comps?.filebeat?.status !== 'not_found') || (comps?.logstash && comps?.logstash?.status !== 'not_found'));
-        if (exists) {
-          this.addLog('info', '检测到日志组件已安装，跳过安装流程');
-          this.completeInstallation(true);
-          this.saveState();
-          return;
-        }
-        this.api.logsBootstrap(requestBody).subscribe({
-      next: (res: any) => {
-        const jobName = res?.jobName || 'polardbx-logs-bootstrap';
-        const jobNamespace = res?.namespace || 'polardbx-operator-system';
-        const targetNs = res?.targetNs || ns;
-
-        this.installJob = {
-          jobName,
-          namespace: jobNamespace,
-          targetNs,
-          instructions: res?.instructions
-        };
-
-        this.addLog('success', `已创建日志收集安装 Job: ${jobName}`);
-
-        // 报告到全局进度服务
-        this.globalProgress.reportLogsInstall(jobName, jobNamespace, targetNs);
-
-        // 启动状态轮询
-        this.startJobStatusPolling();
-
-        // 展示进度动画
-        this.simulateInstallation();
-        this.saveState(); // 保存状态
-        },
-        error: (error: any) => {
-          const msg = error?.error?.error || error?.error?.message || error?.message || '安装触发失败';
-          this.addLog('error', `启动安装失败: ${msg}`);
-          this.completeInstallation(false);
-          this.saveState();
-        }
-      });
-      },
-      error: () => {
-        this.api.logsBootstrap(requestBody).subscribe({
-          next: (res: any) => {
-            const jobName = res?.jobName || 'polardbx-logs-bootstrap';
-            const jobNamespace = res?.namespace || 'polardbx-operator-system';
-            const targetNs = res?.targetNs || ns;
-            this.installJob = { jobName, namespace: jobNamespace, targetNs, instructions: res?.instructions };
-            this.addLog('success', `已创建日志收集安装 Job: ${jobName}`);
-            this.globalProgress.reportLogsInstall(jobName, jobNamespace, targetNs);
-            this.startJobStatusPolling();
-            this.simulateInstallation();
-            this.saveState();
-          },
-          error: (error: any) => {
-            const msg = error?.error?.error || error?.error?.message || error?.message || '安装触发失败';
-            this.addLog('error', `启动安装失败: ${msg}`);
-            this.completeInstallation(false);
-            this.saveState();
-          }
-        });
-      }
-    });
-  }
-
-  private simulateInstallation(): void {
-    const steps = [
-      { message: '准备安装环境...', delay: 1000 },
-      { message: '创建命名空间 ' + this.form.value.namespace, delay: 1500 },
-      { message: '部署 Filebeat DaemonSet...', delay: 2500 },
-      { message: '部署 Logstash...', delay: 2000 },
-      { message: '配置日志采集规则...', delay: 1000 }
-    ];
-
-    let currentStep = 0;
-    const executeStep = () => {
-      if (currentStep < steps.length) {
-        this.installStep = currentStep;
-        this.addLog('info', steps[currentStep].message);
-        
-        setTimeout(() => {
-          currentStep++;
-          executeStep();
-        }, steps[currentStep].delay);
-      } else {
-        this.completeInstallation(true);
-      }
-    };
-
-    executeStep();
-  }
-
-  private completeInstallation(success: boolean): void {
-    this.installing = false;
-    this.installCompleted = true;
-    this.installSuccess = success;
-
-    if (this.installStartTime) {
-      const duration = Date.now() - this.installStartTime.getTime();
-      this.installDuration = Math.round(duration / 1000) + ' 秒';
-    }
-
-    if (success) {
-      this.addLog('success', '安装完成！所有组件已成功部署');
-      this.message.success('PolarDB-X LogCollector 安装成功！');
-    } else {
-      this.addLog('error', '安装失败，请检查错误信息');
-      this.message.error('安装过程中出现错误');
-    }
-
-    this.saveState(); // 保存状态
-  }
-
-  private addLog(level: string, message: string): void {
-    this.installLogs.push({
-      level,
-      message,
-      timestamp: new Date()
-    });
-  }
-
-  cancelInstall(): void {
-    this.installing = false;
-    this.addLog('warning', '用户取消安装');
-    this.message.warning('安装已取消');
-  }
-
-  retryInstall(): void {
-    this.currentStep = 1;
-    this.installing = false;
-    this.installCompleted = false;
-    this.installSuccess = false;
-    this.installLogs = [];
   }
 
   // 注意：restart 已在文件末尾实现，这里避免重复实现
@@ -1152,21 +1489,65 @@ export class LogCollectorInstallComponent implements OnInit, AfterViewInit, OnDe
     this.verifyAttempts = 0;
     this.installSuccess = false;
     this.clearVerifyTimer();
-    this.verifyTimer = setInterval(() => {
+
+    const evaluateStatus = (res: any) => {
+      const comps = res?.components || {};
+      const fbStatus: string = comps?.filebeat?.status || (comps?.filebeat?.ready ? 'running' : comps?.filebeat?.phase);
+      const lsStatus: string = comps?.logstash?.status || (comps?.logstash?.ready ? 'running' : comps?.logstash?.phase);
+      const filebeatReady = fbStatus === 'running';
+      const logstashReady = lsStatus === 'running';
+      const ok = filebeatReady && logstashReady;
+
+      this.latestComponentStatus = {
+        filebeat: fbStatus || '未知',
+        logstash: lsStatus || '未知',
+        updatedAt: Date.now()
+      };
+
+      if (ok) {
+        this.installSuccess = true;
+        this.verifying = false;
+        this.applyResult = {
+          success: true,
+          message: '日志采集组件已成功部署并处于运行状态'
+        };
+        this.stopLogStreaming();
+        this.installJob = null;
+        this.clearVerifyTimer();
+        this.clearSavedState();
+        this.message.success('日志采集组件已成功部署');
+        this.cdr.detectChanges();
+        return true;
+      }
+
+      const statusDescription = `Filebeat 状态: ${fbStatus || '未知'}, Logstash 状态: ${lsStatus || '未知'}`;
+
+      if (this.verifyAttempts >= this.verifyMaxAttempts) {
+        this.installSuccess = false;
+        this.verifying = false;
+        this.applyResult = {
+          success: false,
+          message: '组件未在预期时间内就绪，请检查运行状态',
+          failureReason: statusDescription
+        };
+        this.stopLogStreaming();
+        this.clearVerifyTimer();
+        this.message.error('组件未在预期时间内就绪，请检查运行状态');
+        this.saveState();
+        this.cdr.detectChanges();
+        return true;
+      }
+
+      this.applyResult = null;
+      this.cdr.detectChanges();
+      return false;
+    };
+
+    const poll = () => {
       this.verifyAttempts++;
       this.api.getLogServiceStatus().subscribe({
-        next: (s: any) => {
-          const comps = s?.components || {};
-          const fbStatus: string = comps?.filebeat?.status || (comps?.filebeat?.ready ? 'running' : 'error');
-          const lsStatus: string = comps?.logstash?.status || (comps?.logstash?.ready ? 'running' : 'error');
-          const ok = (fbStatus === 'running') && (lsStatus === 'running');
-          if (ok) {
-            this.installSuccess = true;
-            this.verifying = false;
-            this.clearVerifyTimer();
-          } else if (this.verifyAttempts >= this.verifyMaxAttempts) {
-            this.installSuccess = false;
-            this.verifying = false;
+        next: (res: any) => {
+          if (evaluateStatus(res)) {
             this.clearVerifyTimer();
           }
         },
@@ -1174,11 +1555,22 @@ export class LogCollectorInstallComponent implements OnInit, AfterViewInit, OnDe
           if (this.verifyAttempts >= this.verifyMaxAttempts) {
             this.installSuccess = false;
             this.verifying = false;
+            this.applyResult = {
+              success: false,
+              message: '无法获取组件状态，请手动确认安装结果'
+            };
+            this.stopLogStreaming();
             this.clearVerifyTimer();
+            this.message.error('无法获取组件状态，请手动确认安装结果');
+            this.saveState();
+            this.cdr.detectChanges();
           }
         }
       });
-    }, 3000);
+    };
+
+    poll();
+    this.verifyTimer = setInterval(poll, 4000);
   }
 
   // ==================== localStorage 持久化功能 ====================
@@ -1295,6 +1687,7 @@ export class LogCollectorInstallComponent implements OnInit, AfterViewInit, OnDe
         this.installJob = state.installJob;
         // 如果有安装任务，启动状态轮询
         this.startJobStatusPolling();
+        this.startLogStreaming();
       }
 
       this.message.success('已恢复向导状态');
@@ -1355,18 +1748,27 @@ export class LogCollectorInstallComponent implements OnInit, AfterViewInit, OnDe
       next: (status: any) => {
         this.pollingRetryCount = 0; // 重置重试计数
         const phase = status?.phase;
+        this.jobPhase = phase || null;
+        this.jobMessage = status?.message || status?.details?.message || status?.conditions?.[0]?.message || null;
 
         if (phase === 'Succeeded') {
-          this.completeInstallation(true);
           this.stopJobStatusPolling();
-          this.message.success('日志收集安装已完成');
-          // 成功后清理本地保存的向导状态
-          this.clearSavedState();
+          this.stopLogStreaming(); // 停止日志轮询避免404
+          this.message.success('安装任务已完成，正在验证组件状态');
+          this.verifying = true;
+          this.saveState();
+          this.startVerification();
         } else if (phase === 'Failed') {
           const reason = status?.failureReason || '未知错误';
           this.installSuccess = false;
-          this.installCompleted = true;
-          this.addLog('error', `安装失败: ${reason}`);
+          this.verifying = false;
+          this.stopLogStreaming();
+          this.latestComponentStatus = null;
+          this.applyResult = {
+            success: false,
+            message: `安装失败: ${reason}`,
+            failureReason: reason
+          };
           this.stopJobStatusPolling();
           this.message.error('日志收集安装失败');
           this.saveState(); // 保存失败状态
@@ -1379,11 +1781,14 @@ export class LogCollectorInstallComponent implements OnInit, AfterViewInit, OnDe
         // 404 表示 Job 不存在或已被清理
         if (error?.status === 404) {
           this.installSuccess = false;
-          this.installCompleted = true;
-          this.addLog('warning', '安装任务已被清理或不存在，请重新启动安装');
+          this.verifying = false;
+          this.stopLogStreaming();
           this.stopJobStatusPolling();
           this.message.warning('安装任务不存在，可能已被系统清理');
           this.installJob = null; // 清空任务，避免后续进入页面继续轮询
+          this.jobPhase = null;
+          this.jobMessage = null;
+          this.latestComponentStatus = null;
           this.saveState();
           return;
         }
@@ -1402,11 +1807,18 @@ export class LogCollectorInstallComponent implements OnInit, AfterViewInit, OnDe
   restart(): void {
     this.clearSavedState(); // 清理保存的状态
     this.currentStep = 0;
-    this.installing = false;
-    this.installCompleted = false;
     this.installSuccess = false;
-    this.installLogs = [];
     this.installJob = null;
+    this.applyResult = null;
+    this.verifying = false;
+    this.stopLogStreaming();
+    this.clearVerifyTimer();
+    this.installLogLines = [];
+    this.lastLogSnapshot = '';
+    this.jobPhase = null;
+    this.jobMessage = null;
+    this.latestComponentStatus = null;
+    this.applying = false;
     this.runPreflightCheck();
   }
 }

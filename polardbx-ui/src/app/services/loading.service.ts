@@ -302,6 +302,12 @@ export const LoadingKeys = {
   CLUSTER_LIST: 'cluster-list',
   SYSTEM: 'system',
   LOG_STRATEGY: 'log-strategy',
+  GRAFANA_TEMPLATE_LIST: 'grafana-template-list',
+  GRAFANA_TEMPLATE_DETAIL: 'grafana-template-detail',
+  GRAFANA_TEMPLATE_IMPORT: 'grafana-template-import',
+  ALERT_TEMPLATE_LIST: 'alert-template-list',
+  ALERT_TEMPLATE_DETAIL: 'alert-template-detail',
+  ALERT_TEMPLATE_APPLY: 'alert-template-apply',
   
   CONNECT: 'connect',
   GLOBAL: 'global'

@@ -1,0 +1,238 @@
+<div class="page-wrapper" [class.loading]="loading">
+  <div class="page-header">
+    <div class="title-block">
+      <h2>Prometheus 告警模板</h2>
+      <p>
+        从预置模板快速创建 PrometheusRule 资源，可直接应用或在预览面板中进一步调整。
+        <button nz-button nzType="default" nzSize="small" (click)="reload()" [disabled]="loading">
+          <i nz-icon nzType="reload"></i>
+          重新加载
+        </button>
+      </p>
+    </div>
+    <div class="stats">
+      <nz-card class="stat" nzSize="small">
+        <div class="stat-value">{{ stats.total }}</div>
+        <div class="stat-label">模板总数</div>
+      </nz-card>
+      <nz-card class="stat" nzSize="small">
+        <div class="stat-value">{{ stats.available }}</div>
+        <div class="stat-label">已同步</div>
+      </nz-card>
+      <nz-card class="stat" nzSize="small">
+        <div class="stat-value">{{ stats.recommended }}</div>
+        <div class="stat-label">推荐模板</div>
+      </nz-card>
+    </div>
+  </div>
+
+  <nz-alert
+    *ngIf="directory"
+    nzType="info"
+    nzShowIcon
+    nzMessage="模板目录"
+    [nzDescription]="directoryTpl"
+    class="directory-alert">
+  </nz-alert>
+  <ng-template #directoryTpl>
+    <code>{{ directory }}</code>
+  </ng-template>
+
+  <div class="filters">
+    <div class="filter-item search">
+      <nz-input-group nzSuffixIcon="search">
+        <input
+          nz-input
+          placeholder="搜索名称、描述、标签"
+          [(ngModel)]="keyword"
+          (ngModelChange)="applyFilters()"
+        />
+      </nz-input-group>
+    </div>
+
+    <div class="filter-item">
+      <label>分类</label>
+      <nz-select
+        nzSize="small"
+        style="min-width: 160px"
+        [(ngModel)]="selectedCategory"
+        (ngModelChange)="applyFilters()">
+        <nz-option nzValue="all" nzLabel="全部"></nz-option>
+        <nz-option
+          *ngFor="let category of categories"
+          [nzValue]="category.id"
+          [nzLabel]="category.label">
+        </nz-option>
+      </nz-select>
+    </div>
+
+    <div class="filter-item">
+      <label>严重级别</label>
+      <nz-select
+        nzSize="small"
+        style="min-width: 140px"
+        [(ngModel)]="selectedSeverity"
+        (ngModelChange)="applyFilters()">
+        <nz-option nzValue="all" nzLabel="全部"></nz-option>
+        <nz-option *ngFor="let severity of severities" [nzValue]="severity" [nzLabel]="severity"></nz-option>
+      </nz-select>
+    </div>
+
+    <label nz-checkbox [(ngModel)]="onlyRecommended" (ngModelChange)="applyFilters()">
+      仅推荐模板
+    </label>
+
+    <label nz-checkbox [(ngModel)]="onlyAvailable" (ngModelChange)="applyFilters()">
+      仅显示可用模板
+    </label>
+  </div>
+
+  <nz-spin *ngIf="loading" nzTip="正在加载告警模板..." class="loading-spin"></nz-spin>
+
+  <nz-table
+    *ngIf="!loading"
+    [nzData]="filteredTemplates"
+    nzSize="middle"
+    nzBordered
+    class="template-table"
+    [nzNoResult]="noResultTpl">
+    <thead>
+      <tr>
+        <th nzWidth="220px">模板</th>
+        <th>描述</th>
+        <th nzWidth="120px">分类</th>
+        <th nzWidth="120px">严重级别</th>
+        <th nzWidth="200px">标签 / 组</th>
+        <th nzWidth="120px">状态</th>
+        <th nzWidth="160px">操作</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let template of filteredTemplates">
+        <td>
+          <div class="template-title">
+            <span class="primary">{{ template.title }}</span>
+            <span class="secondary">{{ template.name }}</span>
+          </div>
+        </td>
+        <td>
+          <div class="description">{{ template.description || '暂无描述' }}</div>
+          <div class="doc-link" *ngIf="template.docLink">
+            <a [href]="template.docLink" target="_blank" rel="noopener">查看文档</a>
+          </div>
+        </td>
+        <td>
+          <nz-tag *ngIf="template.category" color="blue">{{ template.category }}</nz-tag>
+          <span *ngIf="!template.category" class="muted">未分组</span>
+        </td>
+        <td>
+          <nz-tag *ngIf="template.severity" [nzColor]="template.severity === 'critical' ? 'red' : template.severity === 'warning' ? 'orange' : 'default'">
+            {{ template.severity || '未标记' }}
+          </nz-tag>
+          <span *ngIf="!template.severity" class="muted">未标记</span>
+        </td>
+        <td>
+          <div class="tag-list" *ngIf="template.tags.length; else noTagTpl">
+            <nz-tag *ngFor="let tag of template.tags" nzColor="default">{{ tag }}</nz-tag>
+          </div>
+          <ng-template #noTagTpl>
+            <span class="muted">暂无标签</span>
+          </ng-template>
+        </td>
+        <td>
+          <div class="status-block">
+            <nz-tag nzColor="green" *ngIf="template.available">已同步</nz-tag>
+            <nz-tag nzColor="default" *ngIf="!template.available" nzTooltipTitle="请在后端 charts/polardbx-monitor/alert-templates 中添加该模板">未同步</nz-tag>
+            <nz-tag *ngIf="template.recommended" nzColor="gold">推荐</nz-tag>
+          </div>
+        </td>
+        <td>
+          <div class="actions">
+            <button
+              nz-button
+              nzType="primary"
+              nzSize="small"
+              (click)="quickApply(template)"
+              [disabled]="applying || !template.available">
+              <i nz-icon nzType="thunderbolt"></i>
+              一键启用
+            </button>
+            <button
+              nz-button
+              nzType="default"
+              nzSize="small"
+              (click)="openPreview(template)"
+              [disabled]="!template.available">
+              <i nz-icon nzType="eye"></i>
+              预览 / 编辑
+            </button>
+          </div>
+        </td>
+      </tr>
+    </tbody>
+  </nz-table>
+
+  <ng-template #noResultTpl>
+    <div class="empty-state">
+      <nz-empty nzNotFoundContent="暂无匹配的告警模板"></nz-empty>
+    </div>
+  </ng-template>
+
+  <nz-drawer
+    [nzVisible]="drawerVisible"
+    [nzTitle]="drawerTitle"
+    nzPlacement="right"
+    nzWidth="720"
+    (nzOnClose)="closeDrawer()">
+    <div class="drawer-content" *ngIf="activeTemplate">
+      <div class="drawer-header">
+        <div class="info">
+          <div class="name">{{ activeTemplate.title }}</div>
+          <div class="meta">
+            <span>命名空间</span>
+            <input nz-input [(ngModel)]="applyNamespace" placeholder="polardbx-monitor" />
+            <span>资源名称</span>
+            <input nz-input [(ngModel)]="applyName" placeholder="{{ activeTemplate.name }}" />
+          </div>
+        </div>
+        <div class="drawer-actions">
+          <button nz-button nzType="default" nzSize="small" (click)="dryRun()" [disabled]="applying">
+            <i nz-icon nzType="experiment"></i>
+            Dry Run
+          </button>
+          <button nz-button nzType="primary" nzSize="small" (click)="applyFromDrawer()" [nzLoading]="applying">
+            <i nz-icon nzType="check"></i>
+            应用模板
+          </button>
+        </div>
+      </div>
+
+      <div class="warnings" *ngIf="dryRunWarnings.length">
+        <nz-alert
+          nzType="warning"
+          nzMessage="Dry-run 返回警告"
+          [nzDescription]="warningsTpl"
+          nzShowIcon>
+        </nz-alert>
+        <ng-template #warningsTpl>
+          <ul>
+            <li *ngFor="let warning of dryRunWarnings">{{ warning }}</li>
+          </ul>
+        </ng-template>
+      </div>
+
+      <app-yaml-preview
+        [yamlContent]="previewContent"
+        [filename]="previewFilename"
+        [loading]="previewLoading"
+        [readonly]="false"
+        [showValidateButton]="true"
+        [validateFunction]="validateYaml">
+      </app-yaml-preview>
+    </div>
+
+    <div *ngIf="!activeTemplate" class="empty-preview">
+      <nz-empty nzNotFoundContent="请选择模板"></nz-empty>
+    </div>
+  </nz-drawer>
+</div>

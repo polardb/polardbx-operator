@@ -17,10 +17,20 @@ export interface PolarDBXBackup {
     };
   };
   status?: {
-    phase?: 'Pending' | 'Running' | 'Completed' | 'Failed';
+    phase?: 'New' | 'FullBackuping' | 'BackupCollecting' | 'BackupCalculating' | 'BinlogBackuping' | 'MetadataBackuping' | 'Finished' | 'Failed' | 'Deleting' | '';
     startTime?: string;
-    completionTime?: string;
+    endTime?: string;
+    backupRootPath?: string;
+    backups?: { [key: string]: string };
+    xstores?: string[];
+    backupSetTimestamp?: { [key: string]: string };
+    latestRecoverableTimestamp?: string;
+    collectStartIndexMap?: { [key: string]: string };
+    collectEndIndexMap?: { [key: string]: string };
     message?: string;
+    completionTime?: string;  // 保留兼容性
+    heartbeat?: string;  // 心跳时间戳
+    clusterSpecSnapshot?: any;  // 集群快照
   };
 }
 

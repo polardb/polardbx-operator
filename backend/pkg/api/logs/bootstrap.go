@@ -9,10 +9,12 @@ import (
 	"time"
 
 	"polardbx-ui-backend/pkg/api/util"
+	"polardbx-ui-backend/pkg/config"
 
 	"github.com/gin-gonic/gin"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -21,17 +23,17 @@ import (
 // Bootstrap installs log collection stack
 func Bootstrap(c *gin.Context) {
 	type req struct {
-		Mode            string `json:"mode"`            // managed|assisted|byo
-		Dry             bool   `json:"dryRun"`
-		NS              string `json:"namespace"`
-		Name            string `json:"releaseName"`
-		EnableFilebeat  bool   `json:"enableFilebeat"`
-		EnableLogstash  bool   `json:"enableLogstash"`
-		ESHost          string `json:"esHost"`
-		ESUser          string `json:"esUser"`
-		ESPassword      string `json:"esPassword"`
-		ESIndex         string `json:"esIndex"`
-		DeploymentType  string `json:"deploymentType"` // default|production|minimal|custom
+		Mode           string `json:"mode"` // managed|assisted|byo
+		Dry            bool   `json:"dryRun"`
+		NS             string `json:"namespace"`
+		Name           string `json:"releaseName"`
+		EnableFilebeat bool   `json:"enableFilebeat"`
+		EnableLogstash bool   `json:"enableLogstash"`
+		ESHost         string `json:"esHost"`
+		ESUser         string `json:"esUser"`
+		ESPassword     string `json:"esPassword"`
+		ESIndex        string `json:"esIndex"`
+		DeploymentType string `json:"deploymentType"` // default|production|minimal|custom
 	}
 	cli, ok := util.K8sClientFromContext(c)
 	if !ok {
@@ -126,41 +128,194 @@ func Bootstrap(c *gin.Context) {
 		return
 	}
 
+	// Create ConfigMap with manifests for the installer Job to apply
+	// This approach avoids needing to mount charts directory or use Helm repo
+	// TODO: In production, consider using a Helm repository like monitoring does
+	manifestsCM := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: r.NS,
+			Name:      "polardbx-logs-manifests",
+		},
+		Data: map[string]string{
+			"manifests.yaml": getLogCollectorManifests(r.Name, r.DeploymentType),
+		},
+	}
+	// Create or update manifests ConfigMap
+	existingCM := &corev1.ConfigMap{}
+	cmKey := client.ObjectKey{Namespace: r.NS, Name: "polardbx-logs-manifests"}
+	if err := cli.Get(c.Request.Context(), cmKey, existingCM); err != nil {
+		if err := cli.Create(c.Request.Context(), manifestsCM); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create manifests ConfigMap", "details": err.Error()})
+			return
+		}
+	} else {
+		existingCM.Data = manifestsCM.Data
+		if err := cli.Update(c.Request.Context(), existingCM); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update manifests ConfigMap", "details": err.Error()})
+			return
+		}
+	}
+
 	// Create a short-lived Job to run log collection stack installation
 	jobName := fmt.Sprintf("polardbx-logs-bootstrap-%d", time.Now().Unix())
 	correlationId := fmt.Sprintf("logs-%d", time.Now().UnixNano())
 
-	// Build installation commands based on configuration
-	commands := []string{
+	// Build Helm installation commands
+	// Use helm upgrade --install to deploy from Helm repository
+	// If chart is not in repository, this will fail gracefully and show manual installation instructions
+	installCommands := []string{
 		"set -e",
 		"echo 'Starting PolarDB-X LogCollector installation...'",
+		"echo 'Checking prerequisites...'",
+		"helm version || (echo 'ERROR: helm not found' && exit 1)",
+
+		// Add Helm repository
+		"echo 'Adding Helm repository...'",
+		"helm repo add polardbx https://polardbx-charts.oss-cn-beijing.aliyuncs.com || echo 'WARN: Failed to add repository'",
+		"helm repo update || true",
+
+		// Try to install from Helm repository
+		fmt.Sprintf("echo 'Attempting to install %s from Helm repository...'", r.Name),
+		fmt.Sprintf("helm upgrade --install %s polardbx/polardbx-logcollector --namespace polardbx-logcollector --create-namespace --wait --timeout 300s || "+
+			"(echo 'WARN: Chart not found in repository. Please install manually:' && "+
+			"echo '  helm install %s ./charts/polardbx-logcollector -n polardbx-logcollector --create-namespace' && "+
+			"exit 1)", r.Name, r.Name),
+
+		// Verify installation
+		"echo 'Verifying installation...'",
+		"helm list -n polardbx-logcollector",
+
+		"echo '========================================='",
+		"echo 'Log collection stack installed successfully'",
+		"echo 'Namespace: polardbx-logcollector'",
+		fmt.Sprintf("echo 'Release: %s'", r.Name),
+		"echo 'Components: Filebeat DaemonSet + Logstash Deployment'",
+		"echo '========================================='",
 	}
 
-	// Create Filebeat DaemonSet if enabled
-	if r.EnableFilebeat {
-		commands = append(commands, "echo 'Installing Filebeat DaemonSet...'")
-		// This would normally apply Filebeat YAML manifests
-		commands = append(commands, fmt.Sprintf("echo 'Filebeat configuration: ES Host=%s, Index=%s'", r.ESHost, r.ESIndex))
+	command := strings.Join(installCommands, " && ")
+
+	// Always deploy in polardbx-logcollector namespace as per official documentation
+	targetNamespace := "polardbx-logcollector"
+
+	// Ensure the target namespace exists
+	ns := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: targetNamespace,
+		},
+	}
+	if err := cli.Create(c.Request.Context(), ns); err != nil && !apierrors.IsAlreadyExists(err) {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create namespace", "details": err.Error()})
+		return
 	}
 
-	// Create Logstash Deployment if enabled
-	if r.EnableLogstash {
-		commands = append(commands, "echo 'Installing Logstash Deployment...'")
-		// This would normally apply Logstash YAML manifests
-		commands = append(commands, "echo 'Logstash configuration applied'")
+	// Create ServiceAccount for Helm installer Job
+	installerSA := &corev1.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "polardbx-logcollector-installer",
+			Namespace: targetNamespace,
+		},
+	}
+	if err := cli.Create(c.Request.Context(), installerSA); err != nil && !apierrors.IsAlreadyExists(err) {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create installer ServiceAccount", "details": err.Error()})
+		return
 	}
 
-	// Create ConfigMaps for log collection strategies
-	commands = append(commands, "echo 'Creating log collection ConfigMaps...'")
-	commands = append(commands, "echo 'Log collection stack installation completed successfully'")
+	// Create ClusterRole with permissions for Helm installation
+	installerRole := &rbacv1.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "polardbx-logcollector-installer-role",
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				APIGroups: []string{""},
+				Resources: []string{"configmaps", "secrets", "services", "serviceaccounts", "pods", "namespaces", "nodes"},
+				Verbs:     []string{"get", "list", "watch", "create", "update", "patch", "delete"},
+			},
+			{
+				APIGroups: []string{"apps"},
+				Resources: []string{"deployments", "daemonsets", "replicasets", "statefulsets"},
+				Verbs:     []string{"get", "list", "watch", "create", "update", "patch", "delete"},
+			},
+			{
+				APIGroups: []string{"batch"},
+				Resources: []string{"jobs", "cronjobs"},
+				Verbs:     []string{"get", "list", "watch", "create", "update", "patch", "delete"},
+			},
+			{
+				APIGroups: []string{"rbac.authorization.k8s.io"},
+				Resources: []string{"roles", "rolebindings", "clusterroles", "clusterrolebindings"},
+				Verbs:     []string{"get", "list", "watch", "create", "update", "patch", "delete"},
+			},
+			{
+				APIGroups: []string{"polardbx.aliyun.com"},
+				Resources: []string{"polardbxlogcollectors", "polardbxlogcollectors/status", "polardbxlogcollectors/finalizers"},
+				Verbs:     []string{"get", "list", "watch", "create", "update", "patch", "delete"},
+			},
+		},
+	}
+	if err := cli.Create(c.Request.Context(), installerRole); err != nil {
+		if !apierrors.IsAlreadyExists(err) {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create installer ClusterRole", "details": err.Error()})
+			return
+		}
 
-	command := strings.Join(commands, " && ")
+		existingRole := &rbacv1.ClusterRole{}
+		if getErr := cli.Get(c.Request.Context(), client.ObjectKey{Name: installerRole.Name}, existingRole); getErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to refresh installer ClusterRole", "details": getErr.Error()})
+			return
+		}
+
+		existingRole.Rules = installerRole.Rules
+		if updateErr := cli.Update(c.Request.Context(), existingRole); updateErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update installer ClusterRole", "details": updateErr.Error()})
+			return
+		}
+	}
+
+	// Create ClusterRoleBinding
+	installerBinding := &rbacv1.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "polardbx-logcollector-installer-binding",
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:      "ServiceAccount",
+				Name:      "polardbx-logcollector-installer",
+				Namespace: targetNamespace,
+			},
+		},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: "rbac.authorization.k8s.io",
+			Kind:     "ClusterRole",
+			Name:     "polardbx-logcollector-installer-role",
+		},
+	}
+	if err := cli.Create(c.Request.Context(), installerBinding); err != nil {
+		if !apierrors.IsAlreadyExists(err) {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create installer ClusterRoleBinding", "details": err.Error()})
+			return
+		}
+
+		existingBinding := &rbacv1.ClusterRoleBinding{}
+		if getErr := cli.Get(c.Request.Context(), client.ObjectKey{Name: installerBinding.Name}, existingBinding); getErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to refresh installer ClusterRoleBinding", "details": getErr.Error()})
+			return
+		}
+
+		existingBinding.Subjects = installerBinding.Subjects
+		existingBinding.RoleRef = installerBinding.RoleRef
+		if updateErr := cli.Update(c.Request.Context(), existingBinding); updateErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update installer ClusterRoleBinding", "details": updateErr.Error()})
+			return
+		}
+	}
 
 	backoff := int32(0)
 	ttl := int32(600)
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: r.NS,
+			Namespace: targetNamespace,
 			Name:      jobName,
 			Labels: map[string]string{
 				"app":           "polardbx-logs-bootstrap",
@@ -174,11 +329,12 @@ func Bootstrap(c *gin.Context) {
 			TTLSecondsAfterFinished: &ttl,
 			Template: corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{
+					ServiceAccountName:           "polardbx-logcollector-installer",
 					RestartPolicy:                corev1.RestartPolicyNever,
 					AutomountServiceAccountToken: func(b bool) *bool { return &b }(true),
 					Containers: []corev1.Container{{
 						Name:            "logs-installer",
-						Image:           "alpine/helm:3.12.3", // Using helm image for kubectl access
+						Image:           config.GetGlobalConfig().GetHelmImage(), // Using helm image for kubectl access
 						ImagePullPolicy: corev1.PullIfNotPresent,
 						Command:         []string{"sh", "-c", command},
 						Env: []corev1.EnvVar{
@@ -208,8 +364,8 @@ func Bootstrap(c *gin.Context) {
 
 	c.JSON(http.StatusAccepted, gin.H{
 		"message":        "logs bootstrap started",
-		"namespace":      r.NS,
-		"targetNs":       "polardbx-logcollector",
+		"namespace":      targetNamespace,
+		"targetNs":       targetNamespace,
 		"mode":           r.Mode,
 		"releaseName":    r.Name,
 		"deploymentType": r.DeploymentType,
@@ -363,4 +519,46 @@ func BootstrapLogs(c *gin.Context) {
 		"logs":      string(logs),
 		"tailLines": tailLines,
 	})
+}
+
+// getLogCollectorManifests returns pre-rendered Kubernetes manifests for log collector components
+// This is a simplified approach - in production, consider using helm template or a Helm repository
+func getLogCollectorManifests(releaseName, deploymentType string) string {
+	// TODO: Ideally, this should call `helm template` or use Helm Go SDK to render the chart
+	// For now, return a minimal working manifest as a placeholder
+	// In production deployment, consider one of these approaches:
+	// 1. Use helm template command to render /charts/polardbx-logcollector
+	// 2. Upload chart to Helm repository and use helm upgrade --install
+	// 3. Pre-render manifests during build and embed them
+
+	return `# PolarDB-X LogCollector Manifests
+# NOTE: This is a simplified placeholder manifest
+# For full-featured deployment, use: helm template polardbx-logcollector ./charts/polardbx-logcollector
+
+# TODO: Replace with actual rendered manifests from charts/polardbx-logcollector
+# Current approach: The Job will use Helm repository installation
+
+# Placeholder - actual manifests should be generated from Helm chart
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: placeholder-logcollector-info
+  namespace: polardbx-logcollector
+data:
+  message: |
+    PolarDB-X LogCollector installation requires Helm chart deployment.
+    Please use one of the following methods:
+    
+    1. From Helm repository (recommended):
+       helm repo add polardbx https://polardbx-charts.oss-cn-beijing.aliyuncs.com
+       helm upgrade --install ` + releaseName + ` polardbx/polardbx-logcollector -n polardbx-logcollector --create-namespace
+    
+    2. From local chart:
+       helm install ` + releaseName + ` ./charts/polardbx-logcollector -n polardbx-logcollector --create-namespace
+    
+    3. kubectl apply with pre-rendered manifests:
+       helm template ` + releaseName + ` ./charts/polardbx-logcollector | kubectl apply -n polardbx-logcollector -f -
+    
+    Deployment Type: ` + deploymentType + `
+`
 }

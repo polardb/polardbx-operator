@@ -26,6 +26,9 @@ import { LoadingService, LoadingKeys } from '../../services/loading.service';
 import { RestoreJob, RestoreJobWithStatus } from '../../models/restore.model';
 import { Subject, interval, from, of } from 'rxjs';
 import { switchMap, takeUntil, concatMap, toArray, catchError } from 'rxjs/operators';
+import { BackupPhase, BackupProgressMetadata, BackupSubPhase } from '../../models/backup-progress.model';
+import { BackupProgressIndicatorComponent } from '../backup-progress-indicator/backup-progress-indicator.component';
+import { BackupType } from '../../utils/backup-progress-strategies';
 
 @Component({
   selector: 'app-restore-job-management',
@@ -51,7 +54,8 @@ import { switchMap, takeUntil, concatMap, toArray, catchError } from 'rxjs/opera
     NzDescriptionsModule,
     NzGridModule,
     NzAlertModule,
-    NzCheckboxModule
+    NzCheckboxModule,
+    BackupProgressIndicatorComponent
   ],
   template: `
     <div class="restore-job-management">
@@ -205,7 +209,12 @@ import { switchMap, takeUntil, concatMap, toArray, catchError } from 'rxjs/opera
                 </nz-tag>
                 <span class="progress-text">{{ getProgress(selectedJob) }}%</span>
               </div>
-              <nz-progress [nzPercent]="getProgress(selectedJob)" [nzStatus]="getProgressClass(selectedJob) === 'phase-warn' ? 'exception' : 'active'"></nz-progress>
+              <app-backup-progress-indicator
+                [metadata]="toBackupMetadata(selectedJob)"
+                [type]="BackupType.RESTORE"
+                size="small"
+                [showDetails]="true">
+              </app-backup-progress-indicator>
               <div *ngIf="isFailed(selectedJob)" style="margin-top:8px;">
                 <nz-alert nzType="error" [nzMessage]="getErrorMessage(selectedJob)" nzShowIcon></nz-alert>
               </div>
@@ -261,7 +270,12 @@ import { switchMap, takeUntil, concatMap, toArray, catchError } from 'rxjs/opera
               </nz-tag>
               <span class="progress-text">{{ getProgress(selectedJob) }}%</span>
             </div>
-            <nz-progress [nzPercent]="getProgress(selectedJob)" [nzStatus]="getProgressClass(selectedJob) === 'phase-warn' ? 'exception' : 'active'"></nz-progress>
+            <app-backup-progress-indicator
+              [metadata]="toBackupMetadata(selectedJob)"
+              [type]="BackupType.RESTORE"
+              size="default"
+              [showDetails]="true">
+            </app-backup-progress-indicator>
             <div *ngIf="isFailed(selectedJob)" style="margin-top:8px;">
               <nz-alert nzType="error" [nzMessage]="getErrorMessage(selectedJob)" nzShowIcon></nz-alert>
             </div>
@@ -416,6 +430,7 @@ import { switchMap, takeUntil, concatMap, toArray, catchError } from 'rxjs/opera
 })
 export class RestoreJobManagementComponent implements OnInit, OnDestroy {
   loadingKeys = LoadingKeys;
+  BackupType = BackupType;
   displayedColumns = ['clusterName', 'phase', 'restoreType', 'created', 'actions'];
   dataSource: RestoreJob[] = [];
   selectedJob?: RestoreJobWithStatus;
@@ -584,6 +599,61 @@ export class RestoreJobManagementComponent implements OnInit, OnDestroy {
         return 0;
     }
     return 30;
+  }
+
+  toBackupMetadata(job?: RestoreJob): BackupProgressMetadata {
+    if (!job) {
+      return {
+        phase: 'Pending',
+        progress: { percentage: 0 }
+      };
+    }
+
+    const phase = this.mapRestorePhaseToBackupPhase(job.phase);
+    const percentage = this.getProgress(job);
+
+    return {
+      phase,
+      subPhase: undefined,
+      startTime: (job as any).createdTime,
+      completionTime: undefined,
+      progress: {
+        percentage: this.normalizePercentage(percentage)
+      },
+      errorMessage: phase === 'Failed' ? (job as any).message : undefined,
+      warnings: [],
+      message: (job as any).message
+    };
+  }
+
+  private mapRestorePhaseToBackupPhase(phase?: string): BackupPhase {
+    const p = ((phase || '') as string).toLowerCase();
+    switch (p) {
+      case 'completed':
+      case '已完成':
+        return 'Completed';
+      case 'failed':
+      case '失败':
+        return 'Failed';
+      case 'creating':
+      case 'restoring':
+      case 'running':
+      case '创建中':
+      case '恢复中':
+        return 'Running';
+      case 'pending':
+      case '已提交':
+        return 'Pending';
+      default:
+        return 'Pending';
+    }
+  }
+
+  private normalizePercentage(value: number | undefined): number {
+    if (value === undefined || value === null || isNaN(value)) {
+      return 0;
+    }
+    return Math.max(0, Math.min(100, Math.round(value)));
   }
 
   reloadSelected(): void {

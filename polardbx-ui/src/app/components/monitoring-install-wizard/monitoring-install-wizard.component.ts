@@ -207,16 +207,28 @@ import { Router } from '@angular/router';
         <!-- 步骤3：安装执行 -->
         <nz-card *ngIf="currentStep === 2" class="step-card" nzTitle="安装执行">
           <div class="install-section">
-            <nz-alert nzType="info" nzMessage="安装进行中" nzDescription="请勿关闭页面，安装过程可能需要几分钟时间" nzShowIcon class="install-alert"></nz-alert>
+            <nz-alert nzType="info" nzMessage="安装进行中" nzDescription="请勿关闭页面，安装过程可能需要 3-5 分钟时间" nzShowIcon class="install-alert"></nz-alert>
             
-            <div class="install-progress">
-              <nz-steps nzDirection="vertical" nzSize="small" [nzCurrent]="installStep">
-                <nz-step nzTitle="准备安装环境" [nzDescription]="getInstallStepDescription(0)"></nz-step>
-                <nz-step nzTitle="创建命名空间" [nzDescription]="getInstallStepDescription(1)"></nz-step>
-                <nz-step nzTitle="安装 CRD" [nzDescription]="getInstallStepDescription(2)"></nz-step>
-                <nz-step nzTitle="部署监控组件" [nzDescription]="getInstallStepDescription(3)"></nz-step>
-                <nz-step nzTitle="配置服务" [nzDescription]="getInstallStepDescription(4)"></nz-step>
-              </nz-steps>
+            <div class="install-progress" *ngIf="installing">
+              <nz-spin nzSpinning="true" nzTip="正在安装监控组件，请稍候...">
+                <div style="min-height: 200px; display: flex; align-items: center; justify-content: center;">
+                  <p style="text-align: center; color: rgba(0,0,0,0.65); font-size: 14px;">
+                    安装预计需要 3-5 分钟，实际时间取决于网络和集群性能
+                  </p>
+                </div>
+              </nz-spin>
+            </div>
+
+            <div class="install-progress" *ngIf="installCompleted">
+              <div [style.padding]="'16px'" [style.background]="installSuccess ? '#f6ffed' : '#fff2f0'" [style.border]="'1px solid ' + (installSuccess ? '#b7eb8f' : '#ffccc7')" [style.border-radius]="'6px'">
+                <p [style.color]="installSuccess ? '#52c41a' : '#ff4d4f'" style="margin: 0; font-weight: 500;">
+                  <i nz-icon [nzType]="installSuccess ? 'check-circle' : 'close-circle'" [style.margin-right]="'8px'"></i>
+                  {{ installSuccess ? '安装完成！' : '安装失败' }}
+                </p>
+                <p *ngIf="installDuration" style="margin: 8px 0 0 0; color: rgba(0,0,0,0.65); font-size: 13px;">
+                  耗时: {{ installDuration }}
+                </p>
+              </div>
             </div>
 
             <div class="install-logs" *ngIf="installLogs.length > 0">
@@ -231,7 +243,7 @@ import { Router } from '@angular/router';
           </div>
 
           <div class="step-actions">
-            <button nz-button nzType="default" (click)="cancelInstall()" [disabled]="installing">
+            <button nz-button nzType="default" (click)="cancelInstall()" [disabled]="!installing">
               取消安装
             </button>
             <button nz-button nzType="primary" 
@@ -661,6 +673,7 @@ export class MonitoringInstallWizardComponent implements OnInit {
   installSuccess = false;
   installLogs: any[] = [];
   installDuration = '';
+  installJobInfo?: { jobName: string; namespace: string };
   // 验证
   verifying = false;
   verifyAttempts = 0;
@@ -777,12 +790,6 @@ export class MonitoringInstallWizardComponent implements OnInit {
     return this.deploymentConfigs[type as keyof typeof this.deploymentConfigs] || this.deploymentConfigs.default;
   }
 
-  getInstallStepDescription(step: number): string {
-    if (step < this.installStep) return '已完成';
-    if (step === this.installStep) return '进行中...';
-    return '等待中';
-  }
-
   getInstalledComponents(): string[] {
     const components: string[] = [];
     if (this.form.value.enablePrometheus) components.push('Prometheus');
@@ -821,43 +828,59 @@ export class MonitoringInstallWizardComponent implements OnInit {
     // 提交安装计划（后端当前持久化计划，不直接执行 Helm）
     const ns = this.form.value.namespace || 'polardbx-operator-system';
     this.api.monitoringBootstrap({ mode: 'managed', namespace: ns, releaseName: 'kube-prometheus-stack', dryRun: false }).subscribe({
-      next: () => {
+      next: (res: any) => {
         this.addLog('success', '已提交安装计划（bootstrap accepted）');
-        // 展示进度动画并完成
-        this.simulateInstallation();
+        this.addLog('info', `安装任务: ${res.jobName}`);
+        // 保存 Job 信息用于轮询
+        this.installJobInfo = { jobName: res.jobName, namespace: res.namespace || ns };
+        // 启动真实 Job 状态轮询
+        this.pollJobStatus();
       },
-      error: (e) => {
-        this.addLog('error', '提交安装计划失败');
+      error: (e: any) => {
+        this.addLog('error', '提交安装计划失败: ' + (e.message || '未知错误'));
         this.completeInstallation(false);
       }
     });
   }
 
-  private simulateInstallation(): void {
-    const steps = [
-      { message: '准备安装环境...', delay: 1000 },
-      { message: '创建命名空间 ' + this.form.value.namespace, delay: 1500 },
-      { message: '安装 CRD 资源...', delay: 2000 },
-      { message: '部署监控组件...', delay: 3000 },
-      { message: '配置服务和网络...', delay: 1000 }
-    ];
+  private pollJobStatus(): void {
+    if (!this.installJobInfo) {
+      this.completeInstallation(false);
+      return;
+    }
 
-    let currentStep = 0;
-    const executeStep = () => {
-      if (currentStep < steps.length) {
-        this.installStep = currentStep;
-        this.addLog('info', steps[currentStep].message);
-        
-        setTimeout(() => {
-          currentStep++;
-          executeStep();
-        }, steps[currentStep].delay);
-      } else {
-        this.completeInstallation(true);
-      }
-    };
+    const jobInfo = this.installJobInfo;
+    this.addLog('info', '正在监控安装进度...');
+    const pollInterval = setInterval(() => {
+      this.api.monitoringBootstrapStatus(jobInfo.jobName, jobInfo.namespace).subscribe({
+        next: (status: any) => {
+          // Update install step display
+          this.installStep = status.active || 0;
+          
+          // Check phase
+          if (status.phase === 'Succeeded') {
+            clearInterval(pollInterval);
+            this.addLog('success', '监控安装完成！');
+            this.completeInstallation(true);
+          } else if (status.phase === 'Failed') {
+            clearInterval(pollInterval);
+            this.addLog('error', `安装失败: ${status.message || '未知原因'}`);
+            this.completeInstallation(false);
+          } else {
+            // Still running - update status message
+            this.addLog('info', `安装进行中... (${status.active || 0} active pods)`);
+          }
+        },
+        error: (err: any) => {
+          clearInterval(pollInterval);
+          this.addLog('error', `查询 Job 状态失败: ${err.message || '未知错误'}`);
+          this.completeInstallation(false);
+        }
+      });
+    }, 5000); // Poll every 5 seconds
 
-    executeStep();
+    // Store interval ID for cleanup
+    (this as any).jobPollInterval = pollInterval;
   }
 
   private completeInstallation(success: boolean): void {

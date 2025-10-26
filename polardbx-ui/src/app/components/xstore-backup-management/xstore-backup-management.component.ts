@@ -25,15 +25,26 @@ import { NzPopconfirmModule } from 'ng-zorro-antd/popconfirm';
 import { NzSwitchModule } from 'ng-zorro-antd/switch';
 import { NzCollapseModule } from 'ng-zorro-antd/collapse';
 import { NzEmptyModule } from 'ng-zorro-antd/empty';
+import { NzDrawerModule } from 'ng-zorro-antd/drawer';
+import { NzDescriptionsModule } from 'ng-zorro-antd/descriptions';
 import { ApiService } from '../../services/api.service';
 import { LoadingService, LoadingKeys } from '../../services/loading.service';
 import { XStoreBackup, XStoreBackupWithStatus, CreateXStoreBackupRequest } from '../../models/xstore-backup.model';
 import { XStoreBackupBinlog, CreateXStoreBackupBinlogRequest } from '../../models/xstore-backup-binlog.model';
+import { 
+  mapBackupPhaseToUIStatus, 
+  isBackupRunning, 
+  isBackupCompletedStatus,
+  getPhaseDisplayLabel 
+} from '../../models/enums/backup-phase-helpers';
 import { XStore } from '../../models/xstore.model';
 import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 import { NamespaceService } from '../../services/namespace.service';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
+import { BackupProgressIndicatorComponent } from '../backup-progress-indicator/backup-progress-indicator.component';
+import { BackupPhase, BackupProgressMetadata, BackupSubPhase } from '../../models/backup-progress.model';
+import { BackupType } from '../../utils/backup-progress-strategies';
 
 @Component({
   selector: 'app-xstore-backup-management',
@@ -64,6 +75,9 @@ import { takeUntil } from 'rxjs/operators';
     NzSwitchModule,
     NzCollapseModule,
     NzEmptyModule,
+    NzDrawerModule,
+    NzDescriptionsModule,
+    BackupProgressIndicatorComponent,
   ],
   template: `
     <div class="xstore-backup-management">
@@ -166,7 +180,15 @@ import { takeUntil } from 'rxjs/operators';
                             <td>{{ b.displaySize || '-' }}</td>
                             <td>{{ formatDate(b.status?.startTime) }}</td>
                             <td>
-                              <nz-progress [nzPercent]="getProgressPercentage(b)" nzSize="small"></nz-progress>
+                              <app-backup-progress-indicator
+                                [metadata]="toBackupMetadata(b)"
+                                [type]="BackupType.XSTORE"
+                                size="small"
+                                [showDetails]="false"
+                                [displayOptions]="{
+                                  showPercentage: true
+                                }">
+                              </app-backup-progress-indicator>
                             </td>
                             <td nzAlign="center">
                               <div class="action-buttons">
@@ -306,7 +328,7 @@ import { takeUntil } from 'rxjs/operators';
                                 {{ bl.spec.pointInTimeRecover ? '启用' : '禁用' }}
                               </nz-tag>
                             </td>
-                            <td>{{ bl.spec.storageProvider?.storageName || '-' }}</td>
+                            <td>{{ bl.spec.storageProvider.storageName || '-' }}</td>
                             <td nzAlign="center">
                               <div class="action-buttons">
                                 <button 
@@ -915,6 +937,89 @@ import { takeUntil } from 'rxjs/operators';
               </ng-template>
             </nz-tab>
           </nz-tabset>
+
+          <nz-drawer
+            [nzVisible]="detailsDrawerVisible"
+            nzPlacement="right"
+            nzTitle="备份详情"
+            [nzWidth]="600"
+            (nzOnClose)="closeDetailsDrawer()">
+            <div *nzDrawerContent>
+              <nz-spin [nzSpinning]="detailsLoading" nzTip="加载中...">
+                <ng-container *ngIf="selectedBackup as backup; else noBackupSelected">
+                  <nz-descriptions nzBordered [nzColumn]="1">
+                    <nz-descriptions-item nzTitle="备份名称">
+                      {{ backup.metadata.name }}
+                    </nz-descriptions-item>
+                    <nz-descriptions-item nzTitle="命名空间">
+                      <nz-tag nzColor="blue">{{ backup.metadata.namespace }}</nz-tag>
+                    </nz-descriptions-item>
+                    <nz-descriptions-item nzTitle="目标 XStore">
+                      {{ getXStoreName(backup) }}
+                    </nz-descriptions-item>
+                    <nz-descriptions-item nzTitle="备份类别">
+                      {{ getCategoryDisplay(backup) }}
+                    </nz-descriptions-item>
+                    <nz-descriptions-item nzTitle="备份类型">
+                      {{ getBackupTypeLabel(backup) }}
+                    </nz-descriptions-item>
+                    <nz-descriptions-item nzTitle="状态">
+                      <nz-tag [nzColor]="getNzStatusColor(backup.status?.phase)">
+                        {{ backup.displayStatus || backup.status?.phase || '未知' }}
+                      </nz-tag>
+                    </nz-descriptions-item>
+                    <nz-descriptions-item nzTitle="消息">
+                      {{ backup.status?.message || '-' }}
+                    </nz-descriptions-item>
+                    <nz-descriptions-item nzTitle="进度">
+                      <app-backup-progress-indicator
+                        [metadata]="toBackupMetadata(backup)"
+                        [type]="BackupType.XSTORE"
+                        size="small"
+                        [showDetails]="true">
+                      </app-backup-progress-indicator>
+                    </nz-descriptions-item>
+                    <nz-descriptions-item nzTitle="耗时">
+                      {{ backup.displayDuration || '-' }}
+                    </nz-descriptions-item>
+                    <nz-descriptions-item nzTitle="开始时间">
+                      {{ formatDate(backup.status?.startTime) }}
+                    </nz-descriptions-item>
+                    <nz-descriptions-item nzTitle="完成时间">
+                      {{ getCompletionTime(backup) }}
+                    </nz-descriptions-item>
+                    <nz-descriptions-item nzTitle="备份大小">
+                      {{ backup.displaySize || '-' }}
+                    </nz-descriptions-item>
+                    <nz-descriptions-item nzTitle="压缩比">
+                      {{ backup.compressionRatio != null ? (backup.compressionRatio + '%') : '-' }}
+                    </nz-descriptions-item>
+                    <nz-descriptions-item nzTitle="存储类型">
+                      {{ getStorageProviderType(backup) }}
+                    </nz-descriptions-item>
+                    <nz-descriptions-item nzTitle="存储 Sink">
+                      {{ getStorageProviderSink(backup) }}
+                    </nz-descriptions-item>
+                    <nz-descriptions-item nzTitle="保留策略">
+                      {{ getRetentionPolicyText(backup) }}
+                    </nz-descriptions-item>
+                    <nz-descriptions-item nzTitle="存储路径">
+                      {{ getBackupRootPath(backup) }}
+                    </nz-descriptions-item>
+                    <nz-descriptions-item nzTitle="创建时间">
+                      {{ formatDate(backup.metadata.creationTimestamp) }}
+                    </nz-descriptions-item>
+                    <nz-descriptions-item nzTitle="最近成功时间">
+                      -
+                    </nz-descriptions-item>
+                  </nz-descriptions>
+                </ng-container>
+                <ng-template #noBackupSelected>
+                  <nz-empty nzNotFoundContent="请选择一个备份查看详情"></nz-empty>
+                </ng-template>
+              </nz-spin>
+            </div>
+          </nz-drawer>
         </div>
       </div>
   `,
@@ -1094,6 +1199,7 @@ export class XStoreBackupManagementComponent implements OnInit, OnDestroy {
   private ns = inject(NamespaceService);
   private message = inject(NzMessageService);
   loadingKeys = LoadingKeys;
+  BackupType = BackupType; // 供模板使用
 
   // Forms
   backupForm!: FormGroup;
@@ -1112,6 +1218,9 @@ export class XStoreBackupManagementComponent implements OnInit, OnDestroy {
   viewMode: 'summary' | 'detail' = 'summary';
   // Binlog modal
   binlogModalVisible = false;
+  selectedBackup: XStoreBackupWithStatus | null = null;
+  detailsDrawerVisible = false;
+  detailsLoading = false;
   // 明细计数与名称用于汇总视图显示类别细分（DN/GMS）
   private detailCountsByParent: Record<string, { dn: number; gms: number; dnNames: string[]; gmsNames: string[] }> = {};
   
@@ -1402,19 +1511,21 @@ export class XStoreBackupManagementComponent implements OnInit, OnDestroy {
   private enrichBackupWithStatus(backup: XStoreBackup): XStoreBackupWithStatus {
     const status = backup.status;
     const provider: any = (backup as any).spec?.storageProvider || {};
-    const storageName: string = (provider.type || provider.storageName || '').toString();
+    const storageName: string = (provider.type || provider.storageName || status?.storageName || '').toString();
 
     return {
       ...backup,
-      isRunning: status?.phase === 'Running',
-      isCompleted: status?.phase === 'Completed',
+      isRunning: isBackupRunning(status?.phase),
+      isCompleted: isBackupCompletedStatus(status?.phase),
       isFailed: status?.phase === 'Failed',
-      displayStatus: this.getDisplayStatus(status?.phase as any, (status as any)?.stage),
-      displaySize: this.formatBytes((status as any)?.backupSize),
-      displayDuration: this.calculateDuration(status?.startTime as any, (status as any)?.completionTime),
-      canRestore: status?.phase === 'Completed',
+      displayStatus: getPhaseDisplayLabel(status?.phase),
+      displaySize: '-',  // XStore 备份对象不包含大小信息
+      displayDuration: this.calculateDuration(status?.startTime, status?.endTime),
+      canRestore: isBackupCompletedStatus(status?.phase),
       storageType: storageName ? storageName.toUpperCase() : undefined,
-      compressionRatio: this.calculateCompressionRatio((status as any)?.backupSize, (status as any)?.compressedSize)
+      compressionRatio: 0,  // XStore 备份对象不包含大小信息，无法计算压缩比
+      storagePath: status?.backupRootPath || '-',  // 添加存储路径
+      completionTime: status?.endTime || '-'  // 添加完成时间
     } as any;
   }
 
@@ -1474,6 +1585,16 @@ export class XStoreBackupManagementComponent implements OnInit, OnDestroy {
     return Math.round((1 - compressedSize / originalSize) * 100);
   }
 
+  // 辅助方法：获取完成时间
+  getCompletionTime(backup: XStoreBackupWithStatus): string {
+    return this.formatDate(backup.status?.endTime);
+  }
+
+  // 辅助方法：获取存储路径
+  getBackupRootPath(backup: XStoreBackupWithStatus): string {
+    return backup.status?.backupRootPath || '-';
+  }
+
   getXStoreName(b: any): string {
     // Prefer spec.xStoreName; fallback to parsing from legacy names like "<backupName>-<xstoreName>-<role>"
     const direct = b?.spec?.xStoreName || (b?.spec?.xstore?.name);
@@ -1527,6 +1648,55 @@ export class XStoreBackupManagementComponent implements OnInit, OnDestroy {
     if (c.dnNames?.length) parts.push(`DN: ${c.dnNames.join(', ')}`);
     if (c.gmsNames?.length) parts.push(`GMS: ${c.gmsNames.join(', ')}`);
     return parts.join(' | ');
+  }
+
+  getStorageProviderType(backup?: XStoreBackupWithStatus | null): string {
+    const provider: any = backup?.spec?.storageProvider;
+    const storageName = provider?.storageName || provider?.type;
+    return storageName ? storageName.toString().toUpperCase() : '-';
+  }
+
+  getStorageProviderSink(backup?: XStoreBackupWithStatus | null): string {
+    const provider: any = backup?.spec?.storageProvider;
+    if (!provider) return '-';
+    if (provider.sink) return provider.sink;
+    if (provider?.oss?.bucket) return provider.oss.bucket;
+    if (provider?.s3?.bucket) return provider.s3.bucket;
+    if (provider?.sftp?.rootPath) return provider.sftp.rootPath;
+    return '-';
+  }
+
+  getBackupTypeLabel(backup?: XStoreBackupWithStatus | null): string {
+    const spec: any = backup?.spec || {};
+    const type: string = spec.backupType || spec.type || spec?.xStoreBackupType || spec?.backup?.type || 'full';
+    return type === 'incremental' ? '增量备份' : '全量备份';
+  }
+
+  getRetentionPolicyText(backup?: XStoreBackupWithStatus | null): string {
+    const spec: any = backup?.spec;
+    if (!spec) return '-';
+
+    if (spec.retentionTime) {
+      return spec.retentionTime;
+    }
+
+    const policy = spec.retentionPolicy;
+    if (!policy) {
+      return '未配置';
+    }
+
+    const parts: string[] = [];
+    if (policy.retain) {
+      parts.push(`保留 ${policy.retain} 个备份`);
+    }
+    if (policy.retainDays) {
+      parts.push(`保留 ${policy.retainDays} 天`);
+    }
+    if (policy.retainHours) {
+      parts.push(`额外保留 ${policy.retainHours} 小时`);
+    }
+
+    return parts.length ? parts.join('，') : '未配置';
   }
 
   private populateFormFromBackup(backup: XStoreBackup): void {
@@ -1727,8 +1897,32 @@ export class XStoreBackupManagementComponent implements OnInit, OnDestroy {
     this.selectedTab = 2; // 跳转到"创建备份配置"Tab
   }
 
-  viewBackup(backup: XStoreBackupWithStatus): void {
-    console.log('View backup details:', backup);
+  async viewBackup(backup: XStoreBackupWithStatus): Promise<void> {
+    this.detailsDrawerVisible = true;
+    this.detailsLoading = true;
+    this.selectedBackup = this.enrichBackupWithStatus(backup);
+
+    try {
+      const detail = await this.apiService.getXStoreBackup(
+        backup.metadata.namespace as string,
+        backup.metadata.name
+      ).toPromise();
+
+      if (detail) {
+        this.selectedBackup = this.enrichBackupWithStatus(detail);
+      }
+    } catch (error) {
+      console.warn('Failed to load XStore backup detail, fallback to cached data:', error);
+      this.message.warning('实时备份详情加载失败，显示缓存数据');
+    } finally {
+      this.detailsLoading = false;
+    }
+  }
+
+  closeDetailsDrawer(): void {
+    this.detailsDrawerVisible = false;
+    this.selectedBackup = null;
+    this.detailsLoading = false;
   }
 
   async refreshBackups(): Promise<void> {
@@ -1759,7 +1953,28 @@ export class XStoreBackupManagementComponent implements OnInit, OnDestroy {
   }
 
   getProgressPercentage(backup: XStoreBackupWithStatus): number {
-    return backup.status?.progress?.percentage || 0;
+    // XStoreBackupStatus doesn't have progress field, return 0 for now
+    // Progress should be calculated based on phase
+    if (isBackupCompletedStatus(backup.status?.phase)) return 100;
+    if (isBackupRunning(backup.status?.phase)) return 50;
+    return 0;
+  }
+
+  getProgressStatus(backup?: XStoreBackupWithStatus | null): 'success' | 'exception' | 'active' | 'normal' {
+    const phase = backup?.status?.phase;
+    if (!phase) {
+      return 'normal';
+    }
+    if (isBackupCompletedStatus(phase)) {
+      return 'success';
+    }
+    if (phase === 'Failed') {
+      return 'exception';
+    }
+    if (isBackupRunning(phase)) {
+      return 'active';
+    }
+    return 'normal';
   }
 
   onChangeViewMode(mode: 'summary' | 'detail'): void {
@@ -2000,5 +2215,155 @@ export class XStoreBackupManagementComponent implements OnInit, OnDestroy {
       retention: this.retentionForm.value,
       resource: this.resourceForm.value
     });
+  }
+
+  /**
+   * 将 XStore 备份对象转换为统一的 BackupProgressMetadata
+   */
+  toBackupMetadata(backup: XStoreBackupWithStatus): BackupProgressMetadata {
+    const status = backup.status;
+    // Note: XStoreBackupStatus doesn't have progress, stage, backupSize, or conditions fields
+    const phase = this.mapToBackupPhase(status?.phase);
+    const subPhase: BackupSubPhase | undefined = undefined;  // XStore doesn't have sub-phases
+
+    const percentageRaw = this.getProgressPercentage(backup);
+    const percentage = this.normalizePercentage(percentageRaw, phase);
+
+    const processedBytes: number | undefined = undefined;  // Not available in XStoreBackupStatus
+    const totalBytes: number | undefined = undefined;  // Not available in XStoreBackupStatus
+    const estimatedTimeRemaining: number | undefined = undefined;  // Not available
+
+    let transferRate: number | undefined;
+    if (processedBytes !== undefined && status?.startTime) {
+      const startEpoch = Date.parse(status.startTime);
+      if (!Number.isNaN(startEpoch)) {
+        const elapsedSeconds = (Date.now() - startEpoch) / 1000;
+        if (elapsedSeconds > 0) {
+          transferRate = processedBytes / elapsedSeconds;
+        }
+      }
+    }
+
+    const lastUpdateTime = new Date().toISOString();
+    // XStoreBackupStatus doesn't have conditions
+    const errorMessage = status?.phase === 'Failed' ? status?.message : undefined;
+    const warningMessages: string[] = [];
+
+    return {
+      phase,
+      subPhase,
+      progress: {
+        percentage,
+        processedBytes,
+        totalBytes,
+        transferRate,
+        estimatedTimeRemaining,
+        lastUpdateTime
+      },
+      startTime: status?.startTime,
+      completionTime: status?.endTime,  // Use endTime instead of completionTime
+      errorMessage,
+      warnings: warningMessages.length > 0 ? warningMessages : undefined,
+      message: status?.message || backup.metadata.name
+    };
+  }
+
+  private mapToBackupPhase(phase?: string): BackupPhase {
+    if (!phase) {
+      return 'Unknown';
+    }
+    const normalized = phase.toLowerCase();
+    if (['completed', 'finished', 'success', 'succeeded'].includes(normalized)) {
+      return 'Completed';
+    }
+    if (['failed', 'failure', 'error'].includes(normalized)) {
+      return 'Failed';
+    }
+    if (['pending', 'waiting', 'queued'].includes(normalized)) {
+      return 'Pending';
+    }
+    if (['deleting', 'cancelled', 'canceled', 'terminating'].includes(normalized)) {
+      return 'Cancelled';
+    }
+    if (['paused', 'pausing'].includes(normalized)) {
+      return 'Paused';
+    }
+    if (['running', 'backuping', 'collecting', 'calculating', 'binloging', 'metadatabackuping', 'executing'].includes(normalized)) {
+      return 'Running';
+    }
+    return 'Unknown';
+  }
+
+  private mapToBackupSubPhase(stage?: string): BackupSubPhase | undefined {
+    if (!stage) {
+      return undefined;
+    }
+    const normalized = stage.toLowerCase();
+    if (normalized.includes('prepare') || normalized.includes('init')) {
+      return 'Initializing';
+    }
+    if (normalized.includes('validate')) {
+      return 'Validating';
+    }
+    if (normalized.includes('collect') || normalized.includes('snapshot')) {
+      return 'Snapshotting';
+    }
+    if (normalized.includes('upload') || normalized.includes('transfer') || normalized.includes('binlog')) {
+      return 'Transferring';
+    }
+    if (normalized.includes('compress')) {
+      return 'Compressing';
+    }
+    if (normalized.includes('encrypt')) {
+      return 'Encrypting';
+    }
+    if (normalized.includes('verify') || normalized.includes('check')) {
+      return 'Verifying';
+    }
+    if (normalized.includes('final')) {
+      return 'Finalizing';
+    }
+    if (normalized.includes('clean')) {
+      return 'CleaningUp';
+    }
+    return undefined;
+  }
+
+  private normalizePercentage(value: unknown, phase: BackupPhase): number {
+    const numeric = typeof value === 'number' ? value : Number(value);
+    if (!Number.isNaN(numeric) && Number.isFinite(numeric)) {
+      const clamped = Math.min(100, Math.max(0, Math.round(numeric)));
+      if (phase === 'Completed' && clamped < 100) {
+        return 100;
+      }
+      return clamped;
+    }
+    return phase === 'Completed' ? 100 : 0;
+  }
+
+  private parseEstimatedTime(value: unknown): number | undefined {
+    if (value === undefined || value === null) {
+      return undefined;
+    }
+    if (typeof value === 'number') {
+      return Number.isFinite(value) ? value : undefined;
+    }
+    const numeric = Number(value);
+    return Number.isNaN(numeric) ? undefined : numeric;
+  }
+
+  private getLatestConditionTimestamp(
+    conditions?: Array<{ lastUpdateTime?: string; lastTransitionTime?: string }>
+  ): string | undefined {
+    if (!conditions || conditions.length === 0) {
+      return undefined;
+    }
+    const timestamps = conditions
+      .flatMap(c => [c.lastUpdateTime, c.lastTransitionTime])
+      .filter((t): t is string => !!t);
+    if (timestamps.length === 0) {
+      return undefined;
+    }
+    return timestamps.sort((a, b) => Date.parse(b) - Date.parse(a))[0];
   }
 }

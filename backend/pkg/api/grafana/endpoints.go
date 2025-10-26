@@ -1,6 +1,7 @@
 package grafana
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"sort"
@@ -143,37 +144,46 @@ func SyncDashboards(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload", "details": err.Error()})
 		return
 	}
+	count, err := syncDashboardsConfig(c.Request.Context(), cli, body.Dashboards, body.Overwrite)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusAccepted, gin.H{"message": "dashboards synced", "count": count})
+}
+
+func syncDashboardsConfig(ctx context.Context, cli client.Client, dashboards map[string]string, overwrite bool) (int, error) {
+	if len(dashboards) == 0 {
+		return 0, nil
+	}
 	cm := corev1.ConfigMap{}
 	key := client.ObjectKey{Namespace: settingsNS, Name: cmDashboards}
-	err := cli.Get(c.Request.Context(), key, &cm)
+	err := cli.Get(ctx, key, &cm)
 	if err != nil {
 		cm = corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: settingsNS, Name: cmDashboards}, Data: map[string]string{}}
-		if err2 := cli.Create(c.Request.Context(), &cm); err2 != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create dashboards", "details": err2.Error()})
-			return
+		if err2 := cli.Create(ctx, &cm); err2 != nil {
+			return 0, fmt.Errorf("failed to create dashboards: %w", err2)
 		}
 	}
 	if cm.Data == nil {
 		cm.Data = map[string]string{}
 	}
-	for k, v := range body.Dashboards {
+	for k, v := range dashboards {
 		if old, exists := cm.Data[k]; exists {
-			if !body.Overwrite && old != "" {
+			if !overwrite && old != "" {
 				continue
 			}
 			if old != v {
-				// version previous content
 				next := nextVersion(cm.Data, k)
 				cm.Data[fmt.Sprintf("%s@v%04d", k, next)] = old
 			}
 		}
 		cm.Data[k] = v
 	}
-	if err := cli.Update(c.Request.Context(), &cm); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update dashboards", "details": err.Error()})
-		return
+	if err := cli.Update(ctx, &cm); err != nil {
+		return 0, fmt.Errorf("failed to update dashboards: %w", err)
 	}
-	c.JSON(http.StatusAccepted, gin.H{"message": "dashboards synced", "count": len(body.Dashboards)})
+	return len(dashboards), nil
 }
 
 func nextVersion(data map[string]string, name string) int {

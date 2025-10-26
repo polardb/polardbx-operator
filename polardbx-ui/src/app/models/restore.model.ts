@@ -8,17 +8,28 @@ export interface RestoreStorageProvider {
 }
 
 export interface RestoreFromSpec {
-  readonly polardbxName?: string;
-  readonly backupSet?: string;
-  readonly xStoreName?: string;
+  // Note: Backend field name is XStoreName but json tag is "clusterName"
+  readonly clusterName?: string;
+  readonly backupSelector?: { [key: string]: string };
+  readonly backupSetPath?: string;
+}
+
+export interface RestoreBinlogSource {
+  readonly namespace?: string;
+  readonly checksum?: string;
+  readonly storageProvider?: RestoreStorageProvider;
 }
 
 export interface RestoreSpec {
-  readonly backupSet?: string;                  // Backup set name for restoration
-  readonly time?: string;                       // Time for PITR (Point-in-Time Recovery)
-  readonly from?: RestoreFromSpec;              // Source information
+  // Note: Backend json tag is "backupset" (lowercase)
+  readonly backupset?: string;
+  readonly time?: string;
+  readonly from?: RestoreFromSpec;
   readonly storageProvider?: RestoreStorageProvider;
-  readonly timezone?: string;                   // Timezone for time parsing
+  readonly timezone?: string;
+  // Note: Backend has typo in json tag: "pitrEndpoiint" instead of "pitrEndpoint"
+  readonly pitrEndpoiint?: string;
+  readonly binlogSource?: RestoreBinlogSource;
 }
 
 export interface PITRStatus {
@@ -34,7 +45,8 @@ export interface PITRStatus {
 
 // Request types for API calls
 export interface RestoreClusterRequest {
-  readonly backupSet?: string;
+  // Use backend json tag names
+  readonly backupset?: string;
   readonly time?: string;                       // For PITR
   readonly targetCluster?: string;              // For restore to new cluster
   readonly storageProvider?: {
@@ -45,7 +57,7 @@ export interface RestoreClusterRequest {
 
 export interface PITRRequest {
   readonly time: string;                        // Required: PITR timestamp
-  readonly backupSet?: string;                  // Optional: specific backup set
+  readonly backupset?: string;                  // Optional: specific backup set (note: lowercase)
   readonly targetCluster?: string;              // Optional: restore to different cluster
   readonly timezone?: string;                   // Optional: timezone for time parsing
 }
@@ -76,6 +88,9 @@ export interface RestoreJob {
   readonly stage: string;
   readonly restoreSpec?: RestoreSpec;
   readonly pitrStatus?: PITRStatus;
+  // Note: Backend has typo in json tag: "pitrEndpoiint"
+  readonly pitrEndpoiint?: string;
+  // Keep backward compatibility
   readonly pitrEndpoint?: string;
   readonly observedGeneration?: number;
   readonly conditions?: Array<{

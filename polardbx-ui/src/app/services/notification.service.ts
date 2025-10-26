@@ -1,8 +1,7 @@
 import { Injectable, inject } from '@angular/core';
-import { MatDialog } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
+import { NzMessageRef, NzMessageService } from 'ng-zorro-antd/message';
+import { NzModalService, ModalOptions } from 'ng-zorro-antd/modal';
 import { Observable } from 'rxjs';
-// Removed ConfirmationDialogComponent import - using native confirm() instead
 
 export interface NotificationOptions {
   duration?: number;
@@ -10,14 +9,16 @@ export interface NotificationOptions {
   panelClass?: string[];
   horizontalPosition?: 'start' | 'center' | 'end' | 'left' | 'right';
   verticalPosition?: 'top' | 'bottom';
+  pauseOnHover?: boolean;
 }
 
 @Injectable({
   providedIn: 'root'
 })
 export class NotificationService {
-  private snackBar = inject(MatSnackBar);
-  private dialog = inject(MatDialog);
+  private message = inject(NzMessageService);
+  private modal = inject(NzModalService);
+  private persistentMessages: NzMessageRef[] = [];
 
 
   /**
@@ -28,17 +29,13 @@ export class NotificationService {
       duration: 3000,
       panelClass: ['success-snackbar'],
       horizontalPosition: 'center',
-      verticalPosition: 'top'
+      verticalPosition: 'top',
+      pauseOnHover: true
     };
     
     const finalOptions = { ...defaultOptions, ...options };
     
-    this.snackBar.open(message, finalOptions.action || '关闭', {
-      duration: finalOptions.duration,
-      panelClass: finalOptions.panelClass,
-      horizontalPosition: finalOptions.horizontalPosition,
-      verticalPosition: finalOptions.verticalPosition
-    });
+    this.openMessage('success', message, finalOptions);
   }
 
   /**
@@ -49,17 +46,13 @@ export class NotificationService {
       duration: 5000,
       panelClass: ['error-snackbar'],
       horizontalPosition: 'center',
-      verticalPosition: 'top'
+      verticalPosition: 'top',
+      pauseOnHover: true
     };
     
     const finalOptions = { ...defaultOptions, ...options };
     
-    this.snackBar.open(message, finalOptions.action || '关闭', {
-      duration: finalOptions.duration,
-      panelClass: finalOptions.panelClass,
-      horizontalPosition: finalOptions.horizontalPosition,
-      verticalPosition: finalOptions.verticalPosition
-    });
+    this.openMessage('error', message, finalOptions);
   }
 
   /**
@@ -70,17 +63,13 @@ export class NotificationService {
       duration: 4000,
       panelClass: ['warning-snackbar'],
       horizontalPosition: 'center',
-      verticalPosition: 'top'
+      verticalPosition: 'top',
+      pauseOnHover: true
     };
     
     const finalOptions = { ...defaultOptions, ...options };
     
-    this.snackBar.open(message, finalOptions.action || '关闭', {
-      duration: finalOptions.duration,
-      panelClass: finalOptions.panelClass,
-      horizontalPosition: finalOptions.horizontalPosition,
-      verticalPosition: finalOptions.verticalPosition
-    });
+    this.openMessage('warning', message, finalOptions);
   }
 
   /**
@@ -91,27 +80,42 @@ export class NotificationService {
       duration: 4000,
       panelClass: ['info-snackbar'],
       horizontalPosition: 'center',
-      verticalPosition: 'top'
+      verticalPosition: 'top',
+      pauseOnHover: true
     };
     
     const finalOptions = { ...defaultOptions, ...options };
     
-    this.snackBar.open(message, finalOptions.action || '关闭', {
-      duration: finalOptions.duration,
-      panelClass: finalOptions.panelClass,
-      horizontalPosition: finalOptions.horizontalPosition,
-      verticalPosition: finalOptions.verticalPosition
-    });
+    this.openMessage('info', message, finalOptions);
   }
 
   /**
    * 显示确认对话框
    */
   confirm(data: any): Observable<boolean> {
+    const options: ModalOptions = {
+      nzTitle: data?.title || '确认操作',
+      nzContent: this.buildModalContent(data?.message, data?.details),
+      nzOkText: data?.confirmText || '确认',
+      nzCancelText: data?.cancelText || '取消',
+      nzOkDanger: data?.type === 'danger',
+      nzClassName: data?.type === 'danger' ? 'notification-modal-danger' : undefined
+    };
+
     return new Observable(observer => {
-      const result = window.confirm(`${data.title}\n\n${data.message}`);
-      observer.next(result);
-      observer.complete();
+      const modalRef = this.modal.confirm({
+        ...options,
+        nzOnOk: () => {
+          observer.next(true);
+          observer.complete();
+        },
+        nzOnCancel: () => {
+          observer.next(false);
+          observer.complete();
+        }
+      });
+
+      return () => modalRef.destroy();
     });
   }
 
@@ -198,14 +202,24 @@ export class NotificationService {
    * 显示加载提示
    */
   loading(message: string): void {
-    this.info(message, { duration: 0 });
+    const ref = this.message.loading(message, {
+      nzDuration: 0,
+      nzPauseOnHover: true
+    });
+    this.persistentMessages.push(ref);
   }
 
   /**
    * 关闭所有通知
    */
   dismissAll(): void {
-    this.snackBar.dismiss();
+    this.persistentMessages.forEach(ref => {
+      if (ref && ref.messageId) {
+        this.message.remove(ref.messageId);
+      }
+    });
+    this.persistentMessages = [];
+    this.message.remove();
   }
 
   /**
@@ -270,5 +284,37 @@ export class NotificationService {
 
   showWarning(message: string, options?: NotificationOptions): void {
     this.warning(message, options);
+  }
+
+  private openMessage(type: 'success' | 'error' | 'warning' | 'info', message: string, options: NotificationOptions): void {
+    const nzDuration = options.duration ?? 3000;
+    const actionSuffix = options.action ? `（${options.action}）` : '';
+    this.message.create(type, `${message}${actionSuffix}`, {
+      nzDuration,
+      nzPauseOnHover: options.pauseOnHover ?? true,
+      nzAnimate: true
+    });
+  }
+
+  private buildModalContent(message?: string, details?: string): string {
+    if (!details) {
+      return message || '';
+    }
+    const escapedDetails = details.replace(/[&<>'"]/g, (char) => {
+      const map: Record<string, string> = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      };
+      return map[char] || char;
+    });
+    return `
+      <div class="notification-modal-content">
+        <p>${message || ''}</p>
+        <pre>${escapedDetails}</pre>
+      </div>
+    `;
   }
 }

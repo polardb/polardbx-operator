@@ -12,3 +12,5 @@ func GrafanaSyncDashboards(c *gin.Context) { api_grafana.SyncDashboards(c) }
 func GrafanaListDashboards(c *gin.Context) { api_grafana.ListDashboards(c) }
 func GrafanaListVersions(c *gin.Context)   { api_grafana.ListDashboardVersions(c) }
 func GrafanaRollback(c *gin.Context)       { api_grafana.RollbackDashboard(c) }
+func GrafanaListTemplates(c *gin.Context)  { api_grafana.ListTemplates(c) }
+func GrafanaGetTemplate(c *gin.Context)    { api_grafana.GetTemplate(c) }

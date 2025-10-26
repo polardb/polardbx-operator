@@ -7,7 +7,7 @@ export interface SessionInfo { enabled: boolean; username?: string; role?: strin
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private http = inject(HttpClient);
-  private baseUrl = 'http://localhost:8080/api/v1';
+  private baseUrl = '/api/v1';
 
   private sessionSubject = new BehaviorSubject<SessionInfo>({ enabled: false });
   session$ = this.sessionSubject.asObservable();
