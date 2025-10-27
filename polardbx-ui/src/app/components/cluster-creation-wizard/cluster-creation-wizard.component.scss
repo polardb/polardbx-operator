@@ -1,0 +1,601 @@
+/* 集群创建向导样式 */
+
+.cluster-creation-wizard {
+  min-height: 100vh;
+  background: #f5f5f5;
+  padding: 0;
+}
+
+/* 向导头部 */
+.wizard-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 20px;
+  margin-bottom: 24px;
+  
+  mat-card {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border: none;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+  }
+  
+  .title-icon {
+    color: #667eea;
+    margin-right: 8px;
+    font-size: 28px;
+    width: 28px;
+    height: 28px;
+  }
+  
+  mat-card-title {
+    display: flex;
+    align-items: center;
+    font-size: 24px;
+    font-weight: 600;
+    color: #333;
+  }
+  
+  mat-card-subtitle {
+    font-size: 14px;
+    color: #666;
+    margin-top: 8px;
+  }
+}
+
+/* 向导内容 */
+.wizard-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+.cluster-stepper {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  overflow: hidden;
+}
+
+/* 步骤内容 */
+.step-content {
+  padding: 32px;
+  min-height: 500px;
+}
+
+.step-header {
+  margin-bottom: 32px;
+  text-align: center;
+  
+  h3 {
+    font-size: 20px;
+    font-weight: 600;
+    color: #333;
+    margin: 0 0 8px 0;
+  }
+  
+  p {
+    font-size: 14px;
+    color: #666;
+    margin: 0;
+  }
+}
+
+/* 表单网格 */
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 24px;
+  
+  .full-width {
+    grid-column: 1 / -1;
+  }
+  
+  .half-width {
+    grid-column: span 1;
+  }
+}
+
+/* 模板选择 */
+.templates-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  margin-bottom: 32px;
+}
+
+.template-card {
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: 2px solid transparent;
+  position: relative;
+  
+  &:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+  }
+  
+  &.selected {
+    border-color: #667eea;
+    box-shadow: 0 8px 24px rgba(102, 126, 234, 0.3);
+  }
+  
+  &.recommended::before {
+    content: '';
+    position: absolute;
+    top: -2px;
+    left: -2px;
+    right: -2px;
+    bottom: -2px;
+    background: linear-gradient(45deg, #ffd700, #ff8c00);
+    border-radius: 8px;
+    z-index: -1;
+  }
+  
+  mat-card-header {
+    position: relative;
+  }
+  
+  .template-icon {
+    background: #f0f0f0;
+    border-radius: 50%;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 16px;
+    
+    mat-icon {
+      color: #667eea;
+      font-size: 24px;
+    }
+  }
+  
+  .recommended-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: #ffd700;
+    color: #333;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    
+    mat-icon {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+    }
+  }
+  
+  mat-card-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+  
+  .template-specs {
+    display: flex;
+    gap: 12px;
+    margin-top: 12px;
+    
+    .spec-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+      color: #666;
+      
+      mat-icon {
+        font-size: 16px;
+        width: 16px;
+        height: 16px;
+      }
+    }
+  }
+}
+
+/* 拓扑配置 */
+.topology-tabs {
+  margin-bottom: 24px;
+  
+  .tab-content {
+    padding: 24px 0;
+  }
+}
+
+.node-config {
+  .node-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 24px;
+    padding: 16px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    
+    mat-icon {
+      font-size: 32px;
+      width: 32px;
+      height: 32px;
+      color: #667eea;
+    }
+    
+    h4 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
+      color: #333;
+    }
+    
+    p {
+      margin: 0;
+      font-size: 14px;
+      color: #666;
+      flex: 1;
+    }
+  }
+  
+  .optional-header {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 24px;
+    padding: 16px;
+    background: #fff3cd;
+    border-radius: 8px;
+    border-left: 4px solid #ffc107;
+    
+    mat-checkbox {
+      font-weight: 600;
+    }
+    
+    p {
+      margin: 0;
+      font-size: 14px;
+      color: #856404;
+    }
+  }
+}
+
+/* 拓扑总览 */
+.topology-summary {
+  margin-top: 32px;
+  padding: 24px;
+  background: #f8f9fa;
+  border-radius: 12px;
+  
+  h4 {
+    margin: 0 0 16px 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+  }
+}
+
+.summary-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.summary-card {
+  background: white;
+  padding: 16px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  
+  mat-icon {
+    color: #667eea;
+    font-size: 24px;
+  }
+  
+  .summary-content {
+    flex: 1;
+    
+    .summary-title {
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 4px;
+    }
+    
+    .summary-value {
+      font-size: 16px;
+      font-weight: 600;
+      color: #333;
+    }
+  }
+}
+
+/* 存储配置 */
+.storage-config {
+  .storage-option {
+    .storage-label {
+      font-weight: 600;
+      color: #333;
+    }
+    
+    .storage-description {
+      font-size: 12px;
+      color: #666;
+      margin-top: 4px;
+    }
+  }
+  
+  .storage-info {
+    display: flex;
+    gap: 12px;
+    padding: 16px;
+    background: #e3f2fd;
+    border-radius: 8px;
+    margin-top: 24px;
+    
+    mat-icon {
+      color: #2196f3;
+      margin-top: 4px;
+    }
+    
+    .info-content {
+      flex: 1;
+      
+      h4 {
+        margin: 0 0 8px 0;
+        font-size: 14px;
+        font-weight: 600;
+        color: #1976d2;
+      }
+      
+      ul {
+        margin: 0;
+        padding-left: 16px;
+        
+        li {
+          font-size: 13px;
+          color: #1565c0;
+          margin-bottom: 4px;
+          
+          strong {
+            color: #0d47a1;
+          }
+        }
+      }
+    }
+  }
+}
+
+/* 网络配置 */
+.network-config {
+  .service-types {
+    margin-bottom: 24px;
+    
+    h4 {
+      margin: 0 0 16px 0;
+      font-size: 16px;
+      font-weight: 600;
+      color: #333;
+    }
+  }
+}
+
+.service-type-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.service-type-card {
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: 2px solid #e0e0e0;
+  
+  &:hover {
+    border-color: #667eea;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+  }
+  
+  &.selected {
+    border-color: #667eea;
+    background: #f3f4ff;
+  }
+  
+  .service-type-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    
+    mat-icon {
+      color: #667eea;
+      font-size: 32px;
+      width: 32px;
+      height: 32px;
+    }
+    
+    .service-type-info {
+      flex: 1;
+      
+      .service-type-title {
+        font-weight: 600;
+        color: #333;
+        margin-bottom: 4px;
+      }
+      
+      .service-type-description {
+        font-size: 12px;
+        color: #666;
+      }
+    }
+  }
+}
+
+.advanced-network {
+  margin-top: 24px;
+}
+
+.security-config {
+  margin-top: 24px;
+  
+  h4 {
+    margin: 0 0 16px 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+  }
+}
+
+/* 高级配置 */
+.advanced-options {
+  .option-panel {
+    margin-bottom: 16px;
+    
+    .option-content {
+      padding: 16px 0;
+      
+      .option-item {
+        margin-bottom: 16px;
+        
+        mat-checkbox {
+          margin-bottom: 4px;
+        }
+        
+        p {
+          margin: 0;
+          font-size: 13px;
+          color: #666;
+          margin-left: 32px;
+        }
+      }
+    }
+  }
+}
+
+/* 配置确认 */
+.config-review {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+  margin-bottom: 32px;
+}
+
+.review-card {
+  .review-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #f0f0f0;
+    
+    &:last-child {
+      border-bottom: none;
+    }
+    
+    .label {
+      font-weight: 500;
+      color: #666;
+    }
+    
+    .value {
+      font-weight: 600;
+      color: #333;
+    }
+  }
+}
+
+.topology-review {
+  .node-review {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0;
+    border-bottom: 1px solid #f0f0f0;
+    
+    &:last-child {
+      border-bottom: none;
+    }
+    
+    mat-icon {
+      color: #667eea;
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+    }
+    
+    .resources {
+      margin-left: auto;
+      font-size: 12px;
+      color: #666;
+    }
+  }
+}
+
+/* 创建状态 */
+.creation-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 32px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  margin: 24px 0;
+  
+  p {
+    margin: 0;
+    font-size: 14px;
+    color: #666;
+  }
+}
+
+/* 步骤操作按钮 */
+.step-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid #e0e0e0;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .wizard-content {
+    padding: 0 12px;
+  }
+  
+  .step-content {
+    padding: 24px 16px;
+  }
+  
+  .form-grid {
+    grid-template-columns: 1fr;
+    
+    .half-width {
+      grid-column: span 1;
+    }
+  }
+  
+  .templates-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .service-type-cards {
+    grid-template-columns: 1fr;
+  }
+  
+  .summary-cards {
+    grid-template-columns: 1fr;
+  }
+  
+  .config-review {
+    grid-template-columns: 1fr;
+  }
+}

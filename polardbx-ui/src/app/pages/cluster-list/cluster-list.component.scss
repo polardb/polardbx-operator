@@ -1,0 +1,246 @@
+:host {
+  display: block;
+  animation: fadeIn 0.5s ease-in-out;
+}
+
+.cluster-list-container {
+  padding: 20px;
+  background: #f0f2f5;
+  min-height: 100vh;
+}
+
+// 页面头部样式
+.page-header {
+  background: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  margin-bottom: 20px;
+  border: 1px solid #e8e8e8;
+
+  .page-icon {
+    font-size: 24px;
+    color: #1890ff;
+  }
+
+  .page-title {
+    font-size: 20px;
+    font-weight: 600;
+    color: rgba(0, 0, 0, 0.88);
+  }
+
+  .refresh-label {
+    font-size: 14px;
+    color: #666;
+    margin-right: 8px;
+  }
+}
+
+// 搜索和统计卡片
+.search-statistics-card {
+  margin-bottom: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border-radius: 8px;
+
+  .search-section {
+    margin-bottom: 16px;
+
+    .search-input {
+      max-width: 500px;
+    }
+
+    .search-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 12px;
+    }
+  }
+
+  .statistics-section {
+    .ant-statistic {
+      text-align: center;
+      
+      .ant-statistic-title {
+        font-size: 14px;
+        color: #666;
+        margin-bottom: 8px;
+      }
+
+      .ant-statistic-content {
+        font-size: 24px;
+        font-weight: 600;
+      }
+    }
+  }
+}
+
+// 加载状态卡片
+.loading-card {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border-radius: 8px;
+
+  .loading-container {
+    text-align: center;
+    padding: 60px 20px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 12px;
+    .loading-text {
+      color: rgba(0,0,0,0.65);
+      letter-spacing: 0.5px;
+    }
+  }
+}
+
+// 表格卡片
+.table-card {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border-radius: 8px;
+
+  .clusters-table {
+    .cluster-link {
+      color: #1890ff;
+      font-weight: 500;
+      text-decoration: none;
+      cursor: pointer;
+      transition: all 0.3s;
+
+      &:hover {
+        color: #40a9ff;
+        text-decoration: underline;
+      }
+    }
+
+    .ant-table-tbody > tr > td {
+      vertical-align: middle;
+    }
+
+    .ant-table-thead > tr > th {
+      background: #fafafa;
+      font-weight: 600;
+      color: #262626;
+    }
+  }
+}
+
+// 无结果状态
+.no-results-hint {
+  margin: 0;
+  color: #8c8c8c;
+  font-size: 14px;
+}
+
+// 动画效果
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.page-header, .search-statistics-card, .table-card {
+  animation: slideInLeft 0.6s ease-out;
+}
+
+.page-header {
+  animation-delay: 0.1s;
+}
+
+.search-statistics-card {
+  animation-delay: 0.2s;
+}
+
+.table-card {
+  animation-delay: 0.3s;
+}
+
+// 响应式设计
+@media (max-width: 768px) {
+  .cluster-list-container {
+    padding: 12px;
+  }
+
+  .page-header {
+    .ant-page-header-heading {
+      flex-direction: column;
+      align-items: flex-start !important;
+      gap: 16px;
+    }
+
+    .ant-page-header-heading-extra {
+      margin-top: 16px;
+      width: 100%;
+      
+      nz-space {
+        width: 100%;
+        justify-content: flex-start;
+        flex-wrap: wrap;
+      }
+    }
+  }
+
+  .search-section {
+    .search-input {
+      max-width: 100%;
+    }
+  }
+
+  .statistics-section {
+    [nz-col] {
+      margin-bottom: 16px;
+    }
+  }
+
+  .clusters-table {
+    .ant-table {
+      font-size: 12px;
+    }
+    
+    .ant-table-thead > tr > th,
+    .ant-table-tbody > tr > td {
+      padding: 8px 4px;
+    }
+  }
+}
+
+@media (max-width: 576px) {
+  .clusters-table {
+    th:nth-child(3),
+    td:nth-child(3),
+    th:nth-child(4),
+    td:nth-child(4) {
+      display: none;
+    }
+  }
+}
+
+// 深色主题支持
+@media (prefers-color-scheme: dark) {
+  .cluster-list-container {
+    background: #141414;
+  }
+
+  .page-header,
+  .search-statistics-card,
+  .table-card,
+  .loading-card {
+    background: #1f1f1f;
+    border-color: #303030;
+  }
+}

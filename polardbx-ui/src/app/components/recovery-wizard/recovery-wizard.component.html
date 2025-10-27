@@ -1,0 +1,375 @@
+<div class="recovery-wizard-container">
+  <div class="wizard-inner">
+    <mat-horizontal-stepper [linear]="true" #stepper>
+      
+      <!-- Step 1: Restore Type Selection -->
+      <mat-step [stepControl]="restoreTypeForm" label="选择恢复类型">
+        <form [formGroup]="restoreTypeForm">
+          <div class="step-content">
+            <h3>选择恢复方式</h3>
+            <p class="step-description">请选择您希望使用的恢复方式</p>
+            
+            <mat-radio-group formControlName="restoreType" class="restore-type-options">
+              <mat-radio-button value="backup" class="restore-option">
+                <div class="option-content">
+                  <div class="option-header">
+                    <mat-icon>backup</mat-icon>
+                    <span class="option-title">备份恢复</span>
+                  </div>
+                  <p class="option-description">从特定的备份集恢复集群到备份时的状态</p>
+                </div>
+              </mat-radio-button>
+              
+              <mat-radio-button value="pitr" class="restore-option">
+                <div class="option-content">
+                  <div class="option-header">
+                    <mat-icon>schedule</mat-icon>
+                    <span class="option-title">时间点恢复 (PITR)</span>
+                  </div>
+                  <p class="option-description">恢复集群到指定的时间点状态</p>
+                </div>
+              </mat-radio-button>
+            </mat-radio-group>
+          </div>
+          
+          <div class="step-actions">
+            <button mat-button matStepperNext [disabled]="!isStepValid(0)">下一步</button>
+          </div>
+        </form>
+      </mat-step>
+
+      <!-- Step 2: Source Selection -->
+      <mat-step [stepControl]="sourceSelectionForm" label="选择恢复源">
+        <form [formGroup]="sourceSelectionForm">
+          <div class="step-content">
+            <h3>配置恢复源</h3>
+            <p class="step-description">选择要恢复的源集群和恢复点</p>
+            
+            <div class="form-row">
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>源集群</mat-label>
+                <mat-select formControlName="sourceCluster" (selectionChange)="onSourceClusterChange()">
+                  <mat-option *ngFor="let cluster of availableClusters" [value]="cluster.metadata.name">
+                    {{cluster.metadata.name}} ({{cluster.metadata.namespace}})
+                  </mat-option>
+                </mat-select>
+                <mat-error>{{getFieldError(sourceSelectionForm, 'sourceCluster')}}</mat-error>
+              </mat-form-field>
+            </div>
+
+            <div class="form-row">
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>命名空间</mat-label>
+                <input matInput formControlName="sourceNamespace">
+                <mat-error>{{getFieldError(sourceSelectionForm, 'sourceNamespace')}}</mat-error>
+              </mat-form-field>
+            </div>
+
+            <!-- Backup Set Selection -->
+            <div *ngIf="isBackupRestore" class="backup-selection">
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>备份集</mat-label>
+                <mat-select formControlName="backupSet">
+                  <mat-option *ngFor="let backup of availableBackups" [value]="backup.metadata.name">
+                    {{backup.metadata.name}} - {{backup.metadata.creationTimestamp | date:'medium'}}
+                  </mat-option>
+                </mat-select>
+                <mat-error>{{getFieldError(sourceSelectionForm, 'backupSet')}}</mat-error>
+              </mat-form-field>
+            </div>
+
+            <!-- PITR Time Selection -->
+            <div *ngIf="isPitrRestore" class="pitr-selection">
+              <div class="form-row">
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>恢复时间点</mat-label>
+                  <input matInput 
+                         type="datetime-local" 
+                         formControlName="pitrTime">
+                  <mat-error>{{getFieldError(sourceSelectionForm, 'pitrTime')}}</mat-error>
+                </mat-form-field>
+              </div>
+              
+              <div class="form-row">
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>时区</mat-label>
+                  <mat-select formControlName="pitrTimezone">
+                    <mat-option *ngFor="let tz of timezones" [value]="tz.value">
+                      {{tz.label}}
+                    </mat-option>
+                  </mat-select>
+                </mat-form-field>
+              </div>
+            </div>
+          </div>
+          
+          <div class="step-actions">
+            <button mat-button matStepperPrevious>上一步</button>
+            <button mat-button matStepperNext [disabled]="!isStepValid(1)">下一步</button>
+          </div>
+        </form>
+      </mat-step>
+
+      <!-- Step 3: Target Selection -->
+      <mat-step [stepControl]="targetSelectionForm" label="选择恢复目标">
+        <form [formGroup]="targetSelectionForm">
+          <div class="step-content">
+            <h3>配置恢复目标</h3>
+            <p class="step-description">选择恢复的目标集群</p>
+            
+            <mat-checkbox formControlName="createNewCluster" class="create-new-option">
+              创建新集群进行恢复
+            </mat-checkbox>
+            
+            <!-- Existing Cluster Selection -->
+            <div *ngIf="!createNewCluster" class="target-existing">
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>目标集群</mat-label>
+                <mat-select formControlName="targetCluster">
+                  <mat-option *ngFor="let cluster of availableClusters" [value]="cluster.metadata.name">
+                    {{cluster.metadata.name}} ({{cluster.metadata.namespace}})
+                  </mat-option>
+                </mat-select>
+                <mat-error>{{getFieldError(targetSelectionForm, 'targetCluster')}}</mat-error>
+              </mat-form-field>
+            </div>
+
+            <!-- New Cluster Configuration -->
+            <div *ngIf="createNewCluster" class="target-new">
+              <div class="form-row">
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>新集群名称</mat-label>
+                  <input matInput formControlName="newClusterName" 
+                            placeholder="输入新集群名称">
+                  <mat-hint>只能包含小写字母、数字和连字符</mat-hint>
+                  <mat-error>{{getFieldError(targetSelectionForm, 'newClusterName')}}</mat-error>
+                </mat-form-field>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>目标命名空间</mat-label>
+                <input matInput formControlName="targetNamespace">
+                <mat-error>{{getFieldError(targetSelectionForm, 'targetNamespace')}}</mat-error>
+              </mat-form-field>
+            </div>
+          </div>
+          
+          <div class="step-actions">
+            <button mat-button matStepperPrevious>上一步</button>
+            <button mat-button matStepperNext [disabled]="!isStepValid(2)">下一步</button>
+          </div>
+        </form>
+      </mat-step>
+
+      <!-- Step 4: Storage Configuration -->
+      <mat-step [stepControl]="storageConfigForm" label="存储配置">
+        <form [formGroup]="storageConfigForm">
+          <div class="step-content">
+            <h3>存储配置</h3>
+            <p class="step-description">配置恢复所需的存储设置（可选）</p>
+            
+            <mat-checkbox formControlName="useCustomStorage" class="custom-storage-option">
+              使用自定义存储配置
+            </mat-checkbox>
+            
+            <div *ngIf="useCustomStorage" class="storage-config">
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>存储类型</mat-label>
+                <mat-select formControlName="storageType">
+                  <mat-option *ngFor="let provider of storageProviders" [value]="provider.value">
+                    {{provider.label}}
+                  </mat-option>
+                </mat-select>
+              </mat-form-field>
+
+              <!-- OSS Configuration -->
+              <div *ngIf="selectedStorageType === 'oss'" formGroupName="ossConfig" class="storage-provider-config">
+                <h4>阿里云 OSS 配置</h4>
+                <div class="form-row">
+                  <mat-form-field appearance="outline">
+                    <mat-label>Access Key ID</mat-label>
+                    <input matInput formControlName="accessKeyId">
+                  </mat-form-field>
+                  <mat-form-field appearance="outline">
+                    <mat-label>Access Key Secret</mat-label>
+                    <input matInput formControlName="accessKeySecret" type="password">
+                  </mat-form-field>
+                </div>
+                <div class="form-row">
+                  <mat-form-field appearance="outline">
+                    <mat-label>Bucket</mat-label>
+                    <input matInput formControlName="bucket">
+                  </mat-form-field>
+                  <mat-form-field appearance="outline">
+                    <mat-label>Endpoint</mat-label>
+                    <input matInput formControlName="endpoint">
+                  </mat-form-field>
+                </div>
+                <div class="form-row">
+                  <mat-form-field appearance="outline" class="full-width">
+                    <mat-label>前缀 (可选)</mat-label>
+                    <input matInput formControlName="prefix">
+                  </mat-form-field>
+                </div>
+              </div>
+
+              <!-- S3 Configuration -->
+              <div *ngIf="selectedStorageType === 's3'" formGroupName="s3Config" class="storage-provider-config">
+                <h4>Amazon S3 配置</h4>
+                <div class="form-row">
+                  <mat-form-field appearance="outline">
+                    <mat-label>Access Key ID</mat-label>
+                    <input matInput formControlName="accessKeyId">
+                  </mat-form-field>
+                  <mat-form-field appearance="outline">
+                    <mat-label>Secret Access Key</mat-label>
+                    <input matInput formControlName="secretAccessKey" type="password">
+                  </mat-form-field>
+                </div>
+                <div class="form-row">
+                  <mat-form-field appearance="outline">
+                    <mat-label>Bucket</mat-label>
+                    <input matInput formControlName="bucket">
+                  </mat-form-field>
+                  <mat-form-field appearance="outline">
+                    <mat-label>Region</mat-label>
+                    <input matInput formControlName="region">
+                  </mat-form-field>
+                </div>
+                <div class="form-row">
+                  <mat-form-field appearance="outline">
+                    <mat-label>Endpoint (可选)</mat-label>
+                    <input matInput formControlName="endpoint">
+                  </mat-form-field>
+                  <mat-form-field appearance="outline">
+                    <mat-label>前缀 (可选)</mat-label>
+                    <input matInput formControlName="prefix">
+                  </mat-form-field>
+                </div>
+              </div>
+
+              <!-- SFTP Configuration -->
+              <div *ngIf="selectedStorageType === 'sftp'" formGroupName="sftpConfig" class="storage-provider-config">
+                <h4>SFTP 配置</h4>
+                <div class="form-row">
+                  <mat-form-field appearance="outline">
+                    <mat-label>主机</mat-label>
+                    <input matInput formControlName="host">
+                  </mat-form-field>
+                  <mat-form-field appearance="outline">
+                    <mat-label>端口</mat-label>
+                    <input matInput formControlName="port" type="number">
+                  </mat-form-field>
+                </div>
+                <div class="form-row">
+                  <mat-form-field appearance="outline">
+                    <mat-label>用户名</mat-label>
+                    <input matInput formControlName="username">
+                  </mat-form-field>
+                  <mat-form-field appearance="outline">
+                    <mat-label>密码</mat-label>
+                    <input matInput formControlName="password" type="password">
+                  </mat-form-field>
+                </div>
+                <div class="form-row">
+                  <mat-form-field appearance="outline" class="full-width">
+                    <mat-label>远程路径</mat-label>
+                    <input matInput formControlName="remotePath">
+                  </mat-form-field>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="step-actions">
+            <button mat-button matStepperPrevious>上一步</button>
+            <button mat-button matStepperNext [disabled]="!isStepValid(3)">下一步</button>
+          </div>
+        </form>
+      </mat-step>
+
+      <!-- Step 5: Confirmation -->
+      <mat-step [stepControl]="confirmationForm" label="确认">
+        <form [formGroup]="confirmationForm">
+          <div class="step-content">
+            <h3>确认恢复配置</h3>
+            <p class="step-description">请仔细检查以下配置信息</p>
+            
+            <mat-card class="summary-card">
+              <mat-card-header>
+                <mat-card-title>恢复配置摘要</mat-card-title>
+              </mat-card-header>
+              <mat-card-content>
+                <div class="summary-section">
+                  <h4>恢复类型</h4>
+                  <p>
+                    <mat-chip-listbox>
+                      <mat-chip-option [selected]="true">
+                        {{isBackupRestore ? '备份恢复' : '时间点恢复 (PITR)'}}
+                      </mat-chip-option>
+                    </mat-chip-listbox>
+                  </p>
+                </div>
+
+                <mat-divider></mat-divider>
+
+                <div class="summary-section">
+                  <h4>源配置</h4>
+                  <p><strong>源集群:</strong> {{sourceSelectionForm.get('sourceCluster')?.value}}</p>
+                  <p><strong>命名空间:</strong> {{sourceSelectionForm.get('sourceNamespace')?.value}}</p>
+                  <p *ngIf="isBackupRestore"><strong>备份集:</strong> {{sourceSelectionForm.get('backupSet')?.value}}</p>
+                  <p *ngIf="isPitrRestore"><strong>恢复时间:</strong> {{sourceSelectionForm.get('pitrTime')?.value}}</p>
+                  <p *ngIf="isPitrRestore"><strong>时区:</strong> {{sourceSelectionForm.get('pitrTimezone')?.value}}</p>
+                </div>
+
+                <mat-divider></mat-divider>
+
+                <div class="summary-section">
+                  <h4>目标配置</h4>
+                  <p *ngIf="createNewCluster"><strong>新集群名称:</strong> {{targetSelectionForm.get('newClusterName')?.value}}</p>
+                  <p *ngIf="!createNewCluster"><strong>目标集群:</strong> {{targetSelectionForm.get('targetCluster')?.value}}</p>
+                  <p><strong>目标命名空间:</strong> {{targetSelectionForm.get('targetNamespace')?.value}}</p>
+                  <p><strong>操作类型:</strong> {{createNewCluster ? '创建新集群' : '覆盖现有集群'}}</p>
+                </div>
+
+                <mat-divider *ngIf="useCustomStorage"></mat-divider>
+
+                <div *ngIf="useCustomStorage" class="summary-section">
+                  <h4>存储配置</h4>
+                  <p><strong>存储类型:</strong> {{selectedStorageType.toUpperCase()}}</p>
+                </div>
+              </mat-card-content>
+            </mat-card>
+
+            <div class="confirmation-options">
+              <mat-checkbox formControlName="validateData">
+                在恢复前验证数据完整性
+              </mat-checkbox>
+              
+              <mat-checkbox formControlName="confirmed" class="confirmation-checkbox">
+                我已仔细检查上述配置，确认执行恢复操作
+              </mat-checkbox>
+              <mat-error *ngIf="confirmationForm.get('confirmed')?.invalid && confirmationForm.get('confirmed')?.touched">
+                {{getFieldError(confirmationForm, 'confirmed')}}
+              </mat-error>
+            </div>
+          </div>
+          
+          <div class="step-actions">
+            <button mat-button matStepperPrevious>上一步</button>
+            <button mat-raised-button 
+                    color="warn" 
+                    [disabled]="!isFormValid() || isProcessing"
+                    (click)="executeRestore()">
+              <mat-icon *ngIf="isProcessing" class="spinner">refresh</mat-icon>
+              {{isProcessing ? '正在执行恢复...' : '开始恢复'}}
+            </button>
+          </div>
+        </form>
+      </mat-step>
+
+    </mat-horizontal-stepper>
+  </div>
+</div>

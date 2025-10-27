@@ -43,7 +43,7 @@ COPY tools/xstore .
 RUN ./venv/bin/python3 -m compileall . && LC_LANG=en_US.utf8 LC_ALL=en_US.utf8 ENGINE=mock ./venv/bin/python3 cli.py
 
 
-FROM ${IMAGE_SOURCE}${IMAGE_SOURCE:+"/"}golang:1.21.1 as gobuilder
+FROM ${IMAGE_SOURCE}${IMAGE_SOURCE:+"/"}golang:1.21 as gobuilder
 
 WORKDIR /workspace
 

@@ -1,0 +1,444 @@
+.backup-schedule-management {
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+
+  .header-card {
+    margin-bottom: 24px;
+    
+    mat-card-header {
+      mat-card-title {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 24px;
+        
+        mat-icon {
+          font-size: 28px;
+          width: 28px;
+          height: 28px;
+        }
+      }
+    }
+  }
+
+  .main-tabs {
+    .mat-mdc-tab-body-wrapper {
+      min-height: 600px;
+    }
+  }
+
+  .tab-content {
+    padding: 24px 0;
+  }
+
+  .actions-toolbar {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 20px;
+    
+    button {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+  }
+
+  .table-card {
+    .table-container {
+      overflow-x: auto;
+      
+      .schedules-table {
+        width: 100%;
+        
+        .schedule-name {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          
+          mat-icon {
+            font-size: 20px;
+            width: 20px;
+            height: 20px;
+          }
+        }
+        
+        .schedule-info {
+          display: flex;
+          flex-direction: row;
+          flex-wrap: wrap;
+          align-items: center;
+          gap: 6px;
+          
+          code {
+            background-color: #f5f5f5;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85em;
+            color: #d32f2f;
+            display: inline-block;
+            max-width: 100%;
+            word-break: break-all;
+            overflow-wrap: anywhere;
+            white-space: pre-wrap;
+            padding-right: 16px; // 为右侧图标预留空间
+          }
+          
+          small {
+            color: rgba(0, 0, 0, 0.6);
+            font-size: 0.8em;
+          }
+        }
+        
+        .backup-time {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          font-size: 0.9em;
+          
+          small {
+            color: rgba(0, 0, 0, 0.6);
+            font-size: 0.8em;
+          }
+        }
+        
+        .storage-info {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 0.9em;
+          
+          mat-icon {
+            font-size: 16px;
+            width: 16px;
+            height: 16px;
+            color: rgba(0, 0, 0, 0.6);
+          }
+        }
+        
+        mat-chip {
+          font-size: 0.8em;
+          min-height: 24px;
+        }
+      }
+    }
+    
+    .no-data {
+      text-align: center;
+      padding: 48px;
+      color: rgba(0, 0, 0, 0.6);
+      
+      mat-icon {
+        font-size: 48px;
+        width: 48px;
+        height: 48px;
+        margin-bottom: 16px;
+        opacity: 0.5;
+      }
+      
+      p {
+        font-size: 16px;
+        margin: 0;
+      }
+    }
+  }
+
+  .form-card {
+    max-width: 900px;
+    margin: 0 auto;
+    
+    .schedule-form {
+      .form-section {
+        margin-bottom: 16px;
+        
+        mat-expansion-panel-header {
+          font-weight: 500;
+        }
+        
+        .form-row {
+          display: flex;
+          gap: 16px;
+          margin-bottom: 16px;
+          flex-wrap: wrap;
+          align-items: center;
+          
+          .full-width {
+            flex: 1;
+            min-width: 100%;
+          }
+          
+          .half-width {
+            flex: 1;
+            min-width: 280px;
+          }
+          
+          mat-slide-toggle {
+            margin-bottom: 8px;
+          }
+          
+          @media (max-width: 768px) {
+            .half-width {
+              min-width: 100%;
+            }
+          }
+        }
+      }
+    }
+    
+    mat-card-actions {
+      padding: 16px 24px;
+      
+      button {
+        margin-left: 8px;
+        
+        &:first-child {
+          margin-left: 0;
+        }
+      }
+    }
+  }
+
+  .loading-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 48px;
+    
+    mat-progress-spinner {
+      margin-bottom: 16px;
+    }
+    
+    p {
+      color: rgba(0, 0, 0, 0.6);
+      font-size: 14px;
+    }
+  }
+
+  // Menu styles
+  .delete-action {
+    color: #f44336;
+    
+    mat-icon {
+      color: #f44336;
+    }
+  }
+
+  // Code styling
+  code {
+    font-family: 'Courier New', monospace;
+    background-color: #f5f5f5;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+  }
+
+  // Responsive design
+  @media (max-width: 768px) {
+    padding: 16px;
+    
+    .header-card mat-card-header mat-card-title {
+      font-size: 20px;
+    }
+    
+    .actions-toolbar {
+      flex-direction: column;
+      
+      button {
+        width: 100%;
+      }
+    }
+    
+    .table-container {
+      .schedules-table {
+        font-size: 0.9em;
+      }
+    }
+    
+    .form-card {
+      max-width: 100%;
+      
+      .schedule-form .form-row {
+        flex-direction: column;
+        
+        .half-width {
+          min-width: 100%;
+        }
+      }
+    }
+  }
+
+  // Theme support
+  @media (prefers-color-scheme: dark) {
+    .schedule-info {
+      code {
+        background-color: #303030;
+        color: #ff5722;
+      }
+      
+      small {
+        color: rgba(255, 255, 255, 0.6);
+      }
+    }
+    
+    .backup-time small {
+      color: rgba(255, 255, 255, 0.6);
+    }
+    
+    .storage-info mat-icon {
+      color: rgba(255, 255, 255, 0.6);
+    }
+    
+    .no-data {
+      color: rgba(255, 255, 255, 0.6);
+    }
+    
+    code {
+      background-color: #303030;
+      color: #ff5722;
+    }
+  }
+
+  // Status color customization
+  .mat-mdc-chip {
+    &.mat-primary {
+      background-color: #4caf50;
+      color: white;
+    }
+    
+    &.mat-warn {
+      background-color: #ff9800;
+      color: white;
+    }
+  }
+
+  // Animation
+  .table-container,
+  .form-card {
+    animation: fadeIn 0.3s ease-in-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  // Form field improvements
+  .mat-mdc-form-field {
+    .mat-mdc-form-field-error {
+      font-size: 0.75em;
+    }
+    
+    .mat-mdc-form-field-hint {
+      font-size: 0.75em;
+      color: rgba(0, 0, 0, 0.6);
+    }
+  }
+
+  // Select with icons
+  .mat-mdc-select-value {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .mat-mdc-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  // Enhanced expansion panels
+  .mat-expansion-panel {
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+    
+    &:not(:last-child) {
+      margin-bottom: 16px;
+    }
+  }
+
+  // Slide toggle styling
+  .mat-mdc-slide-toggle {
+    .mat-mdc-slide-toggle-label {
+      font-size: 14px;
+      font-weight: 500;
+    }
+  }
+
+  // Accessibility improvements (移除空规则以消除 linter 警告)
+
+  // Print styles
+  @media print {
+    .actions-toolbar,
+    .form-card mat-card-actions,
+    [matColumnDef="actions"] {
+      display: none;
+    }
+    
+    .schedules-table {
+      font-size: 12px;
+    }
+    
+    .schedule-info code {
+      background-color: #f0f0f0 !important;
+      color: #333 !important;
+    }
+  }
+
+  // Loading states
+  .mat-mdc-button:disabled,
+  .mat-mdc-raised-button:disabled {
+    opacity: 0.5;
+  }
+
+  // Enhanced table styling
+  .mat-mdc-table {
+    .mat-mdc-header-cell {
+      font-weight: 600;
+      color: rgba(0, 0, 0, 0.87);
+    }
+    
+    .mat-mdc-cell {
+      border-bottom-color: rgba(0, 0, 0, 0.12);
+    }
+    
+    .mat-mdc-row:hover {
+      background-color: rgba(0, 0, 0, 0.04);
+    }
+  }
+
+  // Cron expression highlighting
+  .schedule-info code {
+    position: relative;
+    max-width: 100%;
+    word-break: break-all;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+    padding-right: 16px; // 为右侧图标预留空间
+    
+    &::after {
+      content: '⏰';
+      position: absolute;
+      right: 4px; // 避免溢出容器
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 0.8em;
+      opacity: 0.6;
+    }
+  }
+
+  // Storage provider icons
+  .storage-info mat-icon {
+    &.cloud { color: #2196f3; }
+    &.cloud_circle { color: #ff9800; }
+    &.folder_shared { color: #4caf50; }
+  }
+}

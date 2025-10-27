@@ -1,0 +1,63 @@
+.performance-monitor {
+  padding: 24px;
+}
+
+mat-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.metric-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  background-color: #f9f9f9;
+  border-radius: var(--border-radius);
+}
+
+.performance-score {
+  margin-bottom: 24px;
+}
+
+.score-container {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.score-circle {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  color: white;
+  &.score-excellent { background-color: #4caf50; }
+  &.score-good { background-color: #ffc107; }
+  &.score-fair { background-color: #ff9800; }
+  &.score-poor { background-color: #f44336; }
+}
+
+.api-performance {
+  margin-bottom: 24px;
+}
+
+.api-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.recommendations {
+  margin-top: 24px;
+}

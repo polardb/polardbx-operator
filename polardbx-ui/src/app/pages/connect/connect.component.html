@@ -1,0 +1,213 @@
+<div class="connect-container">
+  <div class="background-animation">
+    <div class="bg-shape shape-1"></div>
+    <div class="bg-shape shape-2"></div>
+    <div class="bg-shape shape-3"></div>
+  </div>
+  
+  <mat-card class="connect-card">
+    <mat-card-header class="text-center">
+      <div class="brand-logo">
+        <div class="logo-wrapper">
+          <mat-icon class="brand-icon">cloud_queue</mat-icon>
+          <div class="logo-pulse"></div>
+        </div>
+      </div>
+      <mat-card-title>连接至 Kubernetes 集群</mat-card-title>
+      <mat-card-subtitle>请提供您的 kubeconfig 配置文件以开始管理 PolarDB-X 集群</mat-card-subtitle>
+    </mat-card-header>
+    
+    <mat-card-content>
+      <!-- 状态指示器 -->
+      <div class="connection-status" [class.valid]="validateKubeconfig()" [class.invalid]="kubeconfig.trim() && !validateKubeconfig()">
+        <mat-icon>{{ validateKubeconfig() ? 'check_circle' : (kubeconfig.trim() ? 'error' : 'info') }}</mat-icon>
+        <span>
+          {{ validateKubeconfig() ? 'Kubeconfig 格式验证通过' : 
+             (kubeconfig.trim() ? 'Kubeconfig 格式不正确' : '请输入有效的 kubeconfig 配置') }}
+        </span>
+      </div>
+
+      <!-- 输入方式选择 -->
+      <mat-button-toggle-group 
+        [(value)]="inputMethod" 
+        (change)="onInputMethodChange()"
+        class="input-method-selector"
+        aria-label="选择输入方式">
+        <mat-button-toggle value="text" class="method-toggle">
+          <mat-icon>edit_note</mat-icon>
+          <span>文本输入</span>
+        </mat-button-toggle>
+        <mat-button-toggle value="file" class="method-toggle">
+          <mat-icon>upload_file</mat-icon>
+          <span>文件上传</span>
+        </mat-button-toggle>
+      </mat-button-toggle-group>
+
+      <!-- 文本输入方式 -->
+      <div *ngIf="inputMethod === 'text'" class="input-section text-input-section">
+        <mat-form-field appearance="outline" class="full-width kubeconfig-field">
+          <mat-label>Kubeconfig 内容</mat-label>
+          <textarea 
+            matInput 
+            [(ngModel)]="kubeconfig" 
+            placeholder="apiVersion: v1
+kind: Config
+clusters:
+- name: my-cluster
+  cluster:
+    server: https://kubernetes.example.com
+    certificate-authority-data: LS0t...
+users:
+- name: my-user
+  user:
+    client-certificate-data: LS0t...
+    client-key-data: LS0t...
+contexts:
+- name: my-context
+  context:
+    cluster: my-cluster
+    user: my-user
+current-context: my-context"
+            rows="16"
+            class="kubeconfig-textarea">
+          </textarea>
+          <mat-hint>
+            <mat-icon class="hint-icon">lightbulb</mat-icon>
+            请确保 kubeconfig 包含 clusters、users、contexts 等完整配置信息
+          </mat-hint>
+        </mat-form-field>
+      </div>
+
+      <!-- 文件上传方式 -->
+      <div *ngIf="inputMethod === 'file'" class="input-section file-input-section">
+        <div
+          class="file-upload-area"
+          role="button"
+          tabindex="0"
+          (click)="fileInput.click()"
+          (keydown.enter)="fileInput.click()"
+          (dragover)="onDragOver($event)"
+          (dragleave)="onDragLeave($event)"
+          (drop)="onDrop($event)"
+          [class.drag-over]="isDragOver"
+          [class.has-file]="selectedFile">
+          
+          <div class="upload-content">
+            <div class="upload-icon-wrapper">
+              <mat-icon class="upload-icon">{{ selectedFile ? 'check_circle' : 'cloud_upload' }}</mat-icon>
+              <div class="upload-ripple" [class.active]="isDragOver"></div>
+            </div>
+            
+            <div class="upload-text-wrapper">
+              <p class="upload-text">
+                <span *ngIf="!selectedFile">拖拽文件到此处或点击选择</span>
+                <span *ngIf="selectedFile" class="selected-file-text">已选择: {{ selectedFile.name }}</span>
+              </p>
+              <p class="upload-hint">支持 .yaml、.yml、.config 文件或无扩展名的 kubeconfig 文件</p>
+            </div>
+          </div>
+          
+          <input 
+            #fileInput
+            type="file" 
+            hidden 
+            (change)="onFileSelected($event)"
+            accept=".yaml,.yml,.config,.*">
+        </div>
+        
+        <!-- 文件信息显示 -->
+        <div *ngIf="selectedFile" class="file-info">
+          <div class="file-icon-wrapper">
+            <mat-icon class="file-icon">description</mat-icon>
+          </div>
+          <div class="file-details">
+            <p class="file-name">{{ selectedFile.name }}</p>
+            <p class="file-size">{{ getFileSize(selectedFile.size) }}</p>
+          </div>
+          <button mat-icon-button (click)="clearFile()" matTooltip="清除已选文件" class="clear-button">
+            <mat-icon>close</mat-icon>
+          </button>
+        </div>
+
+        <!-- 文件内容预览 -->
+        <div *ngIf="kubeconfig && inputMethod === 'file'" class="file-preview">
+          <mat-expansion-panel class="preview-panel">
+            <mat-expansion-panel-header>
+              <mat-panel-title>
+                <mat-icon>visibility</mat-icon>
+                <span class="panel-title-text">文件内容预览</span>
+              </mat-panel-title>
+              <mat-panel-description>
+                点击展开查看 kubeconfig 内容
+              </mat-panel-description>
+            </mat-expansion-panel-header>
+            <div class="config-preview-wrapper">
+              <pre class="config-preview">{{ kubeconfig }}</pre>
+              <button mat-icon-button matTooltip="复制到剪贴板" class="copy-button" (click)="copyToClipboard()">
+                <mat-icon>content_copy</mat-icon>
+              </button>
+            </div>
+          </mat-expansion-panel>
+        </div>
+      </div>
+
+      <!-- 快速连接示例 -->
+      <div class="quick-connect-section">
+        <mat-expansion-panel class="example-panel">
+          <mat-expansion-panel-header>
+            <mat-panel-title>
+              <mat-icon>help_outline</mat-icon>
+              <span class="panel-title-text">需要帮助？</span>
+            </mat-panel-title>
+            <mat-panel-description>
+              查看 kubeconfig 获取方法和示例
+            </mat-panel-description>
+          </mat-expansion-panel-header>
+          <div class="help-content">
+            <h4>如何获取 kubeconfig？</h4>
+            <div class="help-item">
+              <mat-icon>terminal</mat-icon>
+              <div class="help-text">
+                <strong>命令行获取：</strong>
+                <code>kubectl config view --raw</code>
+              </div>
+            </div>
+            <div class="help-item">
+              <mat-icon>folder</mat-icon>
+              <div class="help-text">
+                <strong>文件位置：</strong>
+                <code>~/.kube/config</code>
+              </div>
+            </div>
+            <div class="help-item">
+              <mat-icon>cloud</mat-icon>
+              <div class="help-text">
+                <strong>云平台：</strong>
+                从阿里云等控制台下载 kubeconfig 文件
+              </div>
+            </div>
+          </div>
+        </mat-expansion-panel>
+      </div>
+    </mat-card-content>
+    
+    <mat-card-actions align="end" class="card-actions">
+      <button 
+        mat-raised-button 
+        color="primary" 
+        (click)="onConnect()"
+        [disabled]="isConnecting || !kubeconfig.trim() || !validateKubeconfig()"
+        class="connect-button">
+        <mat-progress-spinner 
+          *ngIf="isConnecting" 
+          mode="indeterminate" 
+          diameter="20"
+          class="button-spinner">
+        </mat-progress-spinner>
+        <mat-icon *ngIf="!isConnecting">{{ validateKubeconfig() ? 'link' : 'link_off' }}</mat-icon>
+        <span *ngIf="!isConnecting">{{ validateKubeconfig() ? '连接集群' : '格式不正确' }}</span>
+        <span *ngIf="isConnecting">正在连接...</span>
+      </button>
+    </mat-card-actions>
+  </mat-card>
+</div>

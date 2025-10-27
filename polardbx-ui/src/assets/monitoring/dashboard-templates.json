@@ -1,0 +1,154 @@
+{
+  "lastUpdated": "2025-10-25",
+  "categories": [
+    { "id": "PolarDBX", "name": "PolarDB-X", "description": "PolarDB-X 集群与存储相关指标" },
+    { "id": "Kubernetes", "name": "Kubernetes", "description": "Kubernetes 平台与工作负载监控" },
+    { "id": "Prometheus", "name": "Prometheus", "description": "Prometheus 自身运行状况" }
+  ],
+  "templates": [
+    {
+      "name": "polardbx-overview",
+      "title": "PolarDB-X 集群概览",
+      "description": "汇总 PolarDB-X 集群核心指标、组件运行状态与 QPS 趋势，适合作为首页仪表板。",
+      "chart": "polardbx-overview.json",
+      "category": "PolarDBX",
+      "tags": ["PolarDB-X", "Overview", "Performance"],
+  "docLink": "https://doc.polardbx.com/zh/operator/ops/monitor/5-alert-config.html",
+      "recommended": true,
+      "quickActions": ["overview"]
+    },
+    {
+      "name": "xstore-overview",
+      "title": "X-Store 存储概览",
+      "description": "展示 X-Store 存储层资源使用、复制延迟与节点健康状态。",
+      "chart": "xstore-overview.json",
+      "category": "PolarDBX",
+      "tags": ["X-Store", "Storage", "Latency"],
+  "docLink": "https://doc.polardbx.com/zh/operator/ops/monitor/5-alert-config.html",
+      "recommended": true
+    },
+    {
+      "name": "cluster-total",
+      "title": "集群总体资源概览",
+      "description": "按集群维度展示 CPU、内存、工作负载数量等关键指标，帮助掌握整体容量情况。",
+      "chart": "cluster-total.json",
+      "category": "Kubernetes",
+      "tags": ["Cluster", "Capacity", "Overview"]
+    },
+    {
+      "name": "workload-total",
+      "title": "工作负载汇总",
+      "description": "按 Deployment/StatefulSet/DaemonSet 分类展示副本状态与资源使用。",
+      "chart": "workload-total.json",
+      "category": "Kubernetes",
+      "tags": ["Workload", "Deployment", "StatefulSet"],
+      "recommended": false
+    },
+    {
+      "name": "pod-total",
+      "title": "Pod 运行状态",
+      "description": "监控 Pod 启动状态、失败原因以及重启情况，快速定位异常工作负载。",
+      "chart": "pod-total.json",
+      "category": "Kubernetes",
+      "tags": ["Pods", "Health", "Troubleshooting"]
+    },
+    {
+      "name": "namespace-by-workload",
+      "title": "命名空间工作负载分析",
+      "description": "按命名空间统计工作负载数量与资源占用，适用于多租户环境容量规划。",
+      "chart": "namespace-by-workload.json",
+      "category": "Kubernetes",
+      "tags": ["Namespace", "Multi-Tenant"]
+    },
+    {
+      "name": "namespace-by-pod",
+      "title": "命名空间 Pod 用量",
+      "description": "对比不同命名空间内 Pod 数量与状态，识别异常命名空间。",
+      "chart": "namespace-by-pod.json",
+      "category": "Kubernetes",
+      "tags": ["Namespace", "Pods"]
+    },
+    {
+      "name": "k8s-resources-cluster",
+      "title": "Kubernetes 集群资源",
+      "description": "集群层面展示 CPU/内存使用、容量上限以及节点状态。",
+      "chart": "k8s-resources-cluster.json",
+      "category": "Kubernetes",
+      "tags": ["Cluster", "Resources", "Capacity"],
+      "recommended": true
+    },
+    {
+      "name": "k8s-resources-node",
+      "title": "节点资源使用",
+      "description": "逐节点查看 CPU、内存与磁盘使用情况，快速识别热点节点。",
+      "chart": "k8s-resources-node.json",
+      "category": "Kubernetes",
+      "tags": ["Node", "Resources", "Hotspot"]
+    },
+    {
+      "name": "k8s-resources-pod",
+      "title": "Pod 资源使用",
+      "description": "可视化 Pod 的 CPU/内存使用及请求限额，用于分析资源分配是否合理。",
+      "chart": "k8s-resources-pod.json",
+      "category": "Kubernetes",
+      "tags": ["Pod", "Resources", "Requests"]
+    },
+    {
+      "name": "node-rsrc-use",
+      "title": "节点用量详情",
+      "description": "针对单个节点的 CPU、内存、网络与磁盘资源使用情况进行细粒度展示。",
+      "chart": "node-rsrc-use.json",
+      "category": "Kubernetes",
+      "tags": ["Node", "Detail", "Resources"]
+    },
+    {
+      "name": "persistentvolumesusage",
+      "title": "持久卷使用情况",
+      "description": "监控 PVC 容量与使用率，预警即将耗尽的卷。",
+      "chart": "persistentvolumesusage.json",
+      "category": "Kubernetes",
+      "tags": ["PVC", "Storage", "Capacity"]
+    },
+    {
+      "name": "apiserver",
+      "title": "Kubernetes APIServer 性能",
+      "description": "关注 APIServer 请求延迟、错误率与 Saturation，保障控制面稳定。",
+      "chart": "apiserver.json",
+      "category": "Kubernetes",
+      "tags": ["APIServer", "Latency", "Error"]
+    },
+    {
+      "name": "controller-manager",
+      "title": "Controller Manager 运行状况",
+      "description": "跟踪 Controller Manager 的队列长度与同步耗时，定位调度异常。",
+      "chart": "controller-manager.json",
+      "category": "Kubernetes",
+      "tags": ["Controller", "Scheduler"]
+    },
+    {
+      "name": "scheduler",
+      "title": "调度器指标",
+      "description": "查看调度器尝试次数、失败率与队列深度，排查调度问题。",
+      "chart": "scheduler.json",
+      "category": "Kubernetes",
+      "tags": ["Scheduler", "Latency"]
+    },
+    {
+      "name": "prometheus",
+      "title": "Prometheus 自身监控",
+      "description": "监控 Prometheus 抓取性能、存储耗用和规则评估耗时，确保监控系统稳定。",
+      "chart": "prometheus.json",
+      "category": "Prometheus",
+      "tags": ["Prometheus", "Self-Monitoring"],
+      "recommended": true
+    },
+    {
+      "name": "prometheus-remote-write",
+      "title": "Prometheus Remote-Write",
+      "description": "观察远程写入队列深度、失败率与延迟，保障远端存储可靠。",
+      "chart": "prometheus-remote-write.json",
+      "category": "Prometheus",
+      "tags": ["Prometheus", "RemoteWrite"]
+    }
+  ]
+}
