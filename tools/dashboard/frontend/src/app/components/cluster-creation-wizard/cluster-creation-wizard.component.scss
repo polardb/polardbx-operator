@@ -1,0 +1,436 @@
+// 低饱和度配色方案
+$primary-color: #4a7c9b;
+$primary-light: #6a9cb8;
+$primary-dark: #3a6c8b;
+$text-primary: #3d4852;
+$text-secondary: #6b7785;
+$text-muted: #8c9ba5;
+$border-color: #dde2e8;
+$background: #f8f9fa;
+$card-bg: #ffffff;
+$success: #5a9178;
+$warning: #b89a5a;
+$info: #5a8fa0;
+
+.cluster-creation-wizard {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: $card-bg;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 0 auto;
+  width: 100%;
+
+  .wizard-steps {
+    padding: 20px 40px;
+    background: $background;
+    border-bottom: 1px solid $border-color;
+    flex-shrink: 0;
+
+    ::ng-deep {
+      .ant-steps-item-process .ant-steps-item-icon {
+        background: $primary-color;
+        border-color: $primary-color;
+      }
+      .ant-steps-item-finish .ant-steps-item-icon {
+        border-color: $primary-color;
+        .ant-steps-icon {
+          color: $primary-color;
+        }
+      }
+      .ant-steps-item-finish .ant-steps-item-tail::after {
+        background: $primary-color;
+      }
+    }
+  }
+
+  // 主体区域 - 包含 spin 和内容
+  .wizard-body {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+
+    ::ng-deep .ant-spin-nested-loading {
+      height: 100%;
+      
+      .ant-spin-container {
+        height: 100%;
+        overflow-y: auto;
+      }
+    }
+  }
+
+  .wizard-content {
+    padding: 28px 40px 40px;
+    min-height: 300px;
+  }
+
+  .step-content {
+    animation: fadeIn 0.3s ease;
+    max-width: 900px;
+    margin: 0 auto;
+
+    .step-title {
+      font-size: 22px;
+      font-weight: 500;
+      color: $text-primary;
+      margin-bottom: 8px;
+      text-align: center;
+    }
+
+    .step-description {
+      color: $text-secondary;
+      margin-bottom: 32px;
+      text-align: center;
+    }
+  }
+
+  // 模板选择
+  .template-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 20px;
+    justify-content: center;
+  }
+
+  .template-card {
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 2px solid transparent;
+    border-radius: 8px;
+    min-height: 160px;
+
+    &:hover {
+      border-color: $primary-light;
+      box-shadow: 0 4px 12px rgba(74, 124, 155, 0.15);
+    }
+
+    &.selected {
+      border-color: $primary-color;
+      background: rgba(74, 124, 155, 0.05);
+    }
+
+    .template-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+
+      .template-icon {
+        font-size: 32px;
+        color: $primary-color;
+      }
+
+      .template-meta {
+        flex: 1;
+
+        h4 {
+          margin: 0 0 6px 0;
+          font-size: 17px;
+          font-weight: 500;
+          color: $text-primary;
+        }
+      }
+    }
+
+    .template-description {
+      color: $text-secondary;
+      font-size: 13px;
+      margin: 12px 0;
+      line-height: 1.6;
+    }
+
+    .template-specs {
+      display: flex;
+      gap: 20px;
+      font-size: 12px;
+      color: $text-muted;
+      padding-top: 12px;
+      border-top: 1px solid $border-color;
+
+      span {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-weight: 500;
+      }
+    }
+  }
+
+  // 表单样式 - 居中显示
+  .form-container {
+    max-width: 600px;
+    margin: 0 auto;
+  }
+
+  form {
+    max-width: 600px;
+    margin: 0 auto;
+
+    ::ng-deep {
+      .ant-form-item-label > label {
+        color: $text-primary;
+        font-weight: 500;
+      }
+
+      .ant-input,
+      .ant-select-selector,
+      .ant-input-number {
+        border-color: $border-color;
+        
+        &:hover, &:focus {
+          border-color: $primary-color;
+        }
+      }
+
+      .ant-input:focus,
+      .ant-select-focused .ant-select-selector {
+        box-shadow: 0 0 0 2px rgba(74, 124, 155, 0.2);
+      }
+
+      .ant-btn-primary {
+        background: $primary-color;
+        border-color: $primary-color;
+
+        &:hover {
+          background: $primary-light;
+          border-color: $primary-light;
+        }
+      }
+
+      .ant-checkbox-checked .ant-checkbox-inner {
+        background: $primary-color;
+        border-color: $primary-color;
+      }
+
+      .ant-switch-checked {
+        background: $primary-color;
+      }
+
+      .ant-tabs-tab-active {
+        .ant-tabs-tab-btn {
+          color: $primary-color;
+        }
+      }
+
+      .ant-tabs-ink-bar {
+        background: $primary-color;
+      }
+
+      .ant-collapse {
+        background: transparent;
+        border-color: $border-color;
+
+        .ant-collapse-header {
+          color: $text-primary;
+        }
+      }
+
+      .ant-descriptions-bordered .ant-descriptions-item-label {
+        background: $background;
+        color: $text-secondary;
+      }
+
+      .ant-tag-processing {
+        background: rgba(74, 124, 155, 0.1);
+        border-color: $primary-light;
+        color: $primary-color;
+      }
+    }
+  }
+
+  // 节点配置
+  .node-config {
+    padding: 20px 0;
+    max-width: 500px;
+    margin: 0 auto;
+
+    .resource-config {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+  }
+
+  // 服务类型选择
+  .service-type-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    max-width: 700px;
+    margin: 0 auto;
+  }
+
+  .service-type-option {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px;
+    border: 2px solid $border-color;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+
+    &:hover {
+      border-color: $primary-light;
+    }
+
+    &.selected {
+      border-color: $primary-color;
+      background: rgba(74, 124, 155, 0.05);
+    }
+
+    span[nz-icon] {
+      font-size: 24px;
+      color: $primary-color;
+    }
+
+    h5 {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 500;
+      color: $text-primary;
+    }
+
+    .service-desc {
+      font-size: 12px;
+      color: $text-muted;
+    }
+  }
+
+  // 功能开关
+  .feature-toggles {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    max-width: 700px;
+    margin: 0 auto 24px;
+
+    .ant-form-item {
+      margin-bottom: 0;
+    }
+
+    label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 18px;
+      border: 1px solid $border-color;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: $card-bg;
+
+      &:hover {
+        border-color: $primary-light;
+        background: rgba(74, 124, 155, 0.02);
+      }
+
+      span[nz-icon] {
+        font-size: 20px;
+        color: $primary-color;
+      }
+    }
+  }
+
+  .switch-label {
+    margin-left: 12px;
+  }
+
+  .share-gms-warning {
+    margin-top: 12px;
+    max-width: 500px;
+  }
+
+  .mt-4 {
+    margin-top: 20px;
+  }
+
+  // 确认页面的描述列表居中
+  ::ng-deep .ant-descriptions {
+    max-width: 800px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  // 底部按钮区 - 固定在底部
+  .wizard-footer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 16px 40px;
+    background: $background;
+    border-top: 1px solid $border-color;
+    flex-shrink: 0;
+
+    .spacer {
+      flex: 1;
+      max-width: 200px;
+    }
+
+    ::ng-deep {
+      .ant-btn-primary {
+        background: $primary-color;
+        border-color: $primary-color;
+
+        &:hover {
+          background: $primary-light;
+          border-color: $primary-light;
+        }
+
+        &:disabled {
+          background: $border-color;
+          border-color: $border-color;
+        }
+      }
+    }
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+// 响应式
+@media (max-width: 768px) {
+  .cluster-creation-wizard {
+    .wizard-steps {
+      padding: 16px;
+    }
+
+    .wizard-content {
+      padding: 16px;
+    }
+
+    .template-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .service-type-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .feature-toggles {
+      grid-template-columns: 1fr;
+    }
+
+    .node-config .resource-config {
+      grid-template-columns: 1fr;
+    }
+
+    .wizard-footer {
+      padding: 12px 16px;
+      flex-wrap: wrap;
+    }
+  }
+}

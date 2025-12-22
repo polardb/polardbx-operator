@@ -1,0 +1,600 @@
+<div class="page-wrapper monitoring-installation-wizard">
+  <div class="page-header">
+    <div class="title-block">
+      <h2>
+        <i nz-icon nzType="tool" nzTheme="outline" class="page-icon"></i>
+        {{ t('header.title') }}
+      </h2>
+      <p>
+        {{ t('header.subtitle') }}
+        <button nz-button nzType="default" nzSize="small" (click)="detectEnvironment()" [nzLoading]="detectionLoading">
+          <i nz-icon nzType="reload"></i>
+          {{ t('actions.retryDetection') }}
+        </button>
+      </p>
+    </div>
+  </div>
+
+  <div class="wizard-container">
+
+  <nz-steps [nzCurrent]="currentStep" nzSize="small" class="wizard-steps">
+    <nz-step *ngFor="let step of steps" [nzTitle]="step.title" [nzDescription]="step.description"></nz-step>
+  </nz-steps>
+
+  <section class="wizard-body" [ngSwitch]="currentStep">
+    <ng-container *ngSwitchCase="0">
+      <form [formGroup]="detectForm" class="detect-form" (ngSubmit)="detectEnvironment()">
+        <div class="field-group">
+          <label for="namespace-select">{{ t('form.namespaceLabel') }}</label>
+          <nz-select
+            formControlName="namespace"
+            nzShowSearch
+            nzAllowClear
+            id="namespace-select"
+            [nzPlaceHolder]="t('form.namespacePlaceholder')"
+            nzSize="large">
+            <nz-option *ngFor="let ns of namespaceOptions" [nzValue]="ns" [nzLabel]="ns"></nz-option>
+          </nz-select>
+        </div>
+        <div class="field-group">
+          <label for="install-mode-select">{{ t('form.installModeLabel') }}</label>
+          <nz-select
+            formControlName="installMode"
+            id="install-mode-select"
+            [nzPlaceHolder]="t('form.installModePlaceholder')"
+            nzSize="large">
+            <nz-option nzValue="managed" [nzLabel]="t('form.installMode.managed')"></nz-option>
+            <nz-option nzValue="assisted" [nzLabel]="t('form.installMode.assisted')"></nz-option>
+            <nz-option nzValue="byo" [nzLabel]="t('form.installMode.byo')"></nz-option>
+          </nz-select>
+        </div>
+        <div class="field-group">
+          <label for="values-yaml">{{ t('form.valuesYamlLabel') }}</label>
+          <textarea
+            id="values-yaml"
+            nz-input
+            formControlName="valuesYaml"
+            [placeholder]="t('form.valuesYamlPlaceholder')"
+            rows="6"></textarea>
+          <div class="hint">{{ t('form.valuesYamlHelp') }}</div>
+        </div>
+        <div class="submit-group">
+          <button nz-button nzType="primary" nzSize="large" [disabled]="detectionLoading">
+            {{ t('form.detectSubmit') }}
+          </button>
+        </div>
+      </form>
+
+      <nz-alert
+        *ngIf="detectionError"
+        nzType="error"
+        nzShowIcon
+        [nzMessage]="t('detect.errorTitle')"
+        [nzDescription]="detectionError"
+        class="detect-alert">
+      </nz-alert>
+
+      <div *ngIf="detectionLoading" class="skeleton-wrapper">
+        <nz-skeleton [nzActive]="true" [nzTitle]="false" [nzParagraph]="{ rows: 4 }"></nz-skeleton>
+        <nz-skeleton [nzActive]="true" [nzTitle]="false" [nzParagraph]="{ rows: 4 }"></nz-skeleton>
+        <nz-skeleton [nzActive]="true" [nzTitle]="false" [nzParagraph]="{ rows: 4 }"></nz-skeleton>
+      </div>
+
+      <ng-container *ngIf="!detectionLoading && detectionSnapshot as snapshot">
+        <div class="snapshot-summary">
+          <nz-card class="summary-card" nzBordered>
+            <div class="summary-content">
+              <div class="metric">
+                <span class="label">{{ t('snapshot.healthScoreLabel') }}</span>
+                <span class="value">{{ (snapshot.healthScore ?? 0) | number:'1.0-0' }}</span>
+              </div>
+              <div class="meta">
+                <span>{{ t('snapshot.namespaceLabel') }}{{ snapshot.namespace }}</span>
+                <span>{{ t('snapshot.detectedAtLabel') }}{{ snapshot.detectedAt | date: 'yyyy-MM-dd HH:mm:ss' }}</span>
+              </div>
+            </div>
+          </nz-card>
+        </div>
+
+        <div class="component-grid">
+          <nz-card
+            *ngFor="let component of detectionComponents"
+            nzBordered
+            [nzBodyStyle]="{ padding: '16px' }"
+            class="component-card">
+            <div class="card-header">
+              <div class="card-title">
+                <span>{{ component.displayName }}</span>
+                <nz-tag [nzColor]="getStatusTagColor(component.status)">{{ getStatusLabel(component.status) }}</nz-tag>
+              </div>
+              <nz-tag [nzColor]="getActionTagColor(component.action)">{{ getActionLabel(component.action) }}</nz-tag>
+            </div>
+            <div class="card-body">
+              <ul>
+                <li>{{ t('component.existsLabel') }}{{ component.exists ? t('common.yes') : t('common.no') }}</li>
+                <li>{{ t('component.healthyLabel') }}{{ component.healthy === undefined ? t('common.unknown') : (component.healthy ? t('component.health.good') : t('component.health.bad')) }}</li>
+                <li *ngIf="component.version">{{ t('component.versionLabel') }}{{ component.version }}</li>
+                <li *ngIf="component.detail">{{ component.detail }}</li>
+              </ul>
+            </div>
+          </nz-card>
+        </div>
+
+        <section *ngIf="detectionRecommendations.length" class="recommendations">
+          <h3>
+            <i nz-icon nzType="bulb" nzTheme="outline"></i>
+            {{ t('recommendations.title') }}
+          </h3>
+          <ul>
+            <li *ngFor="let rec of detectionRecommendations">{{ rec }}</li>
+          </ul>
+        </section>
+
+        <div class="step-actions">
+          <button
+            nz-button
+            nzType="primary"
+            nzSize="large"
+            [disabled]="!detectionComponents.length || planLoading || installPolling"
+            [nzLoading]="planLoading"
+            (click)="generatePlan()">
+            {{ t('actions.nextStep') }}
+          </button>
+        </div>
+      </ng-container>
+    </ng-container>
+
+    <ng-container *ngSwitchCase="1">
+      <nz-spin [nzSpinning]="planLoading" [nzTip]="t('plan.loadingTip')" class="plan-spinner">
+        <ng-container *ngIf="planResponse as plan; else planEmpty">
+          <div class="plan-summary">
+            <nz-card nzBordered>
+              <div class="summary-grid">
+                <div class="summary-item">
+                  <span class="label">{{ t('plan.summary.risk') }}</span>
+                  <nz-tag [nzColor]="getRiskTagColor(plan.plan.riskLevel)">{{ getRiskLabel(plan.plan.riskLevel) }}</nz-tag>
+                </div>
+                <div class="summary-item">
+                  <span class="label">{{ t('plan.summary.duration') }}</span>
+                  <span class="value">{{ formatDuration(plan.estimatedDurationSeconds) }}</span>
+                </div>
+                <div class="summary-item">
+                  <span class="label">{{ t('plan.summary.stepCount') }}</span>
+                  <span class="value">{{ plan.plan.steps.length }}</span>
+                </div>
+                <div class="summary-item">
+                  <span class="label">{{ t('plan.summary.intent') }}</span>
+                  <span class="value">
+                    {{ planIntent === 'repair' ? t('plan.intent.repair') : (planIntent === 'upgrade' ? t('plan.intent.upgrade') : t('plan.intent.install')) }}
+                  </span>
+                </div>
+              </div>
+            </nz-card>
+          </div>
+
+          <nz-table
+            nzSize="middle"
+            [nzFrontPagination]="false"
+            [nzData]="plan.plan.steps"
+            class="plan-table">
+            <thead>
+              <tr>
+                <th>{{ t('plan.table.order') }}</th>
+                <th>{{ t('plan.table.component') }}</th>
+                <th>{{ t('plan.table.action') }}</th>
+                <th>{{ t('plan.table.duration') }}</th>
+                <th>{{ t('plan.table.depends') }}</th>
+                <th>{{ t('plan.table.reason') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let step of plan.plan.steps">
+                <td>{{ step.order }}</td>
+                <td>{{ getComponentDisplayName(step.component) }}</td>
+                <td>
+                  <nz-tag [nzColor]="getActionTagColor(step.action)">{{ getActionLabel(step.action) }}</nz-tag>
+                </td>
+                <td>{{ formatDuration(step.estimatedDurationSeconds) }}</td>
+                <td>{{ formatDependencies(step.dependsOn) }}</td>
+                <td>{{ step.reason || t('common.none') }}</td>
+              </tr>
+            </tbody>
+          </nz-table>
+
+          <section *ngIf="planWarnings.length" class="plan-warnings">
+            <h3>
+              <i nz-icon nzType="alert" nzTheme="outline"></i>
+              {{ t('plan.warnings.title') }}
+            </h3>
+            <ul>
+              <li *ngFor="let warn of planWarnings">{{ warn }}</li>
+            </ul>
+          </section>
+
+          <div class="step-actions">
+            <button nz-button nzType="default" (click)="currentStep = 0">
+              {{ t('actions.backToDetect') }}
+            </button>
+            <button
+              nz-button
+              nzType="primary"
+              [disabled]="!plan.plan.steps.length || installLoading || installPolling"
+              [nzLoading]="installLoading"
+              (click)="startInstallation()">
+              {{ t('actions.startInstallation') }}
+            </button>
+          </div>
+        </ng-container>
+      </nz-spin>
+      <ng-template #planEmpty>
+        <nz-result
+          nzStatus="info"
+          [nzTitle]="t('plan.empty.title')"
+          [nzSubTitle]="t('plan.empty.subtitle')">
+        </nz-result>
+      </ng-template>
+    </ng-container>
+
+    <ng-container *ngSwitchCase="2">
+      <div class="resume-phase-banner" *ngIf="resumeInitialPhaseLabel && !installStatus">
+        <nz-tag nzColor="blue">{{ resumeInitialPhaseLabel }}</nz-tag>
+      </div>
+      <ng-container *ngIf="installStatus as status; else noInstall">
+        <div class="progress-summary">
+          <nz-card nzBordered>
+              <div class="summary-head">
+                <nz-tag [nzColor]="getInstallPhaseTagColor(status.phase)">{{ getInstallPhaseLabel(status.phase) }}</nz-tag>
+                <span class="session-id">{{ t('progress.sessionLabel', { id: status.sessionId }) }}</span>
+            </div>
+            <div class="summary-progress">
+              <nz-progress
+                nzStrokeWidth="12"
+                [nzPercent]="getProgressPercent(status.progress)"
+                [nzStatus]="getProgressStatus(status.phase)">
+              </nz-progress>
+              <div class="summary-actions">
+                <button nz-button nzType="default" nzSize="small" (click)="refreshStatus()">
+                  <i nz-icon nzType="reload"></i>
+                  {{ t('progress.refresh') }}
+                </button>
+                <button nz-button nzType="default" nzSize="small" (click)="backgroundRun()">
+                  <i nz-icon nzType="export"></i>
+                  {{ t('progress.background') }}
+                </button>
+              </div>
+            </div>
+            <div class="summary-times">
+              <span>{{ t('progress.startedAt') }}{{ status.startedAt | date: 'yyyy-MM-dd HH:mm:ss' }}</span>
+              <span>{{ t('progress.updatedAt') }}{{ status.updatedAt | date: 'yyyy-MM-dd HH:mm:ss' }}</span>
+            </div>
+          </nz-card>
+        </div>
+
+        <div class="progress-grid">
+          <nz-card nzBordered class="current-step-card">
+            <h3>{{ t('progress.currentStep') }}</h3>
+            <ng-container *ngIf="status.currentStep as step; else noCurrentStep">
+              <div class="step-order">{{ t('progress.stepOrderLabel', { order: step.order }) }}</div>
+              <div class="step-component">{{ getComponentDisplayName(step.component) }}</div>
+              <div class="step-action">
+                <nz-tag [nzColor]="getActionTagColor(step.action)">{{ getActionLabel(step.action) }}</nz-tag>
+                <span class="step-status">{{ getExecutionStatusLabel(step.status) }}</span>
+              </div>
+              <p class="step-message" *ngIf="step.message">{{ step.message }}</p>
+            </ng-container>
+            <ng-template #noCurrentStep>
+              <p>{{ t('progress.noCurrentStep') }}</p>
+            </ng-template>
+          </nz-card>
+
+          <nz-card nzBordered class="completed-steps-card">
+            <h3>{{ t('progress.recentComplete') }}</h3>
+            <ul>
+              <li *ngFor="let step of (status.completedSteps || []) | slice:-5">
+                <span class="step-order">#{{ step.order }}</span>
+                <span>{{ getComponentDisplayName(step.component) }}</span>
+                <nz-tag nzColor="green">{{ t('progress.completedTag') }}</nz-tag>
+              </li>
+            </ul>
+            <p *ngIf="!(status.completedSteps?.length)">{{ t('progress.noneCompleted') }}</p>
+          </nz-card>
+        </div>
+
+        <div class="component-progress">
+          <nz-card nzBordered>
+            <h3>{{ t('progress.componentHeading') }}</h3>
+            <div class="component-list">
+              <div class="component-item" *ngFor="let comp of status.components">
+                <div class="comp-header">
+                  <span class="comp-name">{{ getComponentDisplayName(comp.name) }}</span>
+                  <nz-tag [nzColor]="getComponentPhaseColor(comp.phase)">{{ getComponentPhaseLabel(comp.phase) }}</nz-tag>
+                </div>
+                <ul>
+                  <li>{{ t('component.versionLabel') }}{{ comp.version || t('common.none') }}</li>
+                  <li *ngIf="comp.installedAt">{{ t('progress.componentInstalledAt', { time: (comp.installedAt | date: 'MM-dd HH:mm') ?? '' }) }}</li>
+                  <li *ngIf="comp.errorMessage" class="error-text">{{ t('progress.componentErrorLabel') }}{{ comp.errorMessage }}</li>
+                </ul>
+              </div>
+              <p *ngIf="!status.components?.length" class="empty-tip">{{ t('progress.waitingComponents') }}</p>
+            </div>
+          </nz-card>
+        </div>
+
+        <div class="retry-section" *ngIf="status.retry as retry">
+          <nz-card nzBordered class="retry-card">
+            <div class="retry-header">
+              <h3>{{ t('progress.retry.heading') }}</h3>
+              <nz-tag [nzColor]="getRetryModeTagColor(retry.mode)">{{ getRetryModeLabel(retry.mode) }}</nz-tag>
+            </div>
+            <div class="retry-body">
+              <div class="retry-metrics">
+                <div class="retry-metric">
+                  <span class="label">{{ t('progress.retry.retries') }}</span>
+                  <span class="value">{{ retry.retries ?? 0 }}</span>
+                </div>
+                <div class="retry-metric">
+                  <span class="label">{{ t('progress.retry.max') }}</span>
+                  <span class="value">{{ retry.maxRetries ?? '∞' }}</span>
+                </div>
+                <div class="retry-metric">
+                  <span class="label">{{ t('progress.retry.backoff') }}</span>
+                  <span class="value">{{ formatBackoff(retry.backoffSeconds) }}</span>
+                </div>
+              </div>
+              <nz-progress
+                *ngIf="retry.maxRetries !== null && retry.maxRetries !== undefined && retry.maxRetries > 0"
+                nzStrokeWidth="8"
+                nzStatus="active"
+                [nzPercent]="getRetryProgressPercent(retry)"></nz-progress>
+              <ul class="retry-details">
+                <li *ngIf="retry.mode === 'scheduled' && retry.nextRetryAt">
+                  {{ t('progress.retry.next') }}{{ retry.nextRetryAt | date: 'yyyy-MM-dd HH:mm:ss' }}
+                  <span class="countdown" *ngIf="retryCountdownSeconds !== null">{{ t('progress.retry.countdown', { value: formatCountdown(retryCountdownSeconds) }) }}</span>
+                </li>
+                <li *ngIf="retry.lastAttemptAt">{{ t('progress.retry.lastAttempt') }}{{ retry.lastAttemptAt | date: 'yyyy-MM-dd HH:mm:ss' }}</li>
+                <li *ngIf="retry.lastError">{{ t('progress.retry.lastError') }}{{ retry.lastError }}</li>
+              </ul>
+              <div class="retry-actions">
+                <button
+                  nz-button
+                  nzType="primary"
+                  nzSize="small"
+                  [disabled]="retryActionLoading || !canManualRetry(retry)"
+                  [nzLoading]="retryActionLoading"
+                  (click)="triggerManualRetry()">
+                  {{ t('actions.retryNow') }}
+                </button>
+                <button
+                  nz-button
+                  nzType="default"
+                  nzSize="small"
+                  *ngIf="showForceRetry(retry)"
+                  [disabled]="retryActionLoading"
+                  [nzLoading]="retryActionLoading"
+                  (click)="triggerManualRetry(true)">
+                  {{ t('actions.retryForce') }}
+                </button>
+                <span class="retry-hint" *ngIf="retry.mode === 'running'">{{ t('progress.retry.runningHint') }}</span>
+                <span class="retry-hint" *ngIf="retry.mode === 'scheduled' && retryCountdownSeconds === null">{{ t('progress.retry.scheduledHint') }}</span>
+                <span class="retry-hint warning" *ngIf="retry.mode === 'exhausted'">{{ t('progress.retry.exhaustedHint') }}</span>
+              </div>
+            </div>
+          </nz-card>
+        </div>
+
+        <div class="error-section" *ngIf="status.errors?.length">
+          <nz-card nzBordered nzType="inner" class="error-card">
+            <div class="error-card-header">
+              <h3>
+                <i nz-icon nzType="warning"></i>
+                {{ t('errors.sectionTitle', { count: status.errors?.length ?? 0 }) }}
+              </h3>
+            </div>
+            <nz-list nzItemLayout="vertical" nzSize="small">
+              <nz-list-item *ngFor="let err of status.errors || []; index as i">
+                <div class="error-item-header">
+                  <nz-tag nzColor="red">{{ err.category }}</nz-tag>
+                  <span class="error-component">
+                    {{ err.component ? getComponentDisplayName(err.component) : t('errors.genericComponent') }}
+                  </span>
+                  <span class="error-step" *ngIf="err.stepOrder !== null">{{ t('errors.stepLabel') }} {{ err.stepOrder }}</span>
+                  <span class="error-time" *ngIf="err.occurredAt">{{ t('errors.timeLabel') }}{{ err.occurredAt | date: 'MM-dd HH:mm' }}</span>
+                </div>
+                <p class="error-message">{{ err.message }}</p>
+                <div class="error-meta" *ngIf="err.context as ctx">
+                  <span class="meta-item" *ngFor="let item of ctx | keyvalue">
+                    <strong>{{ item.key }}: </strong>{{ item.value }}
+                  </span>
+                </div>
+                <div class="error-actions">
+                  <button nz-button nzType="default" nzSize="small" (click)="openDiagnostics(i)">
+                    <i nz-icon nzType="search"></i>
+                    {{ t('errors.viewDiagnostics') }}
+                  </button>
+                </div>
+              </nz-list-item>
+            </nz-list>
+          </nz-card>
+        </div>
+      </ng-container>
+      <ng-template #noInstall>
+        <nz-result
+          nzStatus="info"
+          [nzTitle]="t('progress.noInstallTitle')"
+          [nzSubTitle]="t('progress.noInstallSubtitle')">
+        </nz-result>
+      </ng-template>
+    </ng-container>
+  </section>
+
+  <nz-drawer
+    [nzTitle]="t('progress.drawer.title')"
+    [nzVisible]="diagnosticsVisible"
+    nzPlacement="right"
+    [nzWidth]="520"
+    (nzOnClose)="closeDiagnostics()">
+    <ng-container *nzDrawerContent>
+      <div class="diagnostics-drawer">
+        <div class="diagnostics-error-switcher" *ngIf="installStatus?.errors?.length">
+          <h4>{{ t('diagnostics.errorList') }}</h4>
+          <nz-list nzSize="small">
+            <nz-list-item
+              *ngFor="let err of installStatus?.errors || []; index as i"
+              [class.active]="i === selectedErrorIndex"
+              (click)="selectDiagnosticError(i)">
+              <span class="error-index">#{{ i + 1 }}</span>
+              <span class="error-title">{{ err.component ? getComponentDisplayName(err.component) : t('errors.genericComponent') }}</span>
+              <nz-tag nzColor="red">{{ err.category }}</nz-tag>
+            </nz-list-item>
+          </nz-list>
+        </div>
+
+        <div class="selected-error-block" *ngIf="selectedInstallError as currentError">
+          <h4>{{ t('diagnostics.currentError') }}</h4>
+          <p class="error-summary">{{ currentError.message }}</p>
+          <nz-descriptions nzSize="small" [nzColumn]="1">
+            <nz-descriptions-item [nzTitle]="t('diagnostics.componentLabel')">
+              {{ currentError.component ? getComponentDisplayName(currentError.component) : t('errors.genericComponent') }}
+            </nz-descriptions-item>
+            <nz-descriptions-item [nzTitle]="t('diagnostics.categoryLabel')">
+              {{ currentError.category }}
+            </nz-descriptions-item>
+            <nz-descriptions-item [nzTitle]="t('errors.stepLabel')" *ngIf="currentError.stepOrder !== null">
+              {{ currentError.stepOrder }}
+            </nz-descriptions-item>
+            <nz-descriptions-item [nzTitle]="t('errors.timeLabel')" *ngIf="currentError.occurredAt">
+              {{ currentError.occurredAt | date: 'yyyy-MM-dd HH:mm:ss' }}
+            </nz-descriptions-item>
+          </nz-descriptions>
+          <div class="error-context" *ngIf="currentError.context as ctx">
+            <nz-divider [nzText]="t('errors.context')"></nz-divider>
+            <nz-descriptions nzSize="small" [nzColumn]="1">
+              <nz-descriptions-item *ngFor="let item of ctx | keyvalue" [nzTitle]="item.key">
+                {{ item.value }}
+              </nz-descriptions-item>
+            </nz-descriptions>
+          </div>
+        </div>
+
+        <nz-divider></nz-divider>
+
+        <nz-spin [nzSpinning]="diagnosticsLoading" [nzTip]="t('diagnostics.loading')">
+          <ng-container *ngIf="diagnosticsError as errMsg">
+            <nz-alert nzType="error" nzShowIcon [nzMessage]="t('diagnostics.failure')" [nzDescription]="errMsg"></nz-alert>
+          </ng-container>
+          <ng-container *ngIf="!diagnosticsError && diagnosisResult as diag">
+            <div class="diagnosis-summary">
+              <h4>
+                <nz-tag [nzColor]="getDiagnosisSeverityColor(diag.diagnosis.severity)">
+                  {{ getDiagnosisSeverityLabel(diag.diagnosis.severity) }}
+                </nz-tag>
+                {{ diag.diagnosis.summary }}
+              </h4>
+              <div class="diagnosis-meta">
+                <span>{{ t('diagnostics.categoryLabel') }}{{ diag.diagnosis.category }}</span>
+              </div>
+            </div>
+
+            <nz-tabset nzSize="small">
+              <nz-tab [nzTitle]="t('diagnostics.analysisTab')">
+                <ng-container *ngIf="diag.diagnosis.possibleCauses?.length; else noCauses">
+                  <ul class="diagnosis-list">
+                    <li *ngFor="let cause of diag.diagnosis.possibleCauses">{{ cause }}</li>
+                  </ul>
+                </ng-container>
+                <ng-template #noCauses>
+                  <p class="empty-tip">{{ t('diagnostics.noCauses') }}</p>
+                </ng-template>
+              </nz-tab>
+              <nz-tab [nzTitle]="t('diagnostics.suggestionsTab')">
+                <ng-container *ngIf="diag.diagnosis.suggestedFixes?.length; else noSuggestions">
+                  <ul class="diagnosis-list">
+                    <li *ngFor="let fix of diag.diagnosis.suggestedFixes">{{ fix }}</li>
+                  </ul>
+                </ng-container>
+                <ng-template #noSuggestions>
+                  <p class="empty-tip">{{ t('diagnostics.noSuggestions') }}</p>
+                </ng-template>
+              </nz-tab>
+              <nz-tab [nzTitle]="t('diagnostics.autofixTab')" *ngIf="diag.autoFixes?.length">
+                <div class="autofix-list">
+                  <div class="autofix-item" *ngFor="let fix of diag.autoFixes">
+                    <div class="autofix-header">
+                      <h5>{{ fix.title }}</h5>
+                      <nz-tag nzColor="blue" *ngIf="!fix.automated">{{ t('diagnostics.autofix.manual') }}</nz-tag>
+                    </div>
+                    <p *ngIf="fix.description">{{ fix.description }}</p>
+                    <p *ngIf="fix.verification" class="verification">{{ t('diagnostics.autofix.verification') }}{{ fix.verification }}</p>
+                    <ng-container *ngIf="getAutoFixState(fix.id) as fixState">
+                      <div class="autofix-actions">
+                        <button
+                          nz-button
+                          nzType="primary"
+                          nzSize="small"
+                          [disabled]="fixState.status === 'running' || fixState.status === 'success'"
+                          [nzLoading]="fixState.status === 'running'"
+                          (click)="triggerAutoFix(fix.id)">
+                          <ng-container [ngSwitch]="fixState.status">
+                            <ng-container *ngSwitchCase="'success'">{{ t('actions.autofix.done') }}</ng-container>
+                            <ng-container *ngSwitchCase="'error'">{{ t('actions.autofix.retry') }}</ng-container>
+                            <ng-container *ngSwitchDefault>{{ t('actions.autofix.execute') }}</ng-container>
+                          </ng-container>
+                        </button>
+                        <nz-tag nzColor="green" *ngIf="fixState.status === 'success'">{{ t('diagnostics.autofix.success') }}</nz-tag>
+                        <nz-tag nzColor="red" *ngIf="fixState.status === 'error'">{{ t('diagnostics.autofix.failure') }}</nz-tag>
+                      </div>
+                      <p class="autofix-message" *ngIf="fixState.message">{{ fixState.message }}</p>
+                    </ng-container>
+                  </div>
+                </div>
+              </nz-tab>
+              <nz-tab [nzTitle]="t('diagnostics.rawTab')">
+                <pre class="diagnosis-json">{{ diag | json }}</pre>
+              </nz-tab>
+            </nz-tabset>
+          </ng-container>
+          <ng-container *ngIf="!diagnosticsError && !diagnosisResult">
+            <p class="empty-tip">{{ t('diagnostics.selectPrompt') }}</p>
+          </ng-container>
+        </nz-spin>
+      </div>
+    </ng-container>
+  </nz-drawer>
+
+  <ng-template #resumeDialogTpl>
+    <div class="resume-dialog">
+      <h3>{{ t('resume.title') }}</h3>
+      <p class="resume-tip">{{ t('resume.tip') }}</p>
+      <div class="resume-meta" *ngIf="resumeSessionId">
+        <nz-tag nzColor="blue">{{ t('resume.sessionLabel', { id: resumeSessionId }) }}</nz-tag>
+      </div>
+      <div class="resume-history" *ngIf="resumeHistory.length">
+        <h4>{{ t('resume.historyTitle') }}</h4>
+        <ul>
+          <li *ngFor="let item of resumeHistory | slice:0:3">
+            <span class="history-session">{{ item.sessionId ? t('resume.sessionLabel', { id: item.sessionId }) : t('resume.historyUnknown') }}</span>
+            <span class="history-phase">{{ getInstallPhaseLabel(item.checkpoint.phase) }}</span>
+            <span class="history-updated">{{ item.updatedAt | date: 'MM-dd HH:mm' }}</span>
+          </li>
+        </ul>
+      </div>
+      <div class="resume-actions">
+        <button nz-button nzType="primary" (click)="onResumeContinue()" [disabled]="!resumeSessionId">
+          {{ t('actions.resumeContinue') }}
+        </button>
+        <button nz-button nzType="default" (click)="onResumeRestart()">
+          {{ t('actions.resumeRestart') }}
+        </button>
+        <button nz-button nzType="dashed" (click)="onResumeRepair()">
+          {{ t('actions.resumeRepair') }}
+        </button>
+      </div>
+      <div class="resume-hints">
+        <p>{{ t('resume.hint.continue') }}</p>
+        <p>{{ t('resume.hint.restart') }}</p>
+        <p>{{ t('resume.hint.repair') }}</p>
+      </div>
+    </div>
+  </ng-template>
+  </div>
+</div>

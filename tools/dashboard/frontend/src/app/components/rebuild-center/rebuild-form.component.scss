@@ -1,0 +1,332 @@
+.page-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+  min-height: 100%;
+  background: transparent; /* 外层由 layout 的 inner-content 负责背景 */
+}
+
+.page-header {
+  background: #fff;
+  padding: 16px;
+  border-radius: 10px;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
+}
+
+.title-block {
+  h2 {
+    margin: 0 0 8px;
+    font-size: 22px;
+    font-weight: 600;
+    color: #1f1f1f;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  p {
+    margin: 0;
+    color: #595959;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    line-height: 1.6;
+
+    button {
+      margin-left: 8px;
+    }
+  }
+}
+
+.page-icon {
+  font-size: 22px;
+  color: var(--primary-color, #ff6a00);
+}
+
+.page-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.rebuild-form-page {
+  .form-card {
+    width: 100%;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+
+    .form-content {
+      padding: 24px;
+      /* 原先 780px 会显得页面过窄，这里放大到与其它页面更协调的宽度 */
+      max-width: 1040px;
+      margin: 0 auto;
+      .form-section {
+        margin-bottom: 24px;
+        
+        .section-title {
+          display: flex;
+          align-items: center;
+          margin-bottom: 16px;
+          font-size: 16px;
+          font-weight: 500;
+          color: #262626;
+          
+          i {
+            margin-right: 8px;
+            color: #595959;
+          }
+        }
+        
+        .role-hint {
+          margin-bottom: 8px;
+        }
+      }
+      
+      .role-option {
+        display: flex;
+        align-items: center;
+        
+        i {
+          margin-right: 8px;
+          color: #595959;
+        }
+      }
+      
+      .xstore-option {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        
+        .xstore-name {
+          flex: 1;
+        }
+        
+        .status-tag {
+          margin-left: 8px;
+        }
+      }
+      
+      .pod-option {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        
+        .pod-name {
+          flex: 1;
+        }
+        
+        .pod-info {
+          display: flex;
+          gap: 4px;
+          
+          .status-tag, .role-tag {
+            font-size: 12px;
+          }
+        }
+      }
+      
+      .switch-hint {
+        margin-left: 12px;
+        color: #8c8c8c;
+        font-size: 12px;
+      }
+      
+      .submit-buttons {
+        margin-top: 32px;
+        border-top: 1px solid #f0f0f0;
+        padding-top: 24px;
+      }
+
+      .role-hint-text {
+        padding: 8px 12px;
+        background: #f8f9fa;
+        border-left: 3px solid #d9d9d9;
+        border-radius: 0 4px 4px 0;
+        color: #595959;
+        font-size: 13px;
+        margin-bottom: 8px;
+      }
+    }
+  }
+}
+
+// 响应式设计
+@media (max-width: 768px) {
+  .page-wrapper {
+    padding: 16px;
+  }
+
+  .rebuild-form-page {
+    .form-card {
+      .form-content {
+        padding: 20px;
+
+        .form-section {
+          .section-title {
+            font-size: 14px;
+          }
+        }
+
+        ::ng-deep nz-form-item {
+          .ant-form-item-label {
+            flex: 0 0 100% !important;
+            max-width: 100% !important;
+          }
+
+          .ant-form-item-control {
+            flex: 0 0 100% !important;
+            max-width: 100% !important;
+            margin-left: 0 !important;
+          }
+        }
+
+        .submit-buttons {
+          ::ng-deep .ant-form-item-control {
+            flex: 0 0 100% !important;
+            max-width: 100% !important;
+            margin-left: 0 !important;
+          }
+        }
+      }
+    }
+  }
+}
+
+// 表单项样式增强
+nz-form-item {
+  margin-bottom: 16px;
+}
+
+nz-select, nz-input {
+  width: 100%;
+}
+
+// Icon 颜色增强
+.anticon {
+  &.anticon-question-circle {
+    color: #8c8c8c;
+    cursor: help;
+  }
+}
+
+// 中性色彩主题覆盖
+.rebuild-form-page {
+  ::ng-deep {
+    // 按钮样式覆盖
+    .ant-btn-primary {
+      /* 本页主按钮恢复 Ant Design 默认蓝色（不跟随全局主题色） */
+      background: #1890ff;
+      border-color: #1890ff;
+
+      &:hover,
+      &:focus {
+        background: #40a9ff;
+        border-color: #40a9ff;
+      }
+
+      &:active {
+        background: #096dd9;
+        border-color: #096dd9;
+      }
+    }
+
+    .ant-btn-default {
+      color: #595959;
+      border-color: #d9d9d9;
+
+      &:hover,
+      &:focus {
+        color: #434343;
+        border-color: #434343;
+      }
+    }
+
+    // 选择器和输入框样式
+    .ant-select-focused .ant-select-selector,
+    .ant-input:focus,
+    .ant-input-focused {
+      /* 本页交互控件恢复默认蓝色 */
+      border-color: #1890ff;
+      box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.18);
+    }
+
+    .ant-select-selection-placeholder,
+    .ant-input::placeholder {
+      color: #bfbfbf;
+    }
+
+    // 开关组件样式
+    .ant-switch-checked {
+      background-color: #1890ff;
+    }
+
+    // 表单标签样式
+    .ant-form-item-label > label {
+      color: #595959;
+      font-weight: 500;
+    }
+
+    .ant-form-item-required::before {
+      color: #ff7875;
+    }
+
+    // 分割线样式
+    .ant-divider-horizontal {
+      border-color: #f0f0f0;
+    }
+
+    // 标签样式
+    .ant-tag {
+      border-radius: 4px;
+      
+      &.ant-tag-blue {
+        background: #f0f2f5;
+        border-color: #d9d9d9;
+        color: #595959;
+      }
+
+      &.ant-tag-green {
+        background: #f6ffed;
+        border-color: #b7eb8f;
+        color: #389e0d;
+      }
+
+      &.ant-tag-red {
+        background: #fff2f0;
+        border-color: #ffb3b3;
+        color: #cf1322;
+      }
+    }
+  }
+}
+
+// 加载状态样式
+::ng-deep .ant-spin .ant-spin-dot-item {
+  background-color: #595959;
+}
+
+// 可访问性改进
+@media (prefers-contrast: high) {
+  .rebuild-form-page {
+    background: white;
+
+    .form-card {
+      border: 2px solid #000;
+    }
+
+    ::ng-deep {
+      .ant-btn-primary {
+        background: #000;
+        border-color: #000;
+        color: #fff;
+      }
+
+      .ant-input,
+      .ant-select-selector {
+        border: 2px solid #000;
+      }
+    }
+  }
+}

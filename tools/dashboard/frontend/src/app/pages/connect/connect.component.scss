@@ -1,0 +1,753 @@
+// ============================================================================
+// PolarDB-X 连接页面 - NG-ZORRO 版本
+// 设计风格：阿里云企业级
+// ============================================================================
+
+$polardbx-primary: #ff6a00;
+$polardbx-primary-dark: #e85d00;
+$polardbx-primary-light: #fff1e6;
+
+// 中性色系
+$neutral-900: #1d2129;
+$neutral-700: #4e5969;
+$neutral-500: #86909c;
+$neutral-400: #a1a9b3;
+$neutral-300: #c9cdd4;
+$neutral-200: #e5e6eb;
+$neutral-100: #f2f3f5;
+$neutral-50: #f7f8fa;
+$white: #ffffff;
+
+// 状态色
+$success: #52c41a;
+$error: #ff4d4f;
+
+:host {
+  display: flex;
+  min-height: 100vh;
+  background: $neutral-50;
+}
+
+.connect-container {
+  display: flex;
+  width: 100%;
+  min-height: 100vh;
+}
+
+// ============ 左侧品牌区域 ============
+.brand-section {
+  flex: 0 0 45%;
+  background: linear-gradient(135deg, #ff7a18 0%, #ff6a00 45%, #ff3d00 100%);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 60px;
+  position: relative;
+  overflow: hidden;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: 
+      radial-gradient(circle at 20% 80%, rgba(255, 255, 255, 0.05) 0%, transparent 50%),
+      radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.08) 0%, transparent 50%);
+    pointer-events: none;
+  }
+}
+
+.brand-content {
+  position: relative;
+  z-index: 10;
+  text-align: center;
+  max-width: 400px;
+}
+
+.brand-logo-large {
+  margin-bottom: 32px;
+
+  .logo-icon-container {
+    // 官方横向 logo：用横向卡片容器承载
+    width: 260px;
+    height: 88px;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+
+    .polardbx-logo {
+      width: calc(100% - 28px);
+      height: calc(100% - 22px);
+      display: block;
+      object-fit: contain;
+      filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.18));
+    }
+  }
+}
+
+.brand-title {
+  font-size: 32px;
+  font-weight: 600;
+  color: $white;
+  margin: 0 0 16px 0;
+  letter-spacing: -0.02em;
+}
+
+.brand-subtitle {
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.8);
+  line-height: 1.6;
+  margin: 0 0 48px 0;
+}
+
+.brand-features {
+  text-align: left;
+
+  .feature-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 20px;
+    color: rgba(255, 255, 255, 0.9);
+
+    .feature-icon {
+      width: 40px;
+      height: 40px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-right: 16px;
+
+      [nz-icon] {
+        font-size: 20px;
+        color: $white;
+      }
+    }
+
+    .feature-text {
+      h4 {
+        margin: 0 0 4px 0;
+        font-size: 15px;
+        font-weight: 500;
+        color: $white;
+      }
+
+      p {
+        margin: 0;
+        font-size: 13px;
+        color: rgba(255, 255, 255, 0.7);
+      }
+    }
+  }
+}
+
+// ============ 右侧表单区域 ============
+.form-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 60px;
+  background: $white;
+}
+
+.connect-card {
+  width: 100%;
+  max-width: 520px;
+  background: transparent !important;
+
+  ::ng-deep .ant-card-body {
+    padding: 0;
+  }
+}
+
+.card-header {
+  text-align: center;
+  margin-bottom: 32px;
+
+  .card-title {
+    font-size: 28px;
+    font-weight: 600;
+    color: $neutral-900;
+    margin: 0 0 12px 0;
+  }
+
+  .card-subtitle {
+    font-size: 15px;
+    color: $neutral-500;
+    margin: 0;
+  }
+}
+
+// 状态指示器
+.connection-status {
+  margin-bottom: 24px;
+  border-radius: 8px;
+}
+
+// 输入方式选择器
+.input-method-selector {
+  display: block;
+  margin-bottom: 24px;
+
+  ::ng-deep .ant-segmented {
+    width: 100%;
+    padding: 4px;
+    background: $neutral-100;
+    border-radius: 10px;
+
+    .ant-segmented-item {
+      flex: 1;
+      border-radius: 8px;
+      font-weight: 500;
+      
+      &.ant-segmented-item-selected {
+        background: $white;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      }
+    }
+  }
+}
+
+.input-section {
+  margin-top: 20px;
+  animation: fadeIn 0.25s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+// 文本输入样式
+.text-input-section {
+  .kubeconfig-input-group {
+    width: 100%;
+  }
+
+  .kubeconfig-textarea {
+    font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    resize: vertical;
+    border-radius: 8px;
+
+    &::placeholder {
+      color: $neutral-400;
+    }
+  }
+
+  .input-hint {
+    margin-top: 8px;
+    font-size: 13px;
+    color: $neutral-500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+
+    [nz-icon] {
+      color: $polardbx-primary;
+    }
+  }
+}
+
+// 文件上传样式
+.file-input-section {
+  .file-upload-area {
+    border: 2px dashed $neutral-300;
+    border-radius: 12px;
+    padding: 48px 32px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    background: $neutral-50;
+
+    &:hover {
+      border-color: $polardbx-primary;
+      background: $polardbx-primary-light;
+    }
+
+    &.drag-over {
+      border-color: $polardbx-primary;
+      background: $polardbx-primary-light;
+      border-style: solid;
+    }
+
+    &.has-file {
+      border-color: $success;
+      background: rgba($success, 0.06);
+      border-style: solid;
+    }
+
+    .upload-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .upload-text-wrapper {
+      text-align: center;
+    }
+
+    .upload-icon-wrapper {
+      margin-bottom: 16px;
+
+      .upload-icon {
+        font-size: 48px;
+        color: $neutral-400;
+        transition: all 0.25s ease;
+      }
+    }
+
+    &:hover .upload-icon {
+      color: $polardbx-primary;
+    }
+
+    &.has-file .upload-icon {
+      color: $success;
+    }
+
+    .upload-text {
+      font-size: 16px;
+      margin: 0 0 8px 0;
+      color: $neutral-700;
+      font-weight: 500;
+      text-align: center;
+    }
+
+    .selected-file-text {
+      color: $success;
+    }
+
+    .upload-hint {
+      font-size: 13px;
+      color: $neutral-500;
+      margin: 0;
+    }
+  }
+}
+
+// 文件信息显示
+.file-info {
+  display: flex;
+  align-items: center;
+  margin-top: 16px;
+  padding: 14px 18px;
+  background: $neutral-50;
+  border-radius: 10px;
+  border: 1px solid $neutral-200;
+
+  .file-icon-wrapper {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    background: $polardbx-primary-light;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    .file-icon {
+      font-size: 22px;
+      color: $polardbx-primary;
+    }
+  }
+
+  .file-details {
+    flex-grow: 1;
+    margin-left: 14px;
+
+    .file-name {
+      font-weight: 600;
+      margin: 0 0 2px 0;
+      color: $neutral-900;
+      font-size: 14px;
+    }
+
+    .file-size {
+      font-size: 12px;
+      color: $neutral-500;
+      margin: 0;
+    }
+  }
+
+  .clear-button {
+    color: $neutral-500;
+
+    &:hover {
+      color: $error;
+    }
+  }
+}
+
+// ========== Docker Desktop 风格代码编辑器 ==========
+.file-preview {
+  margin-top: 20px;
+
+  &.docker-style {
+    .code-editor-container {
+      display: flex;
+      flex-direction: column;
+      background: #1e1e1e;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid #3c3c3c;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+    }
+
+    .editor-toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 14px;
+      background: linear-gradient(180deg, #3c3c3c 0%, #323232 100%);
+      border-bottom: 1px solid #4a4a4a;
+      min-height: 44px;
+
+      .toolbar-left {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+
+        .file-badge {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 13px;
+          color: #ffffff;
+          background: rgba(255, 255, 255, 0.1);
+          padding: 6px 12px;
+          border-radius: 6px;
+          font-weight: 500;
+
+          [nz-icon] {
+            font-size: 14px;
+            color: #4fc3f7;
+          }
+        }
+
+        .line-count {
+          font-size: 12px;
+          color: #b0b0b0;
+          padding-left: 8px;
+          border-left: 1px solid #555555;
+        }
+      }
+
+      .toolbar-right {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+
+        .toolbar-btn {
+          width: 32px !important;
+          height: 32px !important;
+          min-width: 32px !important;
+          padding: 0 !important;
+          border-radius: 6px !important;
+          color: #e0e0e0 !important;
+          background: rgba(255, 255, 255, 0.08) !important;
+          border: 1px solid rgba(255, 255, 255, 0.15) !important;
+          display: flex !important;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s ease;
+
+          [nz-icon] {
+            font-size: 16px;
+          }
+
+          &:hover {
+            background: rgba(255, 255, 255, 0.15) !important;
+            border-color: rgba(255, 255, 255, 0.3) !important;
+            color: #ffffff !important;
+          }
+
+          &.copy-btn:hover {
+            background: rgba(76, 175, 80, 0.25) !important;
+            border-color: #66bb6a !important;
+            color: #a5d6a7 !important;
+          }
+        }
+      }
+    }
+
+    .code-content {
+      display: flex;
+      max-height: 260px;
+      overflow: auto;
+      background: #1e1e1e;
+
+      &::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+      }
+
+      &::-webkit-scrollbar-track {
+        background: #1e1e1e;
+      }
+
+      &::-webkit-scrollbar-thumb {
+        background: #4a4a4a;
+        border-radius: 5px;
+        border: 2px solid #1e1e1e;
+
+        &:hover {
+          background: #5a5a5a;
+        }
+      }
+    }
+
+    .line-numbers {
+      display: flex;
+      flex-direction: column;
+      padding: 12px 0;
+      background: #252526;
+      border-right: 1px solid #3c3c3c;
+      user-select: none;
+      position: sticky;
+      left: 0;
+      z-index: 1;
+      min-width: 44px;
+      flex-shrink: 0;
+
+      .line-number {
+        padding: 0 12px;
+        text-align: right;
+        color: #6e7681;
+        font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+        font-size: 12px;
+        line-height: 20px;
+        height: 20px;
+
+        &:hover {
+          color: #a0a0a0;
+        }
+      }
+    }
+
+    .code-area {
+      flex: 1;
+      padding: 12px 16px;
+      min-width: 0;
+
+      .code-text {
+        margin: 0;
+        font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+        font-size: 12px;
+        line-height: 20px;
+        color: #d4d4d4;
+        white-space: pre;
+
+        code {
+          font-family: inherit;
+        }
+      }
+    }
+
+    .editor-statusbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 14px;
+      background: $polardbx-primary;
+      color: #ffffff;
+      font-size: 12px;
+      font-weight: 500;
+
+      .status-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+
+        [nz-icon] {
+          font-size: 14px;
+        }
+      }
+    }
+
+    // YAML 语法高亮
+    ::ng-deep {
+      .yaml-key { color: #9cdcfe; }
+      .yaml-colon { color: #d4d4d4; }
+      .yaml-value { color: #ce9178; }
+      .yaml-string { color: #ce9178; }
+      .yaml-number { color: #b5cea8; }
+      .yaml-boolean { color: #569cd6; }
+      .yaml-comment { color: #6a9955; font-style: italic; }
+      .yaml-list { color: #d4d4d4; }
+      .yaml-url { color: #4ec9b0; text-decoration: underline; }
+    }
+  }
+}
+
+// 帮助信息
+.help-section {
+  margin-top: 24px;
+
+  ::ng-deep .ant-collapse-header {
+    font-weight: 500;
+    color: $neutral-700;
+  }
+
+  .help-content {
+    padding: 8px 0;
+  }
+
+  .help-item {
+    display: flex;
+    align-items: flex-start;
+    margin-bottom: 16px;
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+
+    [nz-icon] {
+      color: $polardbx-primary;
+      margin-right: 12px;
+      margin-top: 3px;
+      font-size: 18px;
+    }
+
+    .help-text {
+      flex: 1;
+
+      strong {
+        display: block;
+        margin-bottom: 4px;
+        color: $neutral-700;
+        font-size: 14px;
+      }
+
+      code {
+        background: $neutral-100;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+        font-size: 13px;
+        color: #d46b08;
+        border: 1px solid $neutral-200;
+      }
+    }
+  }
+}
+
+// 连接按钮
+.card-actions {
+  margin-top: 28px;
+  display: flex;
+  justify-content: center;
+
+  .connect-button {
+    min-width: 200px;
+    height: 48px;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+
+    [nz-icon] {
+      margin-right: 8px;
+    }
+  }
+}
+
+// 页脚
+.footer-text {
+  margin-top: 32px;
+  text-align: center;
+  color: $neutral-500;
+  font-size: 13px;
+
+  a {
+    color: $polardbx-primary;
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+}
+
+// ============ 响应式设计 ============
+@media (max-width: 1024px) {
+  .brand-section {
+    flex: 0 0 40%;
+    padding: 40px;
+  }
+
+  .form-section {
+    padding: 40px;
+  }
+
+  .brand-title {
+    font-size: 28px;
+  }
+
+  .brand-features {
+    display: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .connect-container {
+    flex-direction: column;
+  }
+
+  .brand-section {
+    flex: none;
+    padding: 40px 24px;
+    min-height: auto;
+  }
+
+  .brand-logo-large {
+    margin-bottom: 20px;
+
+    .logo-icon-container {
+      width: 220px;
+      height: 72px;
+      border-radius: 16px;
+    }
+  }
+
+  .brand-title {
+    font-size: 24px;
+  }
+
+  .brand-subtitle {
+    font-size: 14px;
+    margin-bottom: 0;
+  }
+
+  .brand-features {
+    display: none;
+  }
+
+  .form-section {
+    padding: 32px 20px;
+  }
+
+  .connect-card {
+    max-width: 100%;
+  }
+
+  .card-header .card-title {
+    font-size: 22px;
+  }
+
+  .file-upload-area {
+    padding: 36px 20px !important;
+  }
+
+  .connect-button {
+    width: 100%;
+  }
+}

@@ -1,0 +1,116 @@
+// src/app/styles/_shared.scss
+
+// Color Palette - low-saturation professional style
+:root {
+  --primary-color: #ff6a00;        // PolarDB-X brand orange
+  --primary-color-hover: #e85d00;  // hover
+  --primary-color-active: #cc5200; // active
+  --primary-color-light: #fff1e6;  // light background
+  
+  --accent-color: #ff8b3d;         // accent
+  --warn-color: #c75d5d;           // soft warning red
+  --success-color: #5a9e5a;        // soft success green
+
+  --background-color: #f5f6f8;     // primary background
+  --sidebar-background-color: #ffffff;
+  --card-background-color: #ffffff;
+  
+  --text-color: #333333;
+  --text-secondary-color: #666666;
+  --text-placeholder-color: #999999;
+
+  --border-color: #e0e3e8;
+  --border-color-light: #ebeef2;
+
+  --primary-gradient: linear-gradient(135deg, #ff7a18 0%, #ff6a00 100%);
+  --sidebar-active-background: #fff1e6;
+}
+
+// Shadows
+@mixin modern-shadow {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+
+// Border Radius
+@mixin modern-border-radius {
+  border-radius: 12px;
+}
+
+// Transitions
+@mixin modern-transition {
+  transition: all 0.3s ease-in-out;
+}
+
+// Modern Card Style
+@mixin modern-card {
+  background-color: var(--card-background-color);
+  @include modern-border-radius;
+  @include modern-shadow;
+  @include modern-transition;
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+
+  &:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+  }
+}
+
+// Modern Button Style
+@mixin modern-button {
+  @include modern-border-radius;
+  @include modern-shadow;
+  @include modern-transition;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+
+  &:hover {
+    transform: translateY(-2px);
+  }
+}
+
+// Modern Search/Input Field
+@mixin modern-search-field {
+  .mat-form-field-wrapper {
+    background-color: #fff;
+    @include modern-border-radius;
+    @include modern-shadow;
+  }
+  .mat-form-field-infix {
+    border-top: none;
+  }
+}
+
+// Modern Table Style
+@mixin modern-table {
+  th.mat-header-cell {
+    background-color: #fafafa;
+    color: var(--text-secondary-color);
+    font-weight: 600;
+    font-size: 14px;
+  }
+
+  tr.mat-row:hover {
+    background-color: #f5f5f5;
+  }
+}
+
+// Page Title Style
+@mixin page-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-color);
+  margin-bottom: 8px;
+}
+
+// Keyframe Animations
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-20px); }
+  to { opacity: 1; transform: translateX(0); }
+}

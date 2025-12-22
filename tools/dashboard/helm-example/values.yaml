@@ -1,0 +1,78 @@
+# PolarDB-X Dashboard - Helm Chart Values
+# This example demonstrates how to deploy the all-in-one UI backend with K8s-native config
+
+serviceAccount:
+  # Create a dedicated ServiceAccount for the backend deployment
+  create: true
+  # If empty, defaults to "<chart-name>-backend" (or "<nameOverride>-backend")
+  name: ""
+
+backend:
+  enabled: true
+  image:
+    repository: polardbx-dashboard
+    tag: latest
+    pullPolicy: IfNotPresent
+  
+  # Configuration via ConfigMap
+  config:
+    logLevel: info
+    listenAddress: ":8080"
+    uiStaticDir: "/app/ui"
+    # `incluster`: use ServiceAccount credentials inside cluster (may require RBAC)
+    # `kubeconfig`: read kubeconfig from `/etc/kube/kubeconfig` (mount via `backend.secrets.kubeconfig`)
+    kubeMode: "incluster"  # incluster | kubeconfig
+    kubeconfigPath: "/etc/kube/kubeconfig"
+  
+  # Secrets (sensitive data)
+  secrets:
+    # If using kubeconfig mode, provide kubeconfig content (raw file content)
+    kubeconfig: ""
+    hpfsAccessKey: ""
+    hpfsSecretKey: ""
+  
+  # Resource limits
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 8080
+  
+  # Ingress (optional)
+  ingress:
+    enabled: false
+    className: nginx
+    annotations: {}
+    hosts:
+      - host: polardbx-dashboard.local
+        paths:
+          - path: /
+            pathType: Prefix
+    tls: []
+
+# Operator configuration (if deploying operator separately)
+operator:
+  enabled: true
+  image:
+    repository: polardbx-operator
+    tag: v1.0.0
+    pullPolicy: IfNotPresent
+  
+  config:
+    logLevel: info
+    reconcileConcurrency: 4
+  
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi

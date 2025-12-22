@@ -1,0 +1,83 @@
+/* Global page header styles - unify title icons and typography */
+
+// Unified page title icon styles
+.page-icon {
+  font-size: 24px !important;
+  color: var(--page-icon-color, var(--primary-color, #ff6a00)) !important;
+}
+
+// Unified page title text styles
+.page-title {
+  font-size: 20px !important;
+  font-weight: 600 !important;
+  color: rgba(0, 0, 0, 0.88) !important;
+  margin: 0 !important;
+}
+
+// Page header title container
+.page-header-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+// Title styles inside nz-page-header
+.ant-page-header {
+  .page-icon {
+    font-size: 24px !important;
+    color: var(--page-icon-color, var(--primary-color, #ff6a00)) !important;
+  }
+
+  .page-title {
+    font-size: 20px !important;
+    font-weight: 600 !important;
+    color: rgba(0, 0, 0, 0.88) !important;
+  }
+}
+
+// Title styles inside nz-card
+.ant-card {
+  .ant-card-head-title {
+    .page-icon {
+      font-size: 24px !important;
+      color: var(--page-icon-color, var(--primary-color, #ff6a00)) !important;
+    }
+
+    .page-title {
+      font-size: 20px !important;
+      font-weight: 600 !important;
+      color: rgba(0, 0, 0, 0.88) !important;
+    }
+  }
+}
+
+// Subtitle styles
+.page-subtitle {
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.65);
+  margin: 0;
+}
+
+// Theme variables for page header
+:root {
+  --page-icon-color: var(--primary-color, #ff6a00);
+  --page-title-color: rgba(0, 0, 0, 0.88);
+  --page-subtitle-color: rgba(0, 0, 0, 0.65);
+}
+
+// Special icon aliases (ensure icon consistency)
+.cluster-icon {
+  @extend .page-icon;
+}
+
+.title-icon {
+  @extend .page-icon;
+}
+
+// Backward compatible class names
+.page-header {
+  .cluster-icon,
+  .title-icon {
+    @extend .page-icon;
+  }
+}
