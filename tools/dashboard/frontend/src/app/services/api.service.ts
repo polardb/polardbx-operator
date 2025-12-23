@@ -219,6 +219,33 @@ export class ApiService {
     );
   }
 
+  // Backup download info (url + suggested commands)
+  getBackupDownloadInfo(namespace: string, name: string): Observable<{ namespace: string; name: string; phase: string; backupRootPath: string; storage: string; sink: string; sinkConfig?: any; url: string; filename: string; message?: string; command?: string } & any> {
+    return this.handleRequest(
+      this.http.get<{ namespace: string; name: string; phase: string; backupRootPath: string; storage: string; sink: string; sinkConfig?: any; url: string; filename: string; message?: string; command?: string } & any>(
+        `${this.baseUrl}/backups/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}/download`,
+        { headers: this.getHeaders() }
+      ),
+      LoadingKeys.BACKUPS_LIST,
+      `/backups/${namespace}/${name}/download`,
+      'GET'
+    );
+  }
+
+  // Backup file download (tar.gz streaming)
+  downloadBackupFile(namespace: string, name: string): Observable<Blob> {
+    const headers = this.getHeaders().set('Accept', 'application/gzip');
+    return this.handleRequest(
+      this.http.get(`${this.baseUrl}/backups/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}/file`, {
+        headers,
+        responseType: 'blob'
+      }),
+      LoadingKeys.BACKUPS_LIST,
+      `/backups/${namespace}/${name}/file`,
+      'GET'
+    );
+  }
+
   // Get backup role advice (leader/follower)
   getBackupAdvice(namespace: string, clusterName: string): Observable<{ hasFollower: boolean; role: 'leader' | 'follower'; reason?: string }> {
     return this.handleRequest(

@@ -633,19 +633,19 @@
                 <td nzAlign="center">
                   <nz-space nzSize="small">
                     <span *nzSpaceItem>
-                      <button nz-button nzType="link" nzSize="small">
+                      <button nz-button nzType="link" nzSize="small" nz-tooltip nzTooltipTitle="下载备份（tar.gz）" (click)="downloadBackup(backup)">
                         <i nz-icon nzType="download"></i>
                         下载
                       </button>
                     </span>
                     <span *nzSpaceItem>
-                      <button nz-button nzType="link" nzSize="small">
+                      <button nz-button nzType="link" nzSize="small" (click)="restoreBackup(backup)">
                         <i nz-icon nzType="redo"></i>
                         恢复
                       </button>
                     </span>
                     <span *nzSpaceItem>
-                      <button nz-button nzType="link" nzDanger nzSize="small">
+                      <button nz-button nzType="link" nzDanger nzSize="small" (click)="deleteBackup(backup)">
                         <i nz-icon nzType="delete"></i>
                         删除
                       </button>
@@ -664,4 +664,11 @@
   <div style="display:none">
     <app-prechange-check [embedded]="true" [initialNamespace]="clusterNamespace" [initialCluster]="clusterName"></app-prechange-check>
   </div>
+
+  <!-- 下载信息弹窗模板 -->
+  <ng-template #backupDownloadInfoTpl>
+    <div style="white-space:pre-wrap;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace;">
+      {{ backupDownloadInfoText }}
+    </div>
+  </ng-template>
 </div>

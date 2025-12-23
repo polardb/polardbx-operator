@@ -339,7 +339,6 @@ docker rmi polardbx-dashboard:latest
 ## 参考资料
 
 - [QUICK-START.md](./QUICK-START.md) - 快速开始指南
-- [NETWORK-TROUBLESHOOTING.md](./NETWORK-TROUBLESHOOTING.md) - 网络连接问题排查指南
 
 ## 建议
 

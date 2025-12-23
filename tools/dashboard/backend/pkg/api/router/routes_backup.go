@@ -28,6 +28,8 @@ func RegisterBackupRoutesRegistry(reg *RouteRegistry) {
 			{Method: "POST", Path: "/backups/validate", Handler: domain_pxc.ValidateBackup},
 			{Method: "GET", Path: "/backups/:namespace/:name/stream", Handler: domain_pxc.StreamBackupEvents},
 			{Method: "GET", Path: "/backups/:namespace/:name/metrics", Handler: domain_pxc.GetBackupMetrics},
+			{Method: "GET", Path: "/backups/:namespace/:name/download", Handler: domain_pxc.DownloadBackup},
+			{Method: "GET", Path: "/backups/:namespace/:name/file", Handler: domain_pxc.GetBackupFile},
 			{Method: "DELETE", Path: "/backups/:namespace/:name", Handler: domain_pxc.DeleteBackup},
 			{Method: "POST", Path: "/backups/:namespace/:name/force-delete", Handler: domain_pxc.ForceDeleteBackup},
 			{Method: "GET", Path: "/backups/overview", Handler: domain_pxc.GetBackupOverview},

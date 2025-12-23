@@ -1,4 +1,4 @@
-import { AfterViewInit, Component, ElementRef, NgZone, OnDestroy, OnInit, ViewChild, inject } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, NgZone, OnDestroy, OnInit, TemplateRef, ViewChild, inject } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Router, ActivatedRoute, RouterModule } from '@angular/router';
@@ -181,6 +181,7 @@ export class ClusterDetailComponent implements OnInit, AfterViewInit, OnDestroy 
   @ViewChild('cpuChart') cpuChartRef!: ElementRef<HTMLCanvasElement>;
   @ViewChild('memChart') memChartRef!: ElementRef<HTMLCanvasElement>;
   @ViewChild('topologySvg') topologySvgRef!: ElementRef<SVGSVGElement>;
+  @ViewChild('backupDownloadInfoTpl') backupDownloadInfoTpl?: TemplateRef<any>;
 
   // Cluster basics
   clusterName = '';
@@ -222,6 +223,7 @@ export class ClusterDetailComponent implements OnInit, AfterViewInit, OnDestroy 
   // Backup data
   backupDataSource: BackupInfo[] = [];
   backupColumns: string[] = ['id', 'completedTime', 'type', 'status', 'actions'];
+  backupDownloadInfoText = '';
 
   // Forms
   configForm: FormGroup;
@@ -1732,6 +1734,84 @@ export class ClusterDetailComponent implements OnInit, AfterViewInit, OnDestroy 
           this.messageService.error('创建备份失败');
         }
       });
+  }
+
+  downloadBackup(backup: BackupInfo): void {
+    const namespace = (backup?.namespace || this.clusterNamespace || 'default').trim() || 'default';
+    const name = (backup?.name || backup?.id || '').trim();
+    if (!name) {
+      this.messageService.warning('备份名称为空，无法下载');
+      return;
+    }
+
+    const phase = (backup?.phase || backup?.status || '').toLowerCase().trim();
+    const downloadable = ['finished', 'completed', 'succeeded'].includes(phase);
+    if (!downloadable) {
+      this.showBackupDownloadInfo(namespace, name, `备份尚未完成（当前状态：${backup?.status || backup?.phase || '未知'}）`);
+      return;
+    }
+
+    this.apiService.downloadBackupFile(namespace, name).subscribe({
+      next: (blob: Blob) => {
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const filename = `${name}-${stamp}.tar.gz`;
+
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+
+        this.messageService.success('下载已开始');
+      },
+      error: (err: any) => {
+        const status = err?.status;
+        if (status === 409) {
+          this.showBackupDownloadInfo(namespace, name, '备份未完成，暂不能下载');
+          return;
+        }
+        if (status === 404) {
+          this.showBackupDownloadInfo(namespace, name, '未找到备份或存储配置（HPFS sink）');
+          return;
+        }
+        this.showBackupDownloadInfo(namespace, name, err?.error?.message || err?.message || '下载失败');
+      }
+    });
+  }
+
+  private showBackupDownloadInfo(namespace: string, name: string, hint?: string): void {
+    this.apiService.getBackupDownloadInfo(namespace, name).subscribe({
+      next: (info: any) => {
+        const rootPath = info?.backupRootPath || '—';
+        const storage = info?.storage || '—';
+        const sink = info?.sink || '—';
+        const command = info?.command || '（无）';
+
+        this.backupDownloadInfoText = [
+          hint ? String(hint) : '',
+          `备份: ${namespace}/${name}`,
+          `存储: ${storage} / sink=${sink}`,
+          `路径: ${rootPath}`,
+          '',
+          '建议命令:',
+          String(command),
+          '',
+          '提示：在线下载依赖后端能直连存储；大文件更推荐用上面的 CLI 命令。'
+        ].filter(Boolean).join('\n');
+
+        this.modalService.info({
+          nzTitle: '备份下载',
+          nzWidth: 720,
+          nzContent: this.backupDownloadInfoTpl || this.backupDownloadInfoText
+        });
+      },
+      error: () => {
+        this.messageService.warning(hint || '无法获取下载信息');
+      }
+    });
   }
 
   restoreBackup(backup: BackupInfo): void {

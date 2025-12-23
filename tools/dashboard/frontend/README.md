@@ -1,10 +1,10 @@
-# PolarDB-X UI
+# PolarDB-X Dashboard UI
 
 一个用于管理 PolarDB-X 集群的现代化 Web 界面，基于 Angular 19 和 Go 构建。
 
 ## 项目概述
 
-PolarDB-X UI 提供了一个直观的 Web 界面来管理 Kubernetes 上的 PolarDB-X 集群。该项目包含前端 Angular 应用和后端 Go API 服务，支持集群的创建、监控、备份和参数管理等功能。
+PolarDB-X Dashboard UI 提供了一个直观的 Web 界面来管理 Kubernetes 上的 PolarDB-X 集群。该项目包含前端 Angular 应用和后端 Go API 服务，支持集群的创建、监控、备份和参数管理等功能。
 
 ## 技术栈
 
@@ -23,7 +23,6 @@ PolarDB-X UI 提供了一个直观的 Web 界面来管理 Kubernetes 上的 Pola
 
 ## 功能特性
 
-### ✅ 已实现功能
 - **集群连接管理**
   - kubeconfig 验证和连接
   - 多集群支持
@@ -33,19 +32,28 @@ PolarDB-X UI 提供了一个直观的 Web 界面来管理 Kubernetes 上的 Pola
   - 集群列表查看
   - 集群状态监控
   - 集群详情查看
+  - 集群创建和编辑
   - 集群删除操作
+
+- **备份管理**
+  - 备份列表查看
+  - 创建备份
+  - 备份恢复
+  - 备份下载
+
+- **参数模板管理**
+  - 参数模板列表
+  - 参数配置
+
+- **监控和日志**
+  - 实时状态更新
+  - 自动刷新机制
+  - 日志查看
 
 - **实时数据**
   - 自动刷新机制（每5秒）
   - 实时状态更新
   - 响应式设计
-
-### 🔄 开发中功能
-- 集群创建和编辑
-- 备份管理
-- 参数模板管理
-- 监控和告警
-- 日志查看
 
 ## 快速开始
 
@@ -60,11 +68,12 @@ PolarDB-X UI 提供了一个直观的 Web 界面来管理 Kubernetes 上的 Pola
 
 #### 1. 克隆项目
 ```bash
-cd polardbx-operator/polardbx-ui
+cd polardbx-operator/tools/dashboard
 ```
 
 #### 2. 安装前端依赖
 ```bash
+cd frontend
 npm install
 ```
 
@@ -78,7 +87,7 @@ go run main.go
 
 #### 4. 启动前端应用
 ```bash
-cd ../polardbx-ui
+cd ../frontend
 ng serve
 ```
 
@@ -100,7 +109,7 @@ npm run e2e
 
 开发环境下建议通过 Angular 代理将 `/api/*` 请求转发到后端，以避免浏览器跨域（CORS）问题。
 
-1) 在 `polardbx-ui` 根目录创建 `proxy.conf.json`：
+1) 在 `frontend` 根目录创建 `proxy.conf.json`：
 
 ```json
 {
@@ -224,25 +233,36 @@ DELETE /api/v1/parameters/{name}
 ### 项目结构
 
 ```
-polardbx-ui/
-├── src/
-│   ├── app/
-│   │   ├── pages/
-│   │   │   ├── connect/          # 连接页面
-│   │   │   └── cluster-list/     # 集群列表页面
-│   │   ├── services/
-│   │   │   └── api.service.ts    # API 服务
-│   │   ├── app.component.*       # 根组件
-│   │   ├── app.config.ts         # 应用配置
-│   │   └── app.routes.ts         # 路由配置
-│   ├── styles.scss               # 全局样式
-│   └── main.ts                   # 应用入口
-├── backend/
-│   ├── main.go                   # 后端入口
-│   └── pkg/
-│       ├── api/                  # API 处理器
-│       └── k8s/                  # Kubernetes 客户端
-└── README.md
+tools/dashboard/
+├── frontend/                      # Angular 前端（本 README 所在目录）
+│   ├── src/
+│   │   ├── app/
+│   │   │   ├── pages/             # 页面（connect/cluster-list/cluster-detail/...）
+│   │   │   ├── components/        # 复用组件（wizard/monitoring/backup/...）
+│   │   │   ├── services/          # API/状态/业务服务（如 api.service.ts）
+│   │   │   ├── models/            # 类型定义（含 generated/）
+│   │   │   ├── interceptors/      # HTTP 拦截器
+│   │   │   ├── guards/            # 路由守卫
+│   │   │   ├── utils/             # 工具函数
+│   │   │   └── app.routes.ts      # 路由配置
+│   │   ├── assets/                # 静态资源
+│   │   ├── styles.scss            # 全局样式
+│   │   └── main.ts                # 应用入口
+│   ├── angular.json
+│   ├── package.json
+│   └── playwright.config.ts
+├── backend/                       # Go 后端 API 服务
+│   ├── main.go                    # 后端入口
+│   ├── pkg/
+│   │   ├── api/                   # API 路由/处理/领域逻辑
+│   │   ├── k8s/                   # Kubernetes 客户端封装
+│   │   ├── config/                # 配置
+│   │   └── logger/                # 日志
+│   ├── go.mod
+│   └── Dockerfile
+├── QUICK-START.md                 # 一键部署/快速开始
+├── USER-GUIDE.md                  # 使用手册
+└── deploy-all-in-one.sh           # 部署脚本
 ```
 
 ### 开发环境配置
@@ -377,30 +397,3 @@ spec:
 3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
 4. 推送到分支 (`git push origin feature/AmazingFeature`)
 5. 创建 Pull Request
-
-## 许可证
-
-本项目采用 Apache 2.0 许可证。详情请参阅 [LICENSE](../LICENSE) 文件。
-
-## 支持
-
-如果您遇到问题或有建议，请：
-
-1. 查看 [故障排除](#故障排除) 部分
-2. 搜索现有的 [Issues](../../issues)
-3. 创建新的 Issue 描述问题
-4. 参考 [测试报告](./TEST_REPORT.md) 了解已知问题
-
-## 更新日志
-
-### v1.0.0 (2025-07-19)
-- ✅ 初始版本发布
-- ✅ 实现基本的集群连接和管理功能
-- ✅ 完成前后端基础架构
-- ✅ 添加 Angular Material UI 组件
-- ✅ 实现 kubeconfig 认证机制
-- ✅ 支持集群列表查看和基本操作
-
----
-
-**注意**: 本项目仍在积极开发中，功能和 API 可能会发生变化。建议在生产环境使用前进行充分测试。
