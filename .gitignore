@@ -242,7 +242,8 @@ Temporary Items
 *.pdb
 
 # Kernel Module Compile Results
-*.mod*
+*.mod.c
+*.mod.o
 *.cmd
 .tmp_versions/
 modules.order
