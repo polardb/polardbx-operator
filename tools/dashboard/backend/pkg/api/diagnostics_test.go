@@ -78,7 +78,8 @@ func TestDiagnostics_GetFile_FallbackWhenNoAuth(t *testing.T) {
 	scheme := runtime.NewScheme()
 	_ = corev1.AddToScheme(scheme)
 
-	// Create a succeeded clinic pod so GetFile proceeds to auth check.
+	// Create a "new-style" clinic pod whose init container already completed successfully,
+	// so GetFile proceeds to auth check (but we intentionally do NOT provide kubeconfig).
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      diagservice.ClinicPodPrefix + "job-1",
@@ -88,7 +89,24 @@ func TestDiagnostics_GetFile_FallbackWhenNoAuth(t *testing.T) {
 				"polardbx/cluster":         "pxc-1",
 			},
 		},
-		Status: corev1.PodStatus{Phase: corev1.PodSucceeded},
+		Spec: corev1.PodSpec{
+			InitContainers: []corev1.Container{
+				{Name: "collector"},
+			},
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodRunning,
+			InitContainerStatuses: []corev1.ContainerStatus{
+				{
+					Name: "collector",
+					State: corev1.ContainerState{
+						Terminated: &corev1.ContainerStateTerminated{
+							ExitCode: 0,
+						},
+					},
+				},
+			},
+		},
 	}
 	fakeCli := crfake.NewClientBuilder().WithScheme(scheme).WithObjects(pod).Build()
 

@@ -175,49 +175,13 @@ func (s *DiagnosticsService) GetDiagnosisStatus(ctx context.Context, namespace, 
 		Cluster:   pod.Labels["polardbx/cluster"],
 	}
 
-	// Parse Pod status
-	switch pod.Status.Phase {
-	case corev1.PodPending:
-		job.Status = DiagStatusPending
-		job.Progress = 0
-		job.Message = "diagnostic Pod starting"
-	case corev1.PodRunning:
-		job.Status = DiagStatusRunning
-		job.Progress = 50
-		job.Message = "collecting diagnostic information"
-	case corev1.PodSucceeded:
-		job.Status = DiagStatusSucceeded
-		job.Progress = 100
-		job.Message = "diagnostic completed"
-		job.OutputPath = fmt.Sprintf("/tmp/polardbx-clinic/%s.tar.gz", jobID)
-	case corev1.PodFailed:
-		job.Status = DiagStatusFailed
-		job.Progress = 0
-		job.Message = "diagnostic task failed"
-		// Try to get failure reason
-		if len(pod.Status.ContainerStatuses) > 0 {
-			cs := pod.Status.ContainerStatuses[0]
-			if cs.State.Terminated != nil && cs.State.Terminated.Reason != "" {
-				job.Message = fmt.Sprintf("diagnostic failed: %s", cs.State.Terminated.Reason)
-			}
-		}
-	default:
-		job.Status = DiagStatusPending
-		job.Progress = 0
-	}
+	deriveJobStatusFromPod(&pod, job)
 
 	// Set timestamps
 	if !pod.CreationTimestamp.IsZero() {
 		job.StartedAt = pod.CreationTimestamp.Time
 	}
-	if pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed {
-		for _, cs := range pod.Status.ContainerStatuses {
-			if cs.State.Terminated != nil {
-				job.CompletedAt = cs.State.Terminated.FinishedAt.Time
-				break
-			}
-		}
-	}
+	job.CompletedAt = deriveCompletionTime(&pod)
 
 	return job, nil
 }
@@ -252,19 +216,8 @@ func (s *DiagnosticsService) ListDiagnosisReports(ctx context.Context, namespace
 			StartedAt: pod.CreationTimestamp.Time,
 		}
 
-		// Parse status
-		switch pod.Status.Phase {
-		case corev1.PodSucceeded:
-			job.Status = DiagStatusSucceeded
-			job.Progress = 100
-		case corev1.PodFailed:
-			job.Status = DiagStatusFailed
-		case corev1.PodRunning:
-			job.Status = DiagStatusRunning
-			job.Progress = 50
-		default:
-			job.Status = DiagStatusPending
-		}
+		deriveJobStatusFromPod(&pod, &job)
+		job.CompletedAt = deriveCompletionTime(&pod)
 
 		reports = append(reports, job)
 	}
@@ -291,7 +244,7 @@ func (s *DiagnosticsService) GetDownloadInfo(ctx context.Context, namespace, job
 
 // buildClinicPod builds diagnostic Pod configuration
 func (s *DiagnosticsService) buildClinicPod(namespace, podName, clusterName, jobID string) *corev1.Pod {
-	// Diagnostic script - collect various diagnostic information
+	// Diagnostic script - collect various diagnostic information (runs in init container)
 	diagScript := `#!/bin/bash
 set -e
 
@@ -400,9 +353,9 @@ echo "End Time: $(date)"
 		Spec: corev1.PodSpec{
 			RestartPolicy:      corev1.RestartPolicyNever,
 			ServiceAccountName: ClinicServiceAccountName,
-			Containers: []corev1.Container{
+			InitContainers: []corev1.Container{
 				{
-					Name:  "clinic",
+					Name:  "collector",
 					Image: "bitnami/kubectl:latest",
 					Command: []string{
 						"/bin/bash",
@@ -422,6 +375,21 @@ echo "End Time: $(date)"
 					},
 				},
 			},
+			// Keep the pod running after collection finishes so the report can be downloaded via exec/streaming.
+			// Note: exec/cp is not possible for completed pods; using a "sleeper" container avoids 0-byte downloads.
+			Containers: []corev1.Container{
+				{
+					Name:    "clinic",
+					Image:   "bitnami/kubectl:latest",
+					Command: []string{"/bin/sh", "-c", "sleep 365d"},
+					VolumeMounts: []corev1.VolumeMount{
+						{
+							Name:      "output",
+							MountPath: "/tmp/polardbx-clinic",
+						},
+					},
+				},
+			},
 			Volumes: []corev1.Volume{
 				{
 					Name: "output",
@@ -431,5 +399,92 @@ echo "End Time: $(date)"
 				},
 			},
 		},
+	}
+}
+
+func deriveCompletionTime(pod *corev1.Pod) time.Time {
+	for _, cs := range pod.Status.ContainerStatuses {
+		if cs.State.Terminated != nil && !cs.State.Terminated.FinishedAt.IsZero() {
+			return cs.State.Terminated.FinishedAt.Time
+		}
+	}
+	for _, cs := range pod.Status.InitContainerStatuses {
+		if cs.State.Terminated != nil && !cs.State.Terminated.FinishedAt.IsZero() {
+			return cs.State.Terminated.FinishedAt.Time
+		}
+	}
+	return time.Time{}
+}
+
+func deriveJobStatusFromPod(pod *corev1.Pod, job *DiagnosticJob) {
+	// New-style diagnostic pod: init container collects data, long-running container keeps report downloadable.
+	if len(pod.Spec.InitContainers) > 0 {
+		for _, ics := range pod.Status.InitContainerStatuses {
+			if ics.Name != "collector" {
+				continue
+			}
+			if ics.State.Terminated != nil {
+				if ics.State.Terminated.ExitCode == 0 {
+					job.Status = DiagStatusSucceeded
+					job.Progress = 100
+					job.Message = "diagnostic completed"
+					job.OutputPath = fmt.Sprintf("/tmp/polardbx-clinic/%s.tar.gz", job.ID)
+					return
+				}
+				job.Status = DiagStatusFailed
+				job.Progress = 0
+				reason := strings.TrimSpace(ics.State.Terminated.Reason)
+				if reason == "" {
+					reason = "collector exited"
+				}
+				job.Message = fmt.Sprintf("diagnostic failed: %s", reason)
+				return
+			}
+			if ics.State.Running != nil {
+				job.Status = DiagStatusRunning
+				job.Progress = 50
+				job.Message = "collecting diagnostic information"
+				return
+			}
+			job.Status = DiagStatusPending
+			job.Progress = 0
+			job.Message = "diagnostic Pod starting"
+			return
+		}
+
+		// Default: init containers exist but status not reported yet.
+		job.Status = DiagStatusPending
+		job.Progress = 0
+		job.Message = "diagnostic Pod starting"
+		return
+	}
+
+	// Legacy diagnostic pod: runs a single container then completes; completed pods cannot be exec'd into for download.
+	switch pod.Status.Phase {
+	case corev1.PodPending:
+		job.Status = DiagStatusPending
+		job.Progress = 0
+		job.Message = "diagnostic Pod starting"
+	case corev1.PodRunning:
+		job.Status = DiagStatusRunning
+		job.Progress = 50
+		job.Message = "collecting diagnostic information"
+	case corev1.PodSucceeded:
+		job.Status = DiagStatusFailed
+		job.Progress = 100
+		job.Message = "diagnostic finished (legacy mode): report is not downloadable from a completed pod; please re-run diagnostics"
+	case corev1.PodFailed:
+		job.Status = DiagStatusFailed
+		job.Progress = 0
+		job.Message = "diagnostic task failed"
+		if len(pod.Status.ContainerStatuses) > 0 {
+			cs := pod.Status.ContainerStatuses[0]
+			if cs.State.Terminated != nil && cs.State.Terminated.Reason != "" {
+				job.Message = fmt.Sprintf("diagnostic failed: %s", cs.State.Terminated.Reason)
+			}
+		}
+	default:
+		job.Status = DiagStatusPending
+		job.Progress = 0
 	}
 }
