@@ -15,15 +15,16 @@ export class NamespaceService {
   namespaces$ = this.listSubject.asObservable();
 
   async init(): Promise<void> {
+    let def = 'polardbx-operator-system';
     try {
       const ctx = await this.api.getSystemContext().toPromise();
       const nsFromStorage = localStorage.getItem(STORAGE_KEY);
-      const def = nsFromStorage || ctx?.defaultNamespace || 'polardbx-operator-system';
-      this.activeSubject.next(def);
+      def = nsFromStorage || ctx?.defaultNamespace || def;
     } catch {
       const nsFromStorage = localStorage.getItem(STORAGE_KEY);
-      this.activeSubject.next(nsFromStorage || 'polardbx-operator-system');
+      def = nsFromStorage || def;
     }
+    this.setActive(def);
 
     try {
       const ns = await this.api.listSystemNamespaces().toPromise();

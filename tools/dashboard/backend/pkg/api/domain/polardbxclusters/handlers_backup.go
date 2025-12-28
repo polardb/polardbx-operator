@@ -219,7 +219,7 @@ func GetBinlogMetrics(c *gin.Context) {
 	if !ok {
 		return
 	}
-	namespace := c.DefaultQuery("namespace", "")
+	namespace := util.GetNamespace(c, "")
 	nowStr := c.DefaultQuery("now", "")
 	var now time.Time
 	if nowStr != "" {
@@ -466,7 +466,7 @@ func GetBackupOverview(c *gin.Context) {
 	if !ok {
 		return
 	}
-	namespace := c.DefaultQuery("namespace", "")
+	namespace := util.GetNamespace(c, "")
 	evaluateConnectivity := c.DefaultQuery("evaluateConnectivity", "false") == "true"
 	evaluateStorage := c.DefaultQuery("evaluateStorage", "false") == "true"
 	systemNS := c.DefaultQuery("systemNamespace", "polardbx-operator-system")
@@ -494,7 +494,7 @@ func GetClusterBackupState(c *gin.Context) {
 	if !ok {
 		return
 	}
-	namespace := c.DefaultQuery("namespace", "")
+	namespace := util.GetNamespace(c, "")
 	resp, err := svc.GetClusterBackupState(c.Request.Context(), cli, namespace)
 	if err != nil {
 		apierr.AbortWithError(c, err)

@@ -75,10 +75,13 @@ export class ErrorHandlerService {
     }
 
     // 如果有具体的错误信息，使用服务器返回的信息
+    // Backend may return { error: { code, message, details } }
     if (error.error && typeof error.error === 'string') {
       errorMessage = error.error;
-    } else if (error.error && error.error.message) {
-      errorMessage = error.error.message;
+    } else if (error.error && (error.error as any).message) {
+      errorMessage = (error.error as any).message;
+    } else if (error.error && (error.error as any).error?.message) {
+      errorMessage = (error.error as any).error.message;
     }
 
     // 添加上下文信息
@@ -128,6 +131,9 @@ export class ErrorHandlerService {
   private handleAuthError(): void {
     // 清除会话数据
     sessionStorage.removeItem('kubeconfig');
+    sessionStorage.removeItem('kubeconfig-b64');
+    localStorage.removeItem('kubeconfig');
+    localStorage.removeItem('kubeconfig-b64');
     
     // 延迟跳转，让用户看到错误信息
     setTimeout(() => {

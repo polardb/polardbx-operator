@@ -1068,11 +1068,22 @@ export class BackupManagementComponent implements OnInit, OnDestroy {
   }
 
   switchToCreateTab(): void {
+    this.blurActiveElement();
     this.selectedTabIndex = 1;
+    setTimeout(() => this.blurActiveElement(), 0);
   }
 
   onTabIndexChange(index: number): void {
+    this.blurActiveElement();
     this.selectedTabIndex = index;
+    setTimeout(() => this.blurActiveElement(), 0);
+  }
+
+  private blurActiveElement(): void {
+    const el = (document.activeElement as HTMLElement | null);
+    if (el && typeof (el as any).blur === 'function') {
+      (el as any).blur();
+    }
   }
 
   onListClusterChange(value: string): void {

@@ -604,7 +604,7 @@ export class BackupOverviewComponent implements OnInit, OnDestroy {
     }
     
     forkJoin({
-      overview: this.api.getBackupOverview({ evaluateConnectivity: true, connectivityMode: 'present' }),
+      overview: this.api.getBackupOverview({ evaluateConnectivity: true }),
       clusterState: this.api.getClusterBackupState()
     }).subscribe({
       next: ({ overview, clusterState }) => {

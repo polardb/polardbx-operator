@@ -1449,14 +1449,26 @@ export class ApiService {
   }
 
   // Get backup overview (supports optional connectivity check/storage estimation parameters)
-  getBackupOverview(params?: { namespace?: string; evaluateConnectivity?: boolean; connectivityMode?: 'present'|'online'; evaluateStorage?: boolean }): Observable<any> {
-    const n = params?.namespace ? `namespace=${encodeURIComponent(params.namespace)}` : '';
-    const ec = params?.evaluateConnectivity ? `&evaluateConnectivity=true` : '';
-    const cm = params?.connectivityMode ? `&connectivityMode=${params.connectivityMode}` : '';
-    const es = params?.evaluateStorage ? `&evaluateStorage=true` : '';
-    const url = `${this.baseUrl}/backups/overview?${n}${ec}${cm}${es}`.replace('?&','?');
+  getBackupOverview(params?: { namespace?: string; evaluateConnectivity?: boolean; evaluateStorage?: boolean; systemNamespace?: string }): Observable<any> {
+    const url = `${this.baseUrl}/backups/overview`;
+    let httpParams = this.withNs();
+
+    if (params && 'namespace' in params) {
+      const ns = (params.namespace || '').trim();
+      httpParams = ns ? httpParams.set('namespace', ns) : httpParams.delete('namespace');
+    }
+    if (params?.evaluateConnectivity) {
+      httpParams = httpParams.set('evaluateConnectivity', 'true');
+    }
+    if (params?.evaluateStorage) {
+      httpParams = httpParams.set('evaluateStorage', 'true');
+    }
+    if (params?.systemNamespace) {
+      httpParams = httpParams.set('systemNamespace', params.systemNamespace);
+    }
+
     return this.handleRequest(
-      this.http.get<any>(url, { headers: this.getHeaders() }),
+      this.http.get<any>(url, { headers: this.getHeaders(), params: httpParams }),
       LoadingKeys.BACKUPS_LIST,
       '/backups/overview',
       'GET'
@@ -1465,9 +1477,14 @@ export class ApiService {
 
   // Get backup status for each cluster (latest backup, next schedule, RPO)
   getClusterBackupState(namespace?: string): Observable<{ namespace: string; total: number; clusters: any[] }> {
-    const params = namespace ? `?namespace=${encodeURIComponent(namespace)}` : '';
+    const url = `${this.baseUrl}/backups/cluster-state`;
+    let params = this.withNs();
+    if (namespace !== undefined) {
+      const ns = (namespace || '').trim();
+      params = ns ? params.set('namespace', ns) : params.delete('namespace');
+    }
     return this.handleRequest(
-      this.http.get<{ namespace: string; total: number; clusters: any[] }>(`${this.baseUrl}/backups/cluster-state${params}`, { headers: this.getHeaders() }),
+      this.http.get<{ namespace: string; total: number; clusters: any[] }>(url, { headers: this.getHeaders(), params }),
       LoadingKeys.BACKUPS_LIST,
       '/backups/cluster-state',
       'GET'
