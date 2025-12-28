@@ -105,7 +105,17 @@ func FromK8sError(err error) *APIError {
 	case k8serrors.IsConflict(err):
 		return Wrap(ErrK8sConflict, "Resource conflict", err)
 	case k8serrors.IsForbidden(err):
-		return Wrap(ErrK8sPermission, "Insufficient Kubernetes permissions", err)
+		// Forbidden errors can come from RBAC *or* admission webhooks (validation denials).
+		// Prefer surfacing the original status message to help users troubleshoot.
+		msg := "Forbidden"
+		if statusErr, ok := err.(*k8serrors.StatusError); ok {
+			if m := strings.TrimSpace(statusErr.Status().Message); m != "" {
+				msg = m
+			}
+		} else if m := strings.TrimSpace(err.Error()); m != "" {
+			msg = m
+		}
+		return Wrap(ErrK8sPermission, msg, err)
 	case k8serrors.IsUnauthorized(err):
 		return Wrap(ErrKubeconfigReq, "Kubernetes authentication failed", err)
 	case k8serrors.IsTimeout(err):

@@ -25,8 +25,8 @@ import { NzStatisticModule } from 'ng-zorro-antd/statistic';
 import { LoadingKeys, LoadingService } from '../../services/loading.service';
 import { PolarDBXBackupBinlog, CreateBackupBinlogRequest } from '../../models/backup-binlog.model';
 import { NamespaceService } from '../../services/namespace.service';
-import { Subject } from 'rxjs';
-import { takeUntil } from 'rxjs/operators';
+import { Subject, of } from 'rxjs';
+import { catchError, takeUntil } from 'rxjs/operators';
 
 @Component({
   selector: 'app-backup-binlog-management',
@@ -680,6 +680,7 @@ export class BackupBinlogManagementComponent implements OnInit, OnDestroy {
 
   backupBinlogs: PolarDBXBackupBinlog[] = [];
   currentNamespace = 'default';
+  hpfsSinks: Array<{ name: string; type: string }> = [];
 
   createForm: FormGroup = this.fb.group({
     name: ['', [Validators.required, Validators.pattern(/^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/)]],
@@ -700,6 +701,7 @@ export class BackupBinlogManagementComponent implements OnInit, OnDestroy {
         this.currentNamespace = namespace || 'default';
         this.createForm.patchValue({ namespace: this.currentNamespace });
         this.loadBackupBinlogs();
+        this.loadHpfsSinks();
       });
   }
 
@@ -730,7 +732,28 @@ export class BackupBinlogManagementComponent implements OnInit, OnDestroy {
 
     try {
       this.loadingService.setLoading(LoadingKeys.BACKUP_BINLOG_CREATE, true);
-      const formValue = this.createForm.value;
+      const trimmed = {
+        ...this.createForm.value,
+        name: (this.createForm.value.name || '').trim(),
+        namespace: (this.createForm.value.namespace || '').trim(),
+        pxcName: (this.createForm.value.pxcName || '').trim(),
+        storageName: (this.createForm.value.storageName || '').trim(),
+        sink: (this.createForm.value.sink || '').trim()
+      };
+      this.createForm.patchValue({
+        name: trimmed.name,
+        namespace: trimmed.namespace,
+        pxcName: trimmed.pxcName,
+        storageName: trimmed.storageName,
+        sink: trimmed.sink
+      }, { emitEvent: false });
+      if (!trimmed.name || !trimmed.namespace || !trimmed.pxcName || !trimmed.storageName || !trimmed.sink) {
+        this.markFormGroupTouched(this.createForm);
+        this.msg.error('请填写必填项：名称、命名空间、集群、存储类型、存储 Sink');
+        return;
+      }
+
+      const formValue = trimmed;
       
       const request: CreateBackupBinlogRequest = {
         name: formValue.name,
@@ -756,10 +779,37 @@ export class BackupBinlogManagementComponent implements OnInit, OnDestroy {
       }, 100);
     } catch (error) {
       console.error('创建增量日志备份配置失败:', error);
-      this.msg.error('创建增量日志备份配置失败');
+      const e: any = error as any;
+      const msg =
+        e?.error?.error?.message ||
+        e?.error?.message ||
+        e?.message ||
+        '';
+      this.msg.error(msg ? `创建增量日志备份配置失败: ${msg}` : '创建增量日志备份配置失败');
     } finally {
       this.loadingService.setLoading(LoadingKeys.BACKUP_BINLOG_CREATE, false);
     }
+  }
+
+  private loadHpfsSinks(): void {
+    this.apiService.getHpfsSinks().pipe(
+      catchError(() => of(null as any))
+    ).subscribe((res: any) => {
+      const sinks = (res?.sinks || []) as Array<{ name: string; type: string }>;
+      this.hpfsSinks = sinks;
+
+      const preferred = sinks.find(s => s?.name === 'default') || sinks[0];
+      if (!preferred) return;
+
+      const curStorageName = (this.createForm.value?.storageName || '').toString().trim();
+      const curSink = (this.createForm.value?.sink || '').toString().trim();
+      const patch: any = {};
+      if (!curStorageName) patch.storageName = preferred.type;
+      if (!curSink) patch.sink = preferred.name;
+      if (Object.keys(patch).length) {
+        this.createForm.patchValue(patch, { emitEvent: false });
+      }
+    });
   }
 
   async deleteBackupBinlog(namespace: string, name: string): Promise<void> {

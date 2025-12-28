@@ -17,6 +17,7 @@ import { NzModalService } from 'ng-zorro-antd/modal';
 import { NzModalModule } from 'ng-zorro-antd/modal';
 import { NzToolTipModule } from 'ng-zorro-antd/tooltip';
 import { NzSwitchModule } from 'ng-zorro-antd/switch';
+import { NzCheckboxModule } from 'ng-zorro-antd/checkbox';
 import { NzDividerModule } from 'ng-zorro-antd/divider';
 import { NzCollapseModule } from 'ng-zorro-antd/collapse';
 import { NzMenuModule } from 'ng-zorro-antd/menu';
@@ -60,6 +61,7 @@ import {
     NzSpinModule,
     NzToolTipModule,
     NzSwitchModule,
+    NzCheckboxModule,
     NzDividerModule,
     NzCollapseModule,
     NzMenuModule,
@@ -455,6 +457,45 @@ import {
           <nz-spin nzSize="large" nzTip="加载中..."></nz-spin>
         </div>
       </ng-template>
+
+      <!-- 详情弹窗 -->
+      <nz-modal
+        [(nzVisible)]="detailsVisible"
+        nzTitle="备份计划详情"
+        nzWidth="820"
+        [nzFooter]="null"
+        (nzOnCancel)="closeDetails()">
+        <ng-container *nzModalContent>
+          <ng-container *ngIf="selectedSchedule as s">
+            <nz-descriptions nzBordered [nzColumn]="2">
+              <nz-descriptions-item nzTitle="名称">{{ s.metadata.name }}</nz-descriptions-item>
+              <nz-descriptions-item nzTitle="命名空间">{{ s.metadata.namespace || 'default' }}</nz-descriptions-item>
+              <nz-descriptions-item nzTitle="目标集群">{{ s.spec.backupSpec.cluster.name }}</nz-descriptions-item>
+              <nz-descriptions-item nzTitle="状态">
+                <nz-tag [nzColor]="s.spec.suspend ? 'orange' : 'green'">
+                  {{ s.spec.suspend ? '已暂停' : '活动' }}
+                </nz-tag>
+              </nz-descriptions-item>
+              <nz-descriptions-item nzTitle="计划(CRON)">
+                <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 4px;">{{ s.spec.schedule }}</code>
+                <div style="margin-top: 4px; color: rgba(0,0,0,0.65); font-size: 12px;">{{ getCronDescription(s.spec.schedule) }}</div>
+              </nz-descriptions-item>
+              <nz-descriptions-item nzTitle="最大保留备份数">{{ s.spec.maxBackupCount ?? '-' }}</nz-descriptions-item>
+              <nz-descriptions-item nzTitle="上次备份">{{ getLastBackupTime(s) }}</nz-descriptions-item>
+              <nz-descriptions-item nzTitle="下次运行">{{ getNextRunTime(s) }}</nz-descriptions-item>
+              <nz-descriptions-item nzTitle="清理策略">{{ s.spec.backupSpec.cleanPolicy || '-' }}</nz-descriptions-item>
+              <nz-descriptions-item nzTitle="备份角色">{{ s.spec.backupSpec.preferredBackupRole || '-' }}</nz-descriptions-item>
+              <nz-descriptions-item nzTitle="存储提供商">{{ s.spec.backupSpec.storageProvider?.storageName || '-' }}</nz-descriptions-item>
+              <nz-descriptions-item nzTitle="存储 Sink">{{ s.spec.backupSpec.storageProvider?.sink || '-' }}</nz-descriptions-item>
+              <nz-descriptions-item nzTitle="创建时间">{{ s.metadata.creationTimestamp ? (s.metadata.creationTimestamp | date:'yyyy-MM-dd HH:mm:ss') : '-' }}</nz-descriptions-item>
+              <nz-descriptions-item nzTitle="最近备份对象">{{ s.status?.lastBackup || '-' }}</nz-descriptions-item>
+            </nz-descriptions>
+
+            <nz-divider nzText="原始对象(JSON)" nzOrientation="left"></nz-divider>
+            <pre class="schedule-raw">{{ s | json }}</pre>
+          </ng-container>
+        </ng-container>
+      </nz-modal>
     </div>
   `,
   styles: [`
@@ -507,6 +548,20 @@ import {
       width: 100%;
       max-width: none;
       margin: 0;
+    }
+
+    .schedule-raw {
+      max-height: 360px;
+      overflow: auto;
+      background: #0b1020;
+      color: #d9e0ee;
+      border-radius: 10px;
+      padding: 12px;
+      font-size: 12px;
+      line-height: 1.6;
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
     }
 
     .stats-section {
@@ -633,6 +688,10 @@ export class BackupScheduleManagementComponent implements OnInit, OnDestroy {
 
   // Tab management
   selectedTabIndex = 0;
+
+  // Details modal
+  detailsVisible = false;
+  selectedSchedule: PolarDBXBackupSchedule | null = null;
 
   // Options data
   predefinedSchedules = PREDEFINED_CRON_SCHEDULES;
@@ -806,8 +865,15 @@ export class BackupScheduleManagementComponent implements OnInit, OnDestroy {
   }
 
   viewSchedule(schedule: PolarDBXBackupSchedule): void {
-    // Show details in a modal
-    this.message.info(`查看备份计划: ${schedule.metadata.name}`);
+    this.blurActiveElement();
+    this.selectedSchedule = schedule;
+    this.detailsVisible = true;
+    setTimeout(() => this.blurActiveElement(), 0);
+  }
+
+  closeDetails(): void {
+    this.detailsVisible = false;
+    this.selectedSchedule = null;
   }
 
   editSchedule(schedule: PolarDBXBackupSchedule): void {
@@ -879,15 +945,28 @@ export class BackupScheduleManagementComponent implements OnInit, OnDestroy {
 
   // Tab navigation methods
   onTabIndexChange(index: number): void {
+    this.blurActiveElement();
     this.selectedTabIndex = index;
+    setTimeout(() => this.blurActiveElement(), 0);
   }
 
   switchToCreateTab(): void {
+    this.blurActiveElement();
     this.selectedTabIndex = 1;
+    setTimeout(() => this.blurActiveElement(), 0);
   }
 
   switchToListTab(): void {
+    this.blurActiveElement();
     this.selectedTabIndex = 0;
+    setTimeout(() => this.blurActiveElement(), 0);
+  }
+
+  private blurActiveElement(): void {
+    const el = (document.activeElement as HTMLElement | null);
+    if (el && typeof (el as any).blur === 'function') {
+      (el as any).blur();
+    }
   }
 
   // Utility methods

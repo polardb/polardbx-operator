@@ -827,6 +827,8 @@ export class BackupManagementComponent implements OnInit, OnDestroy {
   // Global storage connectivity status
   globalStorageStatus: 'ok' | 'error' | 'unknown' = 'unknown';
   globalStorageDetail = '';
+
+  hpfsSinks: Array<{ name: string; type: string }> = [];
     
   createForm: FormGroup = this.fb.group({
     name: ['', [Validators.pattern(/^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/)]],
@@ -852,6 +854,7 @@ export class BackupManagementComponent implements OnInit, OnDestroy {
         this.loadBackups();
         this.loadClusters();
         this.loadGlobalStorageStatus(); // Load storage connectivity status
+        this.loadHpfsSinks();
       });
 
     this.loadNamespaces();
@@ -956,6 +959,27 @@ export class BackupManagementComponent implements OnInit, OnDestroy {
     });
   }
 
+  private loadHpfsSinks(): void {
+    this.apiService.getHpfsSinks().pipe(
+      catchError(() => of(null as any))
+    ).subscribe((res: any) => {
+      const sinks = (res?.sinks || []) as Array<{ name: string; type: string }>;
+      this.hpfsSinks = sinks;
+
+      const preferred = sinks.find(s => s?.name === 'default') || sinks[0];
+      if (!preferred) return;
+
+      const curStorageName = (this.createForm.value?.storageName || '').toString().trim();
+      const curSink = (this.createForm.value?.sink || '').toString().trim();
+      const patch: any = {};
+      if (!curStorageName) patch.storageName = preferred.type;
+      if (!curSink) patch.sink = preferred.name;
+      if (Object.keys(patch).length) {
+        this.createForm.patchValue(patch, { emitEvent: false });
+      }
+    });
+  }
+
   async loadClusters(): Promise<void> {
     try {
       const response = await this.apiService.getClusters().toPromise();
@@ -978,7 +1002,29 @@ export class BackupManagementComponent implements OnInit, OnDestroy {
 
     try {
       this.loadingService.setLoading(LoadingKeys.BACKUP_CREATE, true);
-      const formValue = this.createForm.value;
+      // Trim critical string fields to avoid passing whitespace-only values to the API/webhook.
+      const trimmed = {
+        ...this.createForm.value,
+        namespace: (this.createForm.value.namespace || '').trim(),
+        clusterName: (this.createForm.value.clusterName || '').trim(),
+        name: (this.createForm.value.name || '').trim(),
+        storageName: (this.createForm.value.storageName || '').trim(),
+        sink: (this.createForm.value.sink || '').trim()
+      };
+      this.createForm.patchValue({
+        namespace: trimmed.namespace,
+        clusterName: trimmed.clusterName,
+        name: trimmed.name,
+        storageName: trimmed.storageName,
+        sink: trimmed.sink
+      }, { emitEvent: false });
+      if (!trimmed.namespace || !trimmed.clusterName || !trimmed.storageName || !trimmed.sink) {
+        this.markFormGroupTouched(this.createForm);
+        this.msg.error('请填写必填项：命名空间、目标集群、存储提供商、存储 Sink');
+        return;
+      }
+
+      const formValue = trimmed;
       const retentionTime = (localStorage.getItem('backupRetentionTime') || '240h').trim();
       
       const body: any = {
@@ -1010,7 +1056,13 @@ export class BackupManagementComponent implements OnInit, OnDestroy {
       }
     } catch (error) {
       console.error('创建备份失败:', error);
-      this.msg.error('创建备份失败');
+      const e: any = error as any;
+      const msg =
+        e?.error?.error?.message ||
+        e?.error?.message ||
+        e?.message ||
+        '';
+      this.msg.error(msg ? `创建备份失败: ${msg}` : '创建备份失败');
     } finally {
       this.loadingService.setLoading(LoadingKeys.BACKUP_CREATE, false);
     }

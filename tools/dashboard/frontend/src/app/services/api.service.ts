@@ -1281,11 +1281,14 @@ export class ApiService {
   // ============================================================================
 
   getBackupBinlogs(namespace = 'default'): Observable<PolarDBXBackupBinlog[]> {
+    const url = `${this.baseUrl}/backup-binlogs`;
+    let params = this.withNs();
+    if (namespace !== undefined) {
+      const ns = (namespace || '').trim();
+      params = ns ? params.set('namespace', ns) : params.delete('namespace');
+    }
     return this.handleRequest(
-      this.http.get<PolarDBXBackupBinlog[]>(`${this.baseUrl}/backup-binlogs`, {
-        headers: this.getHeaders(),
-        params: this.withNs()
-      }),
+      this.http.get<PolarDBXBackupBinlog[]>(url, { headers: this.getHeaders(), params }),
       LoadingKeys.BACKUP_BINLOG_LIST,
       `/backup-binlogs`,
       'GET'
@@ -1293,11 +1296,40 @@ export class ApiService {
   }
 
   createBackupBinlog(namespace: string, request: CreateBackupBinlogRequest): Observable<PolarDBXBackupBinlog> {
+    const ns = (namespace || '').trim();
+    const name = (request?.name || '').trim();
+    const pxcName = (request?.pxcName || '').trim();
+    const sink = (request?.storageProvider?.sink || '').trim();
+    const storageName = (request?.storageProvider?.storageName || '').toString().trim() as any;
+
+    const body: any = {
+      apiVersion: 'polardbx.aliyun.com/v1',
+      kind: 'PolarDBXBackupBinlog',
+      metadata: {
+        name,
+        namespace: ns || (request?.namespace || '').trim() || undefined
+      },
+      spec: {
+        pxcName,
+        pxcUid: request?.pxcUid,
+        remoteExpireLogHours: request?.remoteExpireLogHours,
+        localExpireLogHours: request?.localExpireLogHours,
+        maxLocalBinlogCount: request?.maxLocalBinlogCount,
+        pointInTimeRecover: request?.pointInTimeRecover,
+        binlogChecksum: request?.binlogChecksum,
+        storageProvider: {
+          storageName: storageName || undefined,
+          sink: sink || undefined
+        }
+      }
+    };
+    const cleaned = JSON.parse(JSON.stringify(body));
+    let params = this.withNs();
+    if (ns) {
+      params = params.set('namespace', ns);
+    }
     return this.handleRequest(
-      this.http.post<PolarDBXBackupBinlog>(`${this.baseUrl}/backup-binlogs`, request, {
-        headers: this.getHeaders(),
-        params: this.withNs()
-      }),
+      this.http.post<PolarDBXBackupBinlog>(`${this.baseUrl}/backup-binlogs`, cleaned, { headers: this.getHeaders(), params }),
       LoadingKeys.BACKUP_BINLOG_CREATE,
       `/backup-binlogs`,
       'POST'
