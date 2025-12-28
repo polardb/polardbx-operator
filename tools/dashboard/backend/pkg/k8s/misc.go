@@ -31,6 +31,21 @@ func ListPodsForPolarDBXClusterWithContext(ctx context.Context, c client.Client,
 	return podList.Items, nil
 }
 
+// ListPodsForXStoreWithContext lists all pods for a specific XStore by xstore/name label.
+func ListPodsForXStoreWithContext(ctx context.Context, c client.Client, namespace, xstoreName string) ([]corev1.Pod, error) {
+	var podList corev1.PodList
+	opts := []client.ListOption{
+		client.InNamespace(namespace),
+		client.MatchingLabels{
+			"xstore/name": xstoreName,
+		},
+	}
+	if err := c.List(ctx, &podList, opts...); err != nil {
+		return nil, err
+	}
+	return podList.Items, nil
+}
+
 // ---- PolarDBXParameter CRUD ----
 
 // Deprecated: Use ListPolarDBXParametersWithContext for better context control.

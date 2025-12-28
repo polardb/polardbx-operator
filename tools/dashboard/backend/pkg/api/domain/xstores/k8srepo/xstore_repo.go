@@ -63,8 +63,8 @@ func (r *DefaultXStoreRepository) Delete(ctx context.Context, cli client.Client,
 }
 
 func (r *DefaultXStoreRepository) ListPods(ctx context.Context, cli client.Client, namespace, xstoreName string) ([]corev1.Pod, error) {
-	// pods list function is non-ctx version, keep current implementation
-	return k8s.ListPodsForPolarDBXCluster(cli, namespace, xstoreName)
+	// Use xstore/name label to list pods belonging to this specific XStore
+	return k8s.ListPodsForXStoreWithContext(ctx, cli, namespace, xstoreName)
 }
 
 // XStoreBackup

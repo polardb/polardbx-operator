@@ -295,6 +295,12 @@ export class RebuildFormComponent implements OnInit, OnDestroy {
       .subscribe(name => this.onXStoreChange(name));
 
     this.refreshDerivedStates();
+    
+    // Trigger initial XStore load for default namespace
+    const initialNamespace = this.rebuildForm.get('namespace')?.value;
+    if (initialNamespace) {
+      this.onNamespaceChange(initialNamespace);
+    }
   }
 
   ngOnDestroy(): void {
