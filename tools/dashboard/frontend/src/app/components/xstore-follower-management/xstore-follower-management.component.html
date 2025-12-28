@@ -260,9 +260,11 @@
                     <nz-select formControlName="targetPodName" 
                                nzPlaceHolder="自动选择（优先非 leader 且 Running）"
                                nzAllowClear>
-                      <nz-option value="" nzLabel="自动选择（优先非 leader 且 Running）"></nz-option>
+                      <nz-option [nzValue]="''" nzLabel="自动选择（优先非 leader 且 Running）"></nz-option>
                       <nz-option *ngFor="let pod of filteredTargetPods" 
-                                 [nzValue]="pod.metadata.name">
+                                 nzCustomContent
+                                 [nzValue]="pod.metadata.name"
+                                 [nzLabel]="pod.metadata.name">
                         <span>{{pod.metadata.name}}</span>
                         <nz-tag nzSize="small" class="pod-status-tag">
                           {{pod.status?.phase}}
@@ -286,9 +288,11 @@
                     <nz-select formControlName="fromXStore" 
                                nzPlaceHolder="自动选择（不指定具体源）"
                                nzAllowClear>
-                      <nz-option value="" nzLabel="自动选择（不指定具体源）"></nz-option>
+                      <nz-option [nzValue]="''" nzLabel="自动选择（不指定具体源）"></nz-option>
                       <nz-option *ngFor="let xstore of validSourceXStores" 
-                                 [nzValue]="xstore.metadata.name">
+                                 nzCustomContent
+                                 [nzValue]="xstore.metadata.name"
+                                 [nzLabel]="xstore.metadata.name">
                         <span>{{xstore.metadata.name}}</span>
                         <nz-tag nzSize="small" [nzColor]="getXStoreStatusColor(xstore)">
                           {{xstore.status?.phase}}

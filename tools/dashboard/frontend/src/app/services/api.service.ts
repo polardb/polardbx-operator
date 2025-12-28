@@ -1085,7 +1085,11 @@ export class ApiService {
 
   getXStoreFollowers(namespace?: string): Observable<XStoreFollower[]> {
     const url = `${this.baseUrl}/xstore-followers`;
-    const params = namespace ? new HttpParams().set('namespace', namespace) : this.withNs();
+    let params = this.withNs();
+    if (namespace !== undefined) {
+      const ns = (namespace || '').trim();
+      params = ns ? params.set('namespace', ns) : params.delete('namespace');
+    }
     return this.handleRequest(
       this.http.get<XStoreFollower[]>(url, { headers: this.getHeaders(), params }),
       LoadingKeys.XSTORE_LIST,
@@ -1095,12 +1099,34 @@ export class ApiService {
   }
 
   createXStoreFollower(namespace: string, followerRequest: CreateXStoreFollowerRequest): Observable<XStoreFollower> {
-    const params = new HttpParams().set('namespace', namespace || 'default');
+    const ns = (namespace || '').trim();
+    const name = (followerRequest?.name || '').trim();
+    const xStoreName = (followerRequest?.xStoreName || '').trim();
+
+    const body: any = {
+      apiVersion: 'polardbx.aliyun.com/v1',
+      kind: 'XStoreFollower',
+      metadata: {
+        name,
+        namespace: ns || undefined
+      },
+      spec: {
+        xStoreName,
+        role: followerRequest?.role,
+        local: followerRequest?.local,
+        nodeName: followerRequest?.nodeName,
+        targetPodName: followerRequest?.targetPodName,
+        fromPodName: followerRequest?.fromPodName
+      }
+    };
+    const cleaned = JSON.parse(JSON.stringify(body));
+
+    let params = this.withNs();
+    if (ns) {
+      params = params.set('namespace', ns);
+    }
     return this.handleRequest(
-      this.http.post<XStoreFollower>(`${this.baseUrl}/xstore-followers`, followerRequest, {
-        headers: this.getHeaders(),
-        params
-      }),
+      this.http.post<XStoreFollower>(`${this.baseUrl}/xstore-followers`, cleaned, { headers: this.getHeaders(), params }),
       LoadingKeys.XSTORE_CREATE,
       `/xstore-followers`,
       'POST'
