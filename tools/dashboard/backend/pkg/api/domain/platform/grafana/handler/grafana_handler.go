@@ -391,15 +391,18 @@ func ResolveTemplatesDir() (string, error) {
 		return "", fmt.Errorf("getwd: %w", err)
 	}
 
+	// Only search for the specific chart directories containing Grafana dashboard templates
+	// Removed the bare "dashboard" path to avoid matching unrelated directories like tools/dashboard
 	searchPaths := []string{
 		filepath.Join("charts", "polardbx-monitor", defaultTemplatePath),
 		filepath.Join("charts", "polardbx-monitoring", defaultTemplatePath),
-		filepath.Join(defaultTemplatePath),
 	}
 
 	visited := map[string]struct{}{}
 	dir := cwd
-	for i := 0; i < 8; i++ {
+	// Increase search depth to 12 levels to handle nested project structures
+	// (e.g., tools/dashboard/backend -> root requires 3 levels)
+	for i := 0; i < 12; i++ {
 		for _, searchPath := range searchPaths {
 			candidate := filepath.Join(dir, searchPath)
 			if _, seen := visited[candidate]; seen {
