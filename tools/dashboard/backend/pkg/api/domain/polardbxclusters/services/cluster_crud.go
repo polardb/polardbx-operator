@@ -193,12 +193,27 @@ func convertConfigToCluster(config *ClusterCreationConfig, namespace string) *po
 		dnHostNetwork = config.Network.HostNetwork
 	}
 
+	// Determine protocol version from version string (e.g., "8.0.18" -> 8, "5.7.x" -> 5)
+	protocolVersion := 8 // default to MySQL 8
+	if strings.HasPrefix(config.Version, "5.") {
+		protocolVersion = 5
+	}
+
 	cluster := &polardbxv1.PolarDBXCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      config.Name,
 			Namespace: namespace,
 		},
 		Spec: polardbxv1.PolarDBXClusterSpec{
+			ProtocolVersion: intstr.FromInt(protocolVersion),
+			Config: polardbx.Config{
+				CN: polardbx.CNConfig{
+					Static: &polardbx.CNStaticConfig{
+						EnableCoroutine:    true,
+						RPCProtocolVersion: intstr.FromString("2"),
+					},
+				},
+			},
 			Topology: polardbx.Topology{
 				Version: config.Version,
 				Nodes: polardbx.TopologyNodes{
