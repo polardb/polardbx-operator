@@ -11,13 +11,12 @@ import { NzMessageService } from 'ng-zorro-antd/message';
 import { NzGridModule } from 'ng-zorro-antd/grid';
 import { NzDividerModule } from 'ng-zorro-antd/divider';
 import { NzAlertModule } from 'ng-zorro-antd/alert';
-import { SafeUrlPipe } from '../../pipes/safe-url.pipe';
 import { ApiService } from '../../services/api.service';
 
 @Component({
   selector: 'app-grafana-embed',
   standalone: true,
-  imports: [CommonModule, FormsModule, NzCardModule, NzFormModule, NzInputModule, NzButtonModule, NzIconModule, NzSelectModule, NzGridModule, NzDividerModule, NzAlertModule, SafeUrlPipe],
+  imports: [CommonModule, FormsModule, NzCardModule, NzFormModule, NzInputModule, NzButtonModule, NzIconModule, NzSelectModule, NzGridModule, NzDividerModule, NzAlertModule],
   template: `
     <div class="page-wrapper grafana-embed">
       <div class="page-header">
@@ -72,19 +71,28 @@ import { ApiService } from '../../services/api.service';
 
           <nz-divider></nz-divider>
 
-          <div class="dashboard-display" *ngIf="grafanaUrl; else emptyHint">
-            <div class="frame-container">
-              <iframe [src]="grafanaUrl | safeUrl" title="Grafana Dashboard" referrerpolicy="no-referrer" loading="lazy"></iframe>
+          <div class="dashboard-display">
+            <div class="grafana-link-container">
+              <i nz-icon nzType="dashboard" class="grafana-icon"></i>
+              <h3>Grafana 监控大盘</h3>
+              <p *ngIf="grafanaUrl">点击下方按钮在新窗口中打开 Grafana 仪表盘</p>
+              <p *ngIf="!grafanaUrl">请在上方输入 Grafana 服务地址</p>
+              <div class="grafana-actions">
+                <button nz-button nzType="primary" nzSize="large" [disabled]="!grafanaUrl" (click)="openExternal()">
+                  <i nz-icon nzType="link"></i>
+                  打开 Grafana 仪表盘
+                </button>
+              </div>
+              <nz-alert 
+                *ngIf="grafanaUrl"
+                nzType="info" 
+                nzMessage="安全提示"
+                nzDescription="由于浏览器安全策略限制，Grafana 无法在页面内嵌入显示。请点击上方按钮在新标签页中打开。"
+                nzShowIcon
+                class="security-alert">
+              </nz-alert>
             </div>
           </div>
-          
-          <ng-template #emptyHint>
-            <div class="empty-state">
-              <i nz-icon nzType="dashboard" class="empty-icon"></i>
-              <h3>未配置 Grafana 地址</h3>
-              <p>请在上方输入 Grafana 服务地址以查看监控大盘</p>
-            </div>
-          </ng-template>
         </nz-card>
 
         <nz-card class="version-card" nzTitle="仪表盘版本管理" [nzExtra]="versionExtra">
@@ -201,52 +209,49 @@ import { ApiService } from '../../services/api.service';
       margin-top: 16px;
     }
     
-    .frame-container {
-      position: relative;
-      width: 100%;
-      /* 不使用 100vh，避免在 monitoring-hub/outlet 中出现高度计算错乱 */
-      height: 65vh;
-      min-height: 520px;
-      max-height: 900px;
-      border: 1px solid #e0e0e0;
-      border-radius: 6px;
-      overflow: hidden;
-      background: #f5f5f5;
-    }
-    
-    .frame-container iframe {
-      width: 100%;
-      height: 100%;
-      border: 0;
-      background: #fff;
-    }
-    
-    .empty-state {
+    .grafana-link-container {
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 80px 20px;
-      color: rgba(0, 0, 0, 0.45);
+      padding: 60px 20px;
       text-align: center;
+      background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+      border-radius: 12px;
+      border: 2px dashed #cbd5e1;
     }
     
-    .empty-icon {
-      font-size: 48px;
-      color: #d9d9d9;
-      margin-bottom: 16px;
+    .grafana-icon {
+      font-size: 64px;
+      color: #4a7c9b;
+      margin-bottom: 20px;
     }
     
-    .empty-state h3 {
-      margin: 0 0 8px 0;
-      font-size: 16px;
-      color: rgba(0, 0, 0, 0.65);
+    .grafana-link-container h3 {
+      margin: 0 0 12px 0;
+      font-size: 20px;
+      font-weight: 600;
+      color: #1f2937;
     }
     
-    .empty-state p {
-      margin: 0;
+    .grafana-link-container p {
+      margin: 0 0 24px 0;
       font-size: 14px;
-      color: rgba(0, 0, 0, 0.45);
+      color: #6b7280;
+    }
+    
+    .grafana-actions {
+      margin-bottom: 24px;
+    }
+    
+    .grafana-actions button {
+      padding: 0 32px;
+      height: 44px;
+      font-size: 16px;
+    }
+    
+    .security-alert {
+      max-width: 500px;
     }
     
     .version-controls {
@@ -283,9 +288,12 @@ import { ApiService } from '../../services/api.service';
     @media (max-width: 768px) {
       .page-wrapper { padding: 12px; }
       
-      .frame-container {
-        height: 55vh;
-        min-height: 300px;
+      .grafana-link-container {
+        padding: 40px 16px;
+      }
+      
+      .grafana-icon {
+        font-size: 48px;
       }
       
       .action-buttons {
