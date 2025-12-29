@@ -1,6 +1,7 @@
 package xstores
 
 import (
+	"fmt"
 	"strconv"
 	"time"
 
@@ -65,18 +66,100 @@ func CreateFollower(c *gin.Context) {
 		return
 	}
 	ns := c.DefaultQuery("namespace", util.DefaultNamespace(c, "default"))
-	var body polardbxv1.XStoreFollower
-	if err := c.ShouldBindJSON(&body); err != nil {
+
+	// Support both nested format (metadata/spec) and flat format from frontend
+	var payload struct {
+		// Nested format (Kubernetes-style)
+		Metadata struct {
+			Name      string `json:"name,omitempty"`
+			Namespace string `json:"namespace,omitempty"`
+		} `json:"metadata,omitempty"`
+		Spec struct {
+			XStoreName    string `json:"xStoreName,omitempty"`
+			Role          string `json:"role,omitempty"`
+			TargetPodName string `json:"targetPodName,omitempty"`
+			FromPodName   string `json:"fromPodName,omitempty"`
+			NodeName      string `json:"nodeName,omitempty"`
+			Local         bool   `json:"local,omitempty"`
+		} `json:"spec,omitempty"`
+		// Flat format (frontend-style)
+		Name          string `json:"name,omitempty"`
+		XStoreName    string `json:"xStoreName,omitempty"`
+		Role          string `json:"role,omitempty"`
+		TargetPodName string `json:"targetPodName,omitempty"`
+		FromPodName   string `json:"fromPodName,omitempty"`
+		NodeName      string `json:"nodeName,omitempty"`
+		Local         bool   `json:"local,omitempty"`
+	}
+	if err := c.ShouldBindJSON(&payload); err != nil {
 		apierr.AbortWithError(c, err)
 		return
 	}
-	obj := &body
+
+	obj := &polardbxv1.XStoreFollower{}
+
+	// Resolve name: prefer nested, fallback to flat
+	obj.Name = payload.Metadata.Name
+	if obj.Name == "" {
+		obj.Name = payload.Name
+	}
+
+	// Resolve namespace
+	obj.Namespace = payload.Metadata.Namespace
 	if obj.Namespace == "" {
 		obj.Namespace = ns
+	}
+
+	// Resolve xStoreName: prefer nested, fallback to flat, then path param
+	obj.Spec.XStoreName = payload.Spec.XStoreName
+	if obj.Spec.XStoreName == "" {
+		obj.Spec.XStoreName = payload.XStoreName
 	}
 	if obj.Spec.XStoreName == "" {
 		obj.Spec.XStoreName = c.Param("name")
 	}
+
+	// Resolve role: prefer nested, fallback to flat
+	role := payload.Spec.Role
+	if role == "" {
+		role = payload.Role
+	}
+	if role != "" {
+		obj.Spec.Role = polardbxv1xstore.FollowerRole(role)
+	}
+
+	// Resolve targetPodName: prefer nested, fallback to flat
+	targetPodName := payload.Spec.TargetPodName
+	if targetPodName == "" {
+		targetPodName = payload.TargetPodName
+	}
+	if targetPodName != "" {
+		obj.Spec.TargetPodName = targetPodName
+	}
+
+	// Resolve fromPodName: prefer nested, fallback to flat
+	fromPodName := payload.Spec.FromPodName
+	if fromPodName == "" {
+		fromPodName = payload.FromPodName
+	}
+	if fromPodName != "" {
+		obj.Spec.FromPodName = fromPodName
+	}
+
+	// Resolve nodeName: prefer nested, fallback to flat
+	nodeName := payload.Spec.NodeName
+	if nodeName == "" {
+		nodeName = payload.NodeName
+	}
+	if nodeName != "" {
+		obj.Spec.NodeName = nodeName
+	}
+
+	// Generate name if not provided
+	if obj.Name == "" {
+		obj.Name = fmt.Sprintf("%s-%s-%d", obj.Spec.XStoreName, role, time.Now().Unix())
+	}
+
 	// Never allow client to set status on create.
 	obj.Status = polardbxv1.XStoreFollowerStatus{}
 

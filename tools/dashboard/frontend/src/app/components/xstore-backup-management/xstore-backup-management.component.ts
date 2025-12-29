@@ -776,9 +776,9 @@ import { BackupType } from '../../utils/backup-progress-strategies';
                         </div>
                         <div class="half">
                           <nz-form-item>
-                            <nz-form-label [nzRequired]="true">Region</nz-form-label>
+                            <nz-form-label>Region</nz-form-label>
                             <nz-form-control>
-                              <input nz-input formControlName="region" placeholder="例如：us-east-1" />
+                              <input nz-input formControlName="region" placeholder="例如：us-east-1（MinIO 可留空）" />
                             </nz-form-control>
                           </nz-form-item>
                       </div>
@@ -1415,7 +1415,7 @@ export class XStoreBackupManagementComponent implements OnInit, OnDestroy {
         accessKeyId: ['', Validators.required],
         secretAccessKey: ['', Validators.required],
         bucket: ['', Validators.required],
-        region: ['', Validators.required],
+        region: [''],  // 对于 MinIO 等本地 S3 兼容存储，Region 可选
         endpoint: [''],
         prefix: ['']
       }),
