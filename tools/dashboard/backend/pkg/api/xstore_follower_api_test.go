@@ -85,11 +85,18 @@ func TestXStoreFollowerEndpoints(t *testing.T) {
 
 		// send request matching handler's expected Kubernetes-style shape
 		reqBody := map[string]any{
+			"apiVersion": "polardbx.aliyun.com/v1",
+			"kind":       "XStoreFollower",
 			"metadata": map[string]any{
 				"name": "follower-for-xstore1",
 			},
 			"spec": map[string]any{
-				"xStoreName": "xstore1",
+				"xStoreName":     "xstore1",
+				"role":           "follower",
+				"local":          true,
+				"nodeName":       "node-1",
+				"targetPodName":  "xstore1-dn-0",
+				"fromPodName":    "xstore1-dn-1",
 			},
 		}
 		body, _ := json.Marshal(reqBody)
@@ -103,6 +110,10 @@ func TestXStoreFollowerEndpoints(t *testing.T) {
 		err := fakeClient.Get(context.TODO(), client.ObjectKey{Namespace: "default", Name: "follower-for-xstore1"}, &createdFollower)
 		assert.NoError(t, err)
 		assert.Equal(t, "xstore1", createdFollower.Spec.XStoreName)
+		assert.Equal(t, "xstore1-dn-0", createdFollower.Spec.TargetPodName)
+		assert.Equal(t, "xstore1-dn-1", createdFollower.Spec.FromPodName)
+		assert.Equal(t, "node-1", createdFollower.Spec.NodeName)
+		assert.True(t, createdFollower.Spec.Local)
 	})
 
 	t.Run("ListXStoreFollowers", func(t *testing.T) {

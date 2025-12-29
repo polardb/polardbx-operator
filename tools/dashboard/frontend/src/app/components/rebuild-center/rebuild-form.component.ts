@@ -108,13 +108,43 @@ interface RebuildFormData {
               <nz-form-item>
                 <nz-form-label [nzSpan]="6" nzFor="xStoreName" nzRequired>目标 XStore</nz-form-label>
                 <nz-form-control [nzSpan]="18" nzErrorTip="请选择目标 XStore">
-                  <nz-select 
-                    id="xStoreName" 
-                    formControlName="xStoreName" 
-                    nzPlaceHolder="选择 XStore"
-                    [nzLoading]="isLoadingXStores">
-                    <nz-option *ngFor="let xstore of availableXStores; trackBy: trackByXStoreName" [nzValue]="xstore.metadata.name" [nzLabel]="xstore.metadata.name"></nz-option>
+                  <ng-container *ngIf="availableXStores.length > 0; else xstoreManualInput">
+                    <nz-select 
+                      id="xStoreName" 
+                      formControlName="xStoreName" 
+                      nzPlaceHolder="选择 XStore"
+                      [nzLoading]="isLoadingXStores"
+                      nzShowSearch>
+                      <nz-option *ngFor="let xstore of availableXStores; trackBy: trackByXStoreName" [nzValue]="xstore.metadata.name" [nzLabel]="xstore.metadata.name"></nz-option>
+                    </nz-select>
+                  </ng-container>
+                  <ng-template #xstoreManualInput>
+                    <input
+                      nz-input
+                      id="xStoreName"
+                      formControlName="xStoreName"
+                      placeholder="输入 XStore 名称（例如：demo-5dmd-dn-0）" />
+                    <div class="form-hint" *ngIf="!isLoadingXStores">
+                      未能加载 XStore 列表，可直接输入名称继续创建任务。
+                    </div>
+                  </ng-template>
+                </nz-form-control>
+              </nz-form-item>
+
+              <nz-form-item>
+                <nz-form-label [nzSpan]="6" nzFor="targetPodName" nzRequired>目标 Pod</nz-form-label>
+                <nz-form-control [nzSpan]="18" nzErrorTip="请选择目标 Pod">
+                  <nz-select
+                    id="targetPodName"
+                    formControlName="targetPodName"
+                    nzPlaceHolder="选择要重搭的 Pod"
+                    [nzLoading]="isLoadingPods"
+                    nzShowSearch>
+                    <nz-option *ngFor="let pod of filteredTargetPods; trackBy: trackByPodName" [nzValue]="pod.metadata.name" [nzLabel]="pod.metadata.name"></nz-option>
                   </nz-select>
+                  <div class="form-hint" *ngIf="!isLoadingPods && rebuildForm.get('xStoreName')?.value && filteredTargetPods.length === 0">
+                    未找到可用 Pod，请确认目标 XStore Pod 处于 Running 且非 Leader。
+                  </div>
                 </nz-form-control>
               </nz-form-item>
             </div>
@@ -140,23 +170,6 @@ interface RebuildFormData {
                   <span class="switch-hint">
                     {{ rebuildForm.get('local')?.value ? '在当前节点进行重搭' : '跨节点或新建节点重搭' }}
                   </span>
-                </nz-form-control>
-              </nz-form-item>
-
-              <!-- 目标 Pod 选择 -->
-              <nz-form-item *ngIf="showTargetPod">
-                <nz-form-label [nzSpan]="6" nzFor="targetPodName" [nzRequired]="targetPodRequired">
-                  目标 Pod
-                </nz-form-label>
-                <nz-form-control [nzSpan]="18" [nzErrorTip]="targetPodErrorTip">
-                  <nz-select 
-                    id="targetPodName" 
-                    formControlName="targetPodName" 
-                    nzPlaceHolder="选择目标 Pod"
-                    [nzLoading]="isLoadingPods"
-                    nzAllowClear>
-                    <nz-option *ngFor="let pod of filteredTargetPods; trackBy: trackByPodName" [nzValue]="pod.metadata.name" [nzLabel]="pod.metadata.name"></nz-option>
-                  </nz-select>
                 </nz-form-control>
               </nz-form-item>
 
@@ -252,11 +265,8 @@ export class RebuildFormComponent implements OnInit, OnDestroy {
   isLoadingXStores = false;
   isLoadingPods = false;
   isSubmitting = false;
-  showTargetPod = false;
   showFromPod = false;
   showNodeName = false;
-  targetPodRequired = false;
-  targetPodErrorTip = '';
   localHint = '';
   roleHints: string[] = [];
 
@@ -313,7 +323,7 @@ export class RebuildFormComponent implements OnInit, OnDestroy {
       namespace: ['default', [Validators.required]],
       role: ['learner', [Validators.required]],
       xStoreName: ['', [Validators.required]],
-      targetPodName: [''],
+      targetPodName: ['', [Validators.required]],
       fromPodName: [''],
       nodeName: [''],
       local: [true],
@@ -372,6 +382,7 @@ export class RebuildFormComponent implements OnInit, OnDestroy {
         },
         error: (error) => {
           console.error('Failed to load XStores:', error);
+          this.message.warning('加载 XStore 列表失败，可手动输入 XStore 名称');
           this.availableXStores = [];
           this.isLoadingXStores = false;
         }
@@ -379,7 +390,13 @@ export class RebuildFormComponent implements OnInit, OnDestroy {
   }
 
   onXStoreChange(xstoreName: string): void {
-    if (!xstoreName) return;
+    if (!xstoreName) {
+      this.targetPods = [];
+      this.filteredTargetPods = [];
+      this.filteredSourcePods = [];
+      this.rebuildForm.patchValue({ targetPodName: '', fromPodName: '' });
+      return;
+    }
     
     const namespace = this.rebuildForm.get('namespace')?.value;
     if (!namespace) return;
@@ -412,13 +429,11 @@ export class RebuildFormComponent implements OnInit, OnDestroy {
   private updateFormValidators(role: string): void {
     const targetPodControl = this.rebuildForm.get('targetPodName');
     
+    // Target Pod is required for all rebuild roles.
+    targetPodControl?.setValidators([Validators.required]);
+
     if (role === 'learner') {
-      // Learner requires targetPodName
-      targetPodControl?.setValidators([Validators.required]);
       this.rebuildForm.patchValue({ local: true });
-    } else {
-      // Logger and follower don't require targetPodName
-      targetPodControl?.clearValidators();
     }
     
     targetPodControl?.updateValueAndValidity();
@@ -427,30 +442,36 @@ export class RebuildFormComponent implements OnInit, OnDestroy {
   private filterPods(): void {
     const role = this.rebuildForm.get('role')?.value;
     
-    // Filter target pods (prefer running and non-leader)
-    this.filteredTargetPods = this.targetPods.filter(pod => {
-      const phase = pod.status?.phase;
-      const podRole = this.getPodRole(pod);
-      return phase === 'Running' && podRole !== 'leader';
+    const runningPods = this.targetPods.filter(pod => pod.status?.phase === 'Running');
+    const nonLeaderRunning = runningPods.filter(pod => this.getPodRole(pod) !== 'leader');
+
+    // Prefer matching role first (logger/learner/follower), then fallback to any non-leader running pod.
+    const normalizedRole = (role || '').toString().toLowerCase();
+    const roleMatched = nonLeaderRunning.filter(pod => {
+      const podRole = (this.getPodRole(pod) || '').toLowerCase();
+      return podRole === normalizedRole || podRole === '';
     });
-    
-    // If no suitable target pods, show all running pods
-    if (this.filteredTargetPods.length === 0) {
-      this.filteredTargetPods = this.targetPods.filter(pod => pod.status?.phase === 'Running');
+
+    if (roleMatched.length > 0) {
+      this.filteredTargetPods = roleMatched;
+    } else if (nonLeaderRunning.length > 0) {
+      this.filteredTargetPods = nonLeaderRunning;
+    } else {
+      this.filteredTargetPods = runningPods;
     }
-    
-    // Filter source pods (prefer running pods for logger rebuild)
-    this.filteredSourcePods = this.targetPods.filter(pod => pod.status?.phase === 'Running');
-    
-    // Auto-select single candidate for learner
-    if (role === 'learner' && this.filteredTargetPods.length === 1 && !this.rebuildForm.get('targetPodName')?.value) {
+
+    // Source pods: prefer running pods (let controller decide if omitted)
+    this.filteredSourcePods = runningPods;
+
+    const selectedTarget = (this.rebuildForm.get('targetPodName')?.value || '').toString();
+    if (selectedTarget && !this.targetPods.some(pod => pod?.metadata?.name === selectedTarget)) {
+      this.rebuildForm.patchValue({ targetPodName: '' });
+    }
+
+    // Auto-select single candidate
+    if (this.filteredTargetPods.length === 1 && !this.rebuildForm.get('targetPodName')?.value) {
       this.rebuildForm.patchValue({ targetPodName: this.filteredTargetPods[0].metadata.name });
     }
-  }
-
-  shouldShowTargetPod(): boolean {
-    const role = this.rebuildForm.get('role')?.value;
-    return role === 'learner' || role === 'logger' || role === 'follower';
   }
 
   // Old derived functions removed (replaced with refreshDerivedStates computed properties)
@@ -499,17 +520,14 @@ export class RebuildFormComponent implements OnInit, OnDestroy {
     const role = this.rebuildForm.get('role')?.value;
     const local = this.rebuildForm.get('local')?.value;
 
-    this.showTargetPod = role === 'learner' || role === 'logger' || role === 'follower';
     this.showFromPod = role === 'logger';
     this.showNodeName = !local;
-    this.targetPodRequired = role === 'learner';
-    this.targetPodErrorTip = this.targetPodRequired ? 'Please select target Pod' : '';
     this.localHint = local ? 'Rebuild on current node' : 'Rebuild across nodes or create new node';
 
     const hints: string[] = [];
-    if (role === 'learner') hints.push('Learner rebuild recommends selecting a Running target Pod');
-    if (role === 'logger') hints.push('Logger rebuild can optionally select source Pod, system will auto-select if not specified');
-    if (role === 'follower') hints.push('Follower rebuild can optionally select target Pod, system will auto-select if not specified');
+    hints.push('目标 Pod 为必填项，请选择要重搭的 Pod');
+    if (role === 'learner') hints.push('Learner 重搭建议选择运行中的 Learner Pod');
+    if (role === 'logger') hints.push('Logger 重搭可选源 Pod，未指定时由系统自动选择');
     if (!local) hints.push('Cross-node rebuild will create new Pod on other nodes, target node can be specified');
     this.roleHints = hints;
   }

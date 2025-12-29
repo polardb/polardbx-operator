@@ -135,7 +135,15 @@
         margin-bottom: 4px;
       }
 
-      .namespace-tag {
+      .meta-tags {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+
+      .namespace-tag,
+      .role-tag {
         font-size: 11px;
       }
     }
@@ -156,6 +164,19 @@
 
         .arrow-icon {
           font-size: 10px;
+        }
+      }
+
+      .target-pod {
+        font-size: 12px;
+        color: #8c8c8c;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        margin-top: 2px;
+
+        .pod-icon {
+          font-size: 12px;
         }
       }
     }

@@ -129,7 +129,7 @@ export class XStoreFollowerManagementComponent implements OnInit {
       ]],
       namespace: [this.data.namespace || 'default', Validators.required],
       xStoreName: ['', Validators.required],
-      targetPodName: [''],
+      targetPodName: ['', Validators.required],
       fromXStore: [''],
       fromBackupSet: [''],
       forceRecreate: [false],
@@ -210,6 +210,7 @@ export class XStoreFollowerManagementComponent implements OnInit {
       }
     } catch (error) {
       console.error('Failed to load initial data:', error);
+      this.message.warning('初始化数据加载失败：无法获取 XStore 列表，可手动输入 XStore 名称继续');
     }
   }
 
@@ -349,7 +350,40 @@ export class XStoreFollowerManagementComponent implements OnInit {
     const phase = s?.phase || '';
     const displayPhase = phase || '初始化中';
     const task = s?.currentJobTask ? `，任务：${s.currentJobTask}` : '';
-    return `阶段：${this.getDisplayStatus(phase)}${phase ? `（${phase}）` : ''}${task}`;
+    const message = s?.message ? `，消息：${s.message}` : '';
+    return `阶段：${this.getDisplayStatus(phase)}${phase ? `（${phase}）` : ''}${task}${message}`;
+  }
+
+  getTargetPodName(follower: XStoreFollower): string {
+    return (follower.status as any)?.targetPodName || (follower.spec as any)?.targetPodName || '';
+  }
+
+  getFollowerRoleLabel(role?: string): string {
+    const r = (role || 'follower').toString().toLowerCase();
+    switch (r) {
+      case 'learner':
+        return 'Learner';
+      case 'logger':
+        return 'Logger';
+      case 'follower':
+        return 'Follower';
+      default:
+        return role || 'Follower';
+    }
+  }
+
+  getFollowerRoleColor(role?: string): string {
+    const r = (role || 'follower').toString().toLowerCase();
+    switch (r) {
+      case 'learner':
+        return 'purple';
+      case 'logger':
+        return 'cyan';
+      case 'follower':
+        return 'blue';
+      default:
+        return 'default';
+    }
   }
 
   getStatusChipClass(phase?: string): string {
@@ -556,7 +590,7 @@ export class XStoreFollowerManagementComponent implements OnInit {
   async viewPodLogs(row: any): Promise<void> {
     try {
       const ns = row.metadata.namespace;
-      const pod = ((row as any).status?.targetPod || (row as any).spec?.targetPodName || '').trim();
+      const pod = ((row as any).status?.targetPodName || (row as any).status?.targetPod || (row as any).spec?.targetPodName || '').trim();
       const podName = pod || 'unknown';
       if (!podName || podName === 'unknown') { this.message.warning('未能确定目标 Pod'); return; }
       // First probe container list
@@ -580,7 +614,7 @@ export class XStoreFollowerManagementComponent implements OnInit {
   async describePod(row: any): Promise<void> {
     try {
       const ns = row.metadata.namespace;
-      const pod = ((row as any).status?.targetPod || (row as any).spec?.targetPodName || '').trim();
+      const pod = ((row as any).status?.targetPodName || (row as any).status?.targetPod || (row as any).spec?.targetPodName || '').trim();
       const podName = pod || 'unknown';
       if (!podName || podName === 'unknown') { this.message.warning('未能确定目标 Pod'); return; }
       const p = await this.apiService.getPod(ns as string, podName as string).toPromise();
@@ -636,6 +670,7 @@ export class XStoreFollowerManagementComponent implements OnInit {
       console.error('Failed to reload XStores for namespace:', ns, e);
       this.availableXStores = [];
       this.validSourceXStores = [];
+      this.message.warning('加载 XStore 列表失败，可手动输入 XStore 名称');
     }
   }
 

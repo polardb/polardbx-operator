@@ -65,33 +65,21 @@ func CreateFollower(c *gin.Context) {
 		return
 	}
 	ns := c.DefaultQuery("namespace", util.DefaultNamespace(c, "default"))
-	var payload struct {
-		Metadata struct {
-			Name      string `json:"name,omitempty"`
-			Namespace string `json:"namespace,omitempty"`
-		} `json:"metadata,omitempty"`
-		Spec struct {
-			XStoreName string `json:"xStoreName,omitempty"`
-			Role       string `json:"role,omitempty"`
-		} `json:"spec,omitempty"`
-	}
-	if err := c.ShouldBindJSON(&payload); err != nil {
+	var body polardbxv1.XStoreFollower
+	if err := c.ShouldBindJSON(&body); err != nil {
 		apierr.AbortWithError(c, err)
 		return
 	}
-	obj := &polardbxv1.XStoreFollower{}
-	obj.Name = payload.Metadata.Name
-	obj.Namespace = payload.Metadata.Namespace
+	obj := &body
 	if obj.Namespace == "" {
 		obj.Namespace = ns
 	}
-	obj.Spec.XStoreName = payload.Spec.XStoreName
 	if obj.Spec.XStoreName == "" {
 		obj.Spec.XStoreName = c.Param("name")
 	}
-	if payload.Spec.Role != "" {
-		obj.Spec.Role = polardbxv1xstore.FollowerRole(payload.Spec.Role)
-	}
+	// Never allow client to set status on create.
+	obj.Status = polardbxv1.XStoreFollowerStatus{}
+
 	created, err := followersSvc(c).Create(c.Request.Context(), cli, obj)
 	if err != nil {
 		apierr.AbortWithError(c, err)

@@ -68,7 +68,10 @@
                 <td>
                   <div class="name-cell">
                     <div class="name">{{follower.metadata.name}}</div>
-                    <nz-tag nzColor="blue" class="namespace-tag">{{follower.metadata.namespace}}</nz-tag>
+                    <div class="meta-tags">
+                      <nz-tag nzColor="blue" class="namespace-tag">{{follower.metadata.namespace}}</nz-tag>
+                      <nz-tag [nzColor]="getFollowerRoleColor(follower.spec.role)" class="role-tag">{{getFollowerRoleLabel(follower.spec.role)}}</nz-tag>
+                    </div>
                   </div>
                 </td>
 
@@ -79,6 +82,10 @@
                     <div *ngIf="follower.spec.fromXStore" class="from-xstore">
                       <i nz-icon nzType="arrow-right" class="arrow-icon"></i>
                       <span>{{follower.spec.fromXStore}}</span>
+                    </div>
+                    <div *ngIf="getTargetPodName(follower)" class="target-pod">
+                      <i nz-icon nzType="deployment-unit" class="pod-icon"></i>
+                      <span>{{getTargetPodName(follower)}}</span>
                     </div>
                   </div>
                 </td>
@@ -244,23 +251,28 @@
                 <nz-form-item>
                   <nz-form-label [nzSpan]="6" nzRequired>目标 XStore</nz-form-label>
                   <nz-form-control [nzSpan]="18" nzErrorTip="{{getFieldError(followerForm, 'xStoreName')}}">
-                    <nz-select formControlName="xStoreName" nzPlaceHolder="选择目标 XStore">
-                      <nz-option *ngFor="let xstore of availableXStores" 
-                                 [nzValue]="xstore.metadata.name" 
-                                 [nzLabel]="xstore.metadata.name">
-                      </nz-option>
-                    </nz-select>
+                    <ng-container *ngIf="availableXStores.length > 0; else xstoreManualInput">
+                      <nz-select formControlName="xStoreName" nzPlaceHolder="选择目标 XStore" nzShowSearch>
+                        <nz-option *ngFor="let xstore of availableXStores" 
+                                   [nzValue]="xstore.metadata.name" 
+                                   [nzLabel]="xstore.metadata.name">
+                        </nz-option>
+                      </nz-select>
+                    </ng-container>
+                    <ng-template #xstoreManualInput>
+                      <input nz-input formControlName="xStoreName" placeholder="输入 XStore 名称（例如：demo-5dmd-dn-0）" />
+                      <div class="form-hint">未能加载 XStore 列表，可直接输入名称。</div>
+                    </ng-template>
                   </nz-form-control>
                 </nz-form-item>
 
                 <!-- Target Pod -->
                 <nz-form-item>
-                  <nz-form-label [nzSpan]="6">目标 Pod</nz-form-label>
-                  <nz-form-control [nzSpan]="18">
+                  <nz-form-label [nzSpan]="6" nzRequired>目标 Pod</nz-form-label>
+                  <nz-form-control [nzSpan]="18" nzErrorTip="{{getFieldError(followerForm, 'targetPodName')}}">
                     <nz-select formControlName="targetPodName" 
-                               nzPlaceHolder="自动选择（优先非 leader 且 Running）"
-                               nzAllowClear>
-                      <nz-option [nzValue]="''" nzLabel="自动选择（优先非 leader 且 Running）"></nz-option>
+                               nzPlaceHolder="选择目标 Pod"
+                               nzShowSearch>
                       <nz-option *ngFor="let pod of filteredTargetPods" 
                                  nzCustomContent
                                  [nzValue]="pod.metadata.name"
