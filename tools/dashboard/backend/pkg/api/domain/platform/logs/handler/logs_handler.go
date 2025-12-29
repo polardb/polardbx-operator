@@ -126,8 +126,12 @@ func Query(c *gin.Context) {
 	if req.Host == "" {
 		req.Host = defHost
 	}
+	if req.Host == "" && len(allowed) == 0 && defHost == "" {
+		apierr.AbortForbidden(c, "logs query disabled: configure logs-config ConfigMap (defaultHost/allowedHosts) or create an elasticsearch log strategy")
+		return
+	}
 	if !util.IsHostAllowed(req.Host, allowed, defHost) {
-		apierr.AbortForbidden(c, "target host not allowed")
+		apierr.AbortForbidden(c, "target host not allowed (configure logs-config allowedHosts/defaultHost)")
 		return
 	}
 	// host format validation

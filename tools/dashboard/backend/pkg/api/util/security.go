@@ -2,8 +2,10 @@ package util
 
 import (
 	"crypto/x509"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -18,7 +20,80 @@ const (
 	LogsSecurityDefaultHostKey     = "defaultHost"
 	ElasticsearchCredsSecret       = "elastic-credentials"
 	ElasticsearchCertsSecret       = "elastic-certs-public"
+
+	// Log strategy store (used to infer allowed/default hosts when logs-config is empty).
+	LogStrategiesConfigMapName = "log-strategies"
+	LogStrategiesConfigMapKey  = "strategies.json"
 )
+
+type storedLogStrategy struct {
+	Output struct {
+		Type  string `json:"type"`
+		Hosts string `json:"hosts,omitempty"` // comma-separated
+	} `json:"output"`
+}
+
+func normalizeHostURL(h string) string {
+	h = strings.TrimSpace(h)
+	if h == "" {
+		return ""
+	}
+	// If scheme missing, default to http:// for ES/OpenSearch.
+	if !strings.Contains(h, "://") {
+		return "http://" + h
+	}
+	return h
+}
+
+func inferLogsHostsFromStrategies(c *gin.Context) (allowed []string, def string, err error) {
+	cs, ok := ClientsetFromContext(c)
+	if !ok {
+		return nil, "", fmt.Errorf("no clientset")
+	}
+	cm, e := cs.CoreV1().ConfigMaps(LogsSecurityConfigMapNamespace).Get(c.Request.Context(), LogStrategiesConfigMapName, metav1.GetOptions{})
+	if e != nil || cm == nil || cm.Data == nil {
+		return nil, "", nil
+	}
+	raw := strings.TrimSpace(cm.Data[LogStrategiesConfigMapKey])
+	if raw == "" {
+		return nil, "", nil
+	}
+	var list []storedLogStrategy
+	if err := json.Unmarshal([]byte(raw), &list); err != nil {
+		// Ignore parse errors; keep strict default security posture.
+		return nil, "", nil
+	}
+
+	set := map[string]struct{}{}
+	for _, it := range list {
+		typ := strings.ToLower(strings.TrimSpace(it.Output.Type))
+		if typ != "elasticsearch" {
+			continue
+		}
+		hosts := strings.TrimSpace(it.Output.Hosts)
+		if hosts == "" {
+			continue
+		}
+		for _, h := range strings.Split(hosts, ",") {
+			u := normalizeHostURL(h)
+			if u == "" {
+				continue
+			}
+			if def == "" {
+				def = u
+			}
+			set[u] = struct{}{}
+		}
+	}
+	for h := range set {
+		allowed = append(allowed, h)
+	}
+	sort.Strings(allowed)
+	if def == "" && len(allowed) > 0 {
+		def = allowed[0]
+	}
+	return allowed, def, nil
+}
 
 // LoadLogsSecurityConfig returns allowed hosts and default host from ConfigMap.
 func LoadLogsSecurityConfig(c *gin.Context) (allowedHosts []string, defaultHost string, err error) {
@@ -43,6 +118,15 @@ func LoadLogsSecurityConfig(c *gin.Context) (allowedHosts []string, defaultHost 
 		}
 	}
 	defaultHost = strings.TrimSpace(cm.Data[LogsSecurityDefaultHostKey])
+
+	// If logs-config is empty (fresh install), infer from persisted log strategies.
+	// This keeps SSRF protection while making logs query usable out of the box.
+	if defaultHost == "" && len(allowedHosts) == 0 {
+		if a2, d2, _ := inferLogsHostsFromStrategies(c); len(a2) > 0 || d2 != "" {
+			allowedHosts = a2
+			defaultHost = d2
+		}
+	}
 	return allowedHosts, defaultHost, nil
 }
 
