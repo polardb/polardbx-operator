@@ -15,20 +15,29 @@ import { NzModalModule, NzModalService } from 'ng-zorro-antd/modal';
 import { NzMessageService } from 'ng-zorro-antd/message';
 import { NzDescriptionsModule } from 'ng-zorro-antd/descriptions';
 import { NzEmptyModule } from 'ng-zorro-antd/empty';
-import { NzCodeEditorModule } from 'ng-zorro-antd/code-editor';
 
 import { ApiService } from '../../services/api.service';
 
 interface LogStrategy {
-  id: string;
   name: string;
-  description?: string;
-  config: any;
-  status: 'draft' | 'applied' | 'error';
-  appliedAt?: Date;
-  updatedAt: Date;
-  targetNamespaces?: string[];
-  targetNodeTypes?: string[];
+  // Optional: backend Strategy supports clusterNamespace, frontend legacy uses default.
+  clusterNamespace?: string;
+  // Backend expects clusterName; our legacy UI model uses targetCluster for the name part.
+  targetCluster: string;
+  outputType: 'elasticsearch' | 'stdout';
+  status: 'active' | 'error' | 'disabled';
+  config: {
+    elasticsearch?: {
+      hosts: string[];
+      username?: string;
+      password?: string;
+      // optional extensions
+      caCrt?: string;
+      useTLS?: boolean;
+    };
+  };
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 interface ApplyRecord {
@@ -59,8 +68,7 @@ interface ApplyRecord {
     NzTagModule,
     NzModalModule,
     NzDescriptionsModule,
-    NzEmptyModule,
-    NzCodeEditorModule
+    NzEmptyModule
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -99,10 +107,8 @@ interface ApplyRecord {
             <thead>
               <tr>
                 <th>策略名称</th>
-                <th>状态</th>
-                <th>目标命名空间</th>
-                <th>更新时间</th>
-                <th>应用时间</th>
+                <th>目标集群</th>
+                <th>输出</th>
                 <th nzWidth="200px">操作</th>
               </tr>
             </thead>
@@ -111,37 +117,17 @@ interface ApplyRecord {
                 <td>
                   <div class="strategy-name">
                     <strong>{{ strategy.name }}</strong>
-                    <div class="strategy-description" *ngIf="strategy.description">
-                      {{ strategy.description }}
-                    </div>
                   </div>
                 </td>
                 <td>
-                  <nz-tag [nzColor]="getStatusColor(strategy.status)">
-                    {{ getStatusText(strategy.status) }}
+                  <nz-tag nzColor="blue">
+                    {{ (strategy.clusterNamespace || 'default') + '/' + (strategy.targetCluster || '-') }}
                   </nz-tag>
                 </td>
                 <td>
-                  <div class="target-namespaces">
-                    <nz-tag 
-                      *ngFor="let ns of strategy.targetNamespaces?.slice(0, 2)" 
-                      nzColor="blue"
-                      class="namespace-tag">
-                      {{ ns }}
-                    </nz-tag>
-                    <span *ngIf="(strategy.targetNamespaces?.length || 0) > 2" class="more-count">
-                      +{{ (strategy.targetNamespaces?.length || 0) - 2 }}
-                    </span>
-                  </div>
-                </td>
-                <td>{{ strategy.updatedAt | date:'yyyy-MM-dd HH:mm' }}</td>
-                <td>
-                  <span *ngIf="strategy.appliedAt; else notApplied">
-                    {{ strategy.appliedAt | date:'yyyy-MM-dd HH:mm' }}
-                  </span>
-                  <ng-template #notApplied>
-                    <span class="not-applied">未应用</span>
-                  </ng-template>
+                  <nz-tag [nzColor]="strategy.outputType === 'elasticsearch' ? 'geekblue' : 'default'">
+                    {{ strategy.outputType === 'elasticsearch' ? 'Elasticsearch' : 'Stdout' }}
+                  </nz-tag>
                 </td>
                 <td>
                   <div class="action-buttons">
@@ -259,97 +245,89 @@ interface ApplyRecord {
           </nz-form-item>
 
           <nz-form-item>
-            <nz-form-label [nzSpan]="6">描述</nz-form-label>
+            <nz-form-label [nzSpan]="6" nzRequired>集群命名空间</nz-form-label>
             <nz-form-control [nzSpan]="18">
-              <textarea 
-                nz-input 
-                formControlName="description" 
-                placeholder="输入策略描述（可选）"
-                rows="3">
-              </textarea>
-            </nz-form-control>
-          </nz-form-item>
-
-          <nz-form-item>
-            <nz-form-label [nzSpan]="6">目标命名空间</nz-form-label>
-            <nz-form-control [nzSpan]="18">
-              <nz-select 
-                formControlName="targetNamespaces" 
-                nzMode="multiple"
-                nzPlaceholder="选择目标命名空间"
-                nzAllowClear
-                nzShowSearch>
-                <nz-option 
-                  *ngFor="let ns of namespaces" 
-                  [nzValue]="ns" 
-                  [nzLabel]="ns">
-                </nz-option>
+              <nz-select formControlName="clusterNamespace" nzShowSearch nzPlaceHolder="选择命名空间">
+                <nz-option *ngFor="let ns of namespaces" [nzValue]="ns" [nzLabel]="ns"></nz-option>
               </nz-select>
             </nz-form-control>
           </nz-form-item>
 
           <nz-form-item>
-            <nz-form-label [nzSpan]="6">配置格式</nz-form-label>
+            <nz-form-label [nzSpan]="6" nzRequired>目标集群</nz-form-label>
             <nz-form-control [nzSpan]="18">
-              <nz-select 
-                formControlName="configFormat" 
-                (ngModelChange)="onConfigFormatChange($event)">
-                <nz-option nzValue="json" nzLabel="JSON"></nz-option>
-                <nz-option nzValue="yaml" nzLabel="YAML"></nz-option>
-              </nz-select>
+              <ng-container *ngIf="clusterOptions.length > 0; else manualCluster">
+                <nz-select formControlName="targetCluster" nzShowSearch nzPlaceHolder="选择集群名称">
+                  <nz-option *ngFor="let c of clusterOptions" [nzValue]="c" [nzLabel]="c"></nz-option>
+                </nz-select>
+              </ng-container>
+              <ng-template #manualCluster>
+                <input nz-input formControlName="targetCluster" placeholder="输入集群名称（例如 demo）" />
+              </ng-template>
             </nz-form-control>
           </nz-form-item>
 
           <nz-form-item>
-            <nz-form-label [nzSpan]="6" nzRequired>策略配置</nz-form-label>
+            <nz-form-label [nzSpan]="6" nzRequired>输出类型</nz-form-label>
             <nz-form-control [nzSpan]="18">
-              <div class="config-editor">
-                <div class="editor-actions">
-                  <button 
-                    nz-button 
-                    nzType="default" 
-                    nzSize="small"
-                    (click)="precheck()"
-                    [nzLoading]="prechecking"
-                    [disabled]="!editForm.get('config')?.value?.trim()">
-                    <i nz-icon nzType="check-circle"></i>
-                    预检
-                  </button>
-                  <button 
-                    nz-button 
-                    nzType="dashed" 
-                    nzSize="small"
-                    (click)="loadTemplate()">
-                    <i nz-icon nzType="file-add"></i>
-                    加载模板
-                  </button>
-                  <button 
-                    nz-button 
-                    nzType="dashed" 
-                    nzSize="small"
-                    (click)="formatConfig()">
-                    <i nz-icon nzType="align-left"></i>
-                    格式化
-                  </button>
-                </div>
-
-                <nz-code-editor
-                  formControlName="config"
-                  [nzEditorOption]="getEditorOptions()"
-                  style="height: 300px;">
-                </nz-code-editor>
-
-                <div class="precheck-result" *ngIf="precheckResult">
-                  <nz-alert 
-                    [nzType]="precheckResult.success ? 'success' : 'error'"
-                    [nzMessage]="precheckResult.success ? '预检通过' : '预检失败'"
-                    [nzDescription]="precheckResult.message"
-                    nzShowIcon>
-                  </nz-alert>
-                </div>
-              </div>
+              <nz-select formControlName="outputType">
+                <nz-option nzValue="stdout" nzLabel="Stdout（控制台）"></nz-option>
+                <nz-option nzValue="elasticsearch" nzLabel="Elasticsearch"></nz-option>
+              </nz-select>
             </nz-form-control>
           </nz-form-item>
+
+          <ng-container *ngIf="editForm.get('outputType')?.value === 'elasticsearch'">
+            <nz-form-item>
+              <nz-form-label [nzSpan]="6" nzRequired>ES Hosts</nz-form-label>
+              <nz-form-control [nzSpan]="18" nzExtra="支持逗号/换行分隔；如使用 https:// 将自动启用 TLS">
+                <textarea nz-input formControlName="esHosts" rows="3" placeholder="http://elasticsearch:9200, https://es2:9200"></textarea>
+              </nz-form-control>
+            </nz-form-item>
+
+            <nz-form-item>
+              <nz-form-label [nzSpan]="6">用户名</nz-form-label>
+              <nz-form-control [nzSpan]="18">
+                <input nz-input formControlName="esUsername" placeholder="可选（Basic Auth）" />
+              </nz-form-control>
+            </nz-form-item>
+
+            <nz-form-item>
+              <nz-form-label [nzSpan]="6">密码</nz-form-label>
+              <nz-form-control [nzSpan]="18" nzExtra="编辑已有策略时后端不会回显密码；如需更新请重新填写">
+                <input nz-input type="password" formControlName="esPassword" placeholder="可选（Basic Auth）" />
+              </nz-form-control>
+            </nz-form-item>
+
+            <nz-form-item>
+              <nz-form-label [nzSpan]="6">CA 证书</nz-form-label>
+              <nz-form-control [nzSpan]="18" nzExtra="可选（TLS 自签名场景）">
+                <textarea nz-input formControlName="caCrt" rows="4" placeholder="-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----"></textarea>
+              </nz-form-control>
+            </nz-form-item>
+          </ng-container>
+
+          <div style="margin: 8px 0 0 0;">
+            <button
+              nz-button
+              nzType="default"
+              nzSize="small"
+              (click)="precheck()"
+              [nzLoading]="prechecking"
+              [disabled]="!editForm.valid">
+              <i nz-icon nzType="check-circle"></i>
+              预检
+            </button>
+          </div>
+
+          <div class="precheck-result" *ngIf="precheckResult">
+            <nz-alert
+              [nzType]="precheckResult.success ? 'success' : 'error'"
+              [nzMessage]="precheckResult.success ? '预检通过' : '预检失败'"
+              [nzDescription]="precheckResult.message"
+              nzShowIcon>
+            </nz-alert>
+          </div>
 
           <nz-form-item>
             <nz-form-control [nzSpan]="18" [nzOffset]="6">
@@ -398,40 +376,20 @@ interface ApplyRecord {
         <div class="strategy-details" *ngIf="viewingStrategy">
           <nz-descriptions nzBordered nzSize="small">
             <nz-descriptions-item nzTitle="策略名称">{{ viewingStrategy.name }}</nz-descriptions-item>
-            <nz-descriptions-item nzTitle="状态">
-              <nz-tag [nzColor]="getStatusColor(viewingStrategy.status)">
-                {{ getStatusText(viewingStrategy.status) }}
-              </nz-tag>
+            <nz-descriptions-item nzTitle="目标集群" nzSpan="2">
+              {{ (viewingStrategy.clusterNamespace || 'default') + '/' + (viewingStrategy.targetCluster || '-') }}
             </nz-descriptions-item>
-            <nz-descriptions-item nzTitle="描述" nzSpan="2">
-              {{ viewingStrategy.description || '无' }}
-            </nz-descriptions-item>
-            <nz-descriptions-item nzTitle="目标命名空间" nzSpan="2">
-              <nz-tag 
-                *ngFor="let ns of viewingStrategy.targetNamespaces" 
-                nzColor="blue">
-                {{ ns }}
-              </nz-tag>
-            </nz-descriptions-item>
-            <nz-descriptions-item nzTitle="更新时间">
-              {{ viewingStrategy.updatedAt | date:'yyyy-MM-dd HH:mm:ss' }}
-            </nz-descriptions-item>
-            <nz-descriptions-item nzTitle="应用时间">
-              <span *ngIf="viewingStrategy.appliedAt; else notAppliedView">
-                {{ viewingStrategy.appliedAt | date:'yyyy-MM-dd HH:mm:ss' }}
-              </span>
-              <ng-template #notAppliedView>
-                <span class="not-applied">未应用</span>
-              </ng-template>
+            <nz-descriptions-item nzTitle="输出">
+              {{ viewingStrategy.outputType === 'elasticsearch' ? 'Elasticsearch' : 'Stdout' }}
             </nz-descriptions-item>
           </nz-descriptions>
 
-            <div class="config-section">
-              <h4>策略配置</h4>
-              <div class="config-viewer">
-                <pre>{{ getViewConfigContent() }}</pre>
-              </div>
+          <div class="config-section" *ngIf="viewingStrategy.outputType === 'elasticsearch'">
+            <h4>Elasticsearch 配置</h4>
+            <div class="config-viewer">
+              <pre>{{ formatEsConfig(viewingStrategy) }}</pre>
             </div>
+          </div>
         </div>
       </ng-container>
     </nz-modal>
@@ -636,6 +594,7 @@ export class LogStrategyManagementComponent implements OnInit {
   strategies: LogStrategy[] = [];
   applyRecords: ApplyRecord[] = [];
   namespaces: string[] = [];
+  clusterOptions: string[] = [];
 
   editModalVisible = false;
   viewModalVisible = false;
@@ -654,10 +613,17 @@ export class LogStrategyManagementComponent implements OnInit {
   ) {
     this.editForm = this.fb.group({
       name: ['', Validators.required],
-      description: [''],
-      targetNamespaces: [[]],
-      configFormat: ['json'],
-      config: ['', Validators.required]
+      clusterNamespace: ['default', Validators.required],
+      targetCluster: ['', Validators.required],
+      outputType: ['stdout', Validators.required],
+      esHosts: [''],
+      esUsername: [''],
+      esPassword: [''],
+      caCrt: ['']
+    });
+    // Listen to clusterNamespace to reload clusters (best-effort)
+    this.editForm.get('clusterNamespace')?.valueChanges.subscribe((ns) => {
+      this.loadClusters(ns);
     });
   }
 
@@ -714,11 +680,27 @@ export class LogStrategyManagementComponent implements OnInit {
       next: (namespaces: any) => {
         this.namespaces = namespaces || [];
         this.cdr.markForCheck();
+        // Auto-load clusters for current or first namespace
+        const ns = this.editForm.get('clusterNamespace')?.value || (this.namespaces.length > 0 ? this.namespaces[0] : 'default');
+        this.loadClusters(ns);
       },
       error: (error: any) => {
         // Error is handled in ApiService, returns empty array
         // Just update UI state
         this.namespaces = [];
+        this.cdr.markForCheck();
+      }
+    });
+  }
+
+  private loadClusters(namespace: string): void {
+    this.api.getClusters(namespace || 'default', { silent: true }).subscribe({
+      next: (clusters) => {
+        this.clusterOptions = (clusters || []).map((c) => c.metadata?.name).filter(Boolean) as string[];
+        this.cdr.markForCheck();
+      },
+      error: () => {
+        this.clusterOptions = [];
         this.cdr.markForCheck();
       }
     });
@@ -736,12 +718,16 @@ export class LogStrategyManagementComponent implements OnInit {
 
   editStrategy(strategy: LogStrategy): void {
     this.editingStrategy = strategy;
+    const esCfg: any = strategy.config?.elasticsearch || {};
     this.editForm.patchValue({
       name: strategy.name,
-      description: strategy.description || '',
-      targetNamespaces: strategy.targetNamespaces || [],
-      configFormat: this.detectConfigFormat(strategy.config),
-      config: this.formatConfigForEdit(strategy.config)
+      clusterNamespace: strategy.clusterNamespace || 'default',
+      targetCluster: strategy.targetCluster || '',
+      outputType: strategy.outputType || 'stdout',
+      esHosts: Array.isArray(esCfg.hosts) ? esCfg.hosts.join(',') : (esCfg.hosts || ''),
+      esUsername: esCfg.username || '',
+      esPassword: '', // password never echoed
+      caCrt: esCfg.caCrt || ''
     });
     this.precheckResult = null;
     this.editModalVisible = true;
@@ -757,9 +743,9 @@ export class LogStrategyManagementComponent implements OnInit {
       nzTitle: '确认删除策略？',
       nzContent: `删除策略"${strategy.name}"后不可恢复。`,
       nzOkText: '确认删除',
-        nzOkDanger: true,
+      nzOkDanger: true,
       nzCancelText: '取消',
-      nzOnOk: () => this.doDeleteStrategy(strategy.id)
+      nzOnOk: () => this.doDeleteStrategy(strategy.name)
     });
   }
 
@@ -785,15 +771,26 @@ export class LogStrategyManagementComponent implements OnInit {
     this.saving = true;
     const formData = this.editForm.value;
     
-    const strategyData = {
+    // Build strategy data for backend (aligned with ApiService.mapToBackendLogStrategy)
+    const strategyData: any = {
       name: formData.name,
-      description: formData.description,
-      targetNamespaces: formData.targetNamespaces,
-      config: this.parseConfig(formData.config, formData.configFormat)
+      clusterNamespace: formData.clusterNamespace || 'default',
+      targetCluster: formData.targetCluster,
+      outputType: formData.outputType
     };
+    if (formData.outputType === 'elasticsearch') {
+      strategyData.config = {
+        elasticsearch: {
+          hosts: (formData.esHosts || '').split(/[,\n]/).map((h: string) => h.trim()).filter(Boolean),
+          username: formData.esUsername || '',
+          password: formData.esPassword || '',
+          caCrt: formData.caCrt || ''
+        }
+      };
+    }
 
     const request = this.editingStrategy 
-      ? this.api.updateLogStrategy(this.editingStrategy.id, strategyData)
+      ? this.api.updateLogStrategy(this.editingStrategy.name, strategyData)
       : this.api.createLogStrategy(strategyData);
 
     request.subscribe({
@@ -820,7 +817,7 @@ export class LogStrategyManagementComponent implements OnInit {
 
     this.modal.confirm({
       nzTitle: '确认应用策略？',
-      nzContent: `将应用策略"${this.editForm.value.name}"到目标命名空间。`,
+      nzContent: `将应用策略"${this.editForm.value.name}"到目标集群。`,
       nzOkText: '确认应用',
       nzOkType: 'primary',
       nzCancelText: '取消',
@@ -833,7 +830,7 @@ export class LogStrategyManagementComponent implements OnInit {
 
     this.applying = true;
     
-    this.api.applyLogStrategy(this.editingStrategy.id).subscribe({
+    this.api.applyLogStrategy(this.editingStrategy.name).subscribe({
       next: () => {
         this.message.success('策略应用成功');
         this.closeEditModal();
@@ -851,25 +848,35 @@ export class LogStrategyManagementComponent implements OnInit {
   }
 
   precheck(): void {
-    const config = this.editForm.get('config')?.value;
-    if (!config?.trim()) {
-      this.message.warning('请输入策略配置');
+    const fv = this.editForm.value;
+    if (!fv.name || !fv.targetCluster) {
+      this.message.warning('请填写策略名称和目标集群');
       return;
     }
 
     this.prechecking = true;
     this.precheckResult = null;
 
-    const formData = this.editForm.value;
-    const strategyData = {
-      name: formData.name,
-      config: this.parseConfig(formData.config, formData.configFormat),
-      targetNamespaces: formData.targetNamespaces
+    const strategyData: any = {
+      name: fv.name,
+      clusterName: fv.targetCluster,
+      clusterNamespace: fv.clusterNamespace || 'default',
+      output: {
+        type: fv.outputType
+      }
     };
+    if (fv.outputType === 'elasticsearch') {
+      strategyData.output.hosts = (fv.esHosts || '').split(/[,\n]/).map((h: string) => h.trim()).filter(Boolean).join(',');
+      strategyData.output.username = fv.esUsername || '';
+      strategyData.output.password = fv.esPassword || '';
+      strategyData.output.useTLS = strategyData.output.hosts.includes('https://');
+      strategyData.output.caCrt = fv.caCrt || '';
+      strategyData.output.authType = fv.esUsername ? 'basic' : 'none';
+    }
 
     this.api.precheckLogStrategy(strategyData).subscribe({
       next: (result: any) => {
-        this.precheckResult = result;
+        this.precheckResult = { success: result.valid, message: (result.errors || []).join('; ') || (result.warnings || []).join('; ') || 'OK' };
         this.prechecking = false;
         this.cdr.markForCheck();
       },
@@ -883,44 +890,6 @@ export class LogStrategyManagementComponent implements OnInit {
         this.cdr.markForCheck();
       }
     });
-  }
-
-  loadTemplate(): void {
-    const format = this.editForm.get('configFormat')?.value || 'json';
-    const template = this.getConfigTemplate(format);
-    this.editForm.patchValue({ config: template });
-    this.precheckResult = null;
-  }
-
-  formatConfig(): void {
-    const config = this.editForm.get('config')?.value;
-    const format = this.editForm.get('configFormat')?.value || 'json';
-    
-    if (!config?.trim()) {
-      this.message.warning('请输入配置内容');
-      return;
-    }
-
-    try {
-      let formatted = '';
-      if (format === 'json') {
-        const parsed = JSON.parse(config);
-        formatted = JSON.stringify(parsed, null, 2);
-      } else {
-        // YAML 格式化（简单实现）
-        formatted = config.trim();
-      }
-      this.editForm.patchValue({ config: formatted });
-    } catch (error) {
-      this.message.error('配置格式错误，无法格式化');
-    }
-  }
-
-  onConfigFormatChange(format: string): void {
-    const currentConfig = this.editForm.get('config')?.value;
-    if (!currentConfig?.trim()) {
-      this.loadTemplate();
-    }
   }
 
   closeEditModal(): void {
@@ -938,16 +907,19 @@ export class LogStrategyManagementComponent implements OnInit {
   private resetEditForm(): void {
     this.editForm.reset({
       name: '',
-      description: '',
-      targetNamespaces: [],
-      configFormat: 'json',
-      config: ''
+      clusterNamespace: 'default',
+      targetCluster: '',
+      outputType: 'stdout',
+      esHosts: '',
+      esUsername: '',
+      esPassword: '',
+      caCrt: ''
     });
   }
 
   getStatusColor(status: string): string {
     switch (status) {
-      case 'applied': return 'green';
+      case 'active': return 'green';
       case 'error': return 'red';
       default: return 'blue';
     }
@@ -955,115 +927,14 @@ export class LogStrategyManagementComponent implements OnInit {
 
   getStatusText(status: string): string {
     switch (status) {
-      case 'applied': return '已应用';
+      case 'active': return '活跃';
       case 'error': return '错误';
-      default: return '草稿';
+      default: return '禁用';
     }
   }
 
-  getEditorOptions(): any {
-    const format = this.editForm.get('configFormat')?.value || 'json';
-    return {
-      theme: 'vs',
-      language: format,
-      readOnly: false,
-      minimap: { enabled: false },
-      scrollBeyondLastLine: false,
-      fontSize: 13,
-      lineNumbers: 'on',
-      folding: true,
-      automaticLayout: true,
-      wordWrap: 'on',
-      wrappingIndent: 'indent'
-    };
-  }
-
-  private detectConfigFormat(config: any): string {
-    if (typeof config === 'string') {
-      try {
-        JSON.parse(config);
-        return 'json';
-      } catch {
-        return 'yaml';
-      }
-    }
-    return 'json';
-  }
-
-  private formatConfigForEdit(config: any): string {
-    if (typeof config === 'string') {
-      return config;
-    }
-    return JSON.stringify(config, null, 2);
-  }
-
-  private parseConfig(configStr: string, format: string): any {
-    try {
-      if (format === 'json') {
-        return JSON.parse(configStr);
-      } else {
-        // 对于 YAML，暂时返回字符串，实际应该使用 YAML 解析器
-        return configStr;
-      }
-    } catch (error) {
-      throw new Error('配置格式错误: ' + (error as Error).message);
-    }
-  }
-
-  getViewConfigContent(): string {
-    if (!this.viewingStrategy) return '';
-    return this.formatConfigForEdit(this.viewingStrategy.config);
-  }
-
-  private getConfigTemplate(format: string): string {
-    if (format === 'json') {
-      return JSON.stringify({
-        "version": "v1",
-        "spec": {
-          "collectors": [
-            {
-              "name": "polardbx-logs",
-              "type": "filebeat",
-              "config": {
-                "paths": ["/var/log/polardbx/*.log"],
-                "multiline": {
-                  "pattern": "^\\d{4}-\\d{2}-\\d{2}",
-                  "negate": true,
-                  "match": "after"
-                }
-              }
-            }
-          ],
-          "outputs": [
-            {
-              "name": "elasticsearch",
-              "config": {
-                "hosts": ["http://elasticsearch:9200"],
-                "index": "polardbx-logs-%{+yyyy.MM.dd}"
-              }
-            }
-          ]
-        }
-      }, null, 2);
-    } else {
-      return `version: v1
-spec:
-  collectors:
-    - name: polardbx-logs
-      type: filebeat
-      config:
-        paths:
-          - /var/log/polardbx/*.log
-        multiline:
-          pattern: '^\\d{4}-\\d{2}-\\d{2}'
-          negate: true
-          match: after
-  outputs:
-    - name: elasticsearch
-      config:
-        hosts:
-          - http://elasticsearch:9200
-        index: polardbx-logs-%{+yyyy.MM.dd}`;
-    }
+  formatEsConfig(strategy: LogStrategy): string {
+    const es = strategy.config?.elasticsearch || {};
+    return JSON.stringify(es, null, 2);
   }
 }

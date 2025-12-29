@@ -907,10 +907,17 @@ export class ApiService {
   getLogCollectors(namespace: string = 'polardbx-logcollector'): Observable<PolarDBXLogCollector[]> {
     const params = new HttpParams().set('namespace', namespace);
     return this.handleRequest(
-      this.http.get<PolarDBXLogCollector[]>(`${this.baseUrl}/log-collectors`, {
-        headers: this.getHeaders(),
-        params
-      }),
+      this.http.get<any>(`${this.baseUrl}/log-collectors`, { headers: this.getHeaders(), params }).pipe(
+        map((res: any) => {
+          // Backend may return either:
+          // - [] (array)
+          // - { items: [...] } (k8s-style list)
+          // - { data: [...] } / { logCollectors: [...] } (wrapped list)
+          if (Array.isArray(res)) return res as PolarDBXLogCollector[];
+          const items = res?.items ?? res?.data ?? res?.logCollectors ?? [];
+          return Array.isArray(items) ? (items as PolarDBXLogCollector[]) : [];
+        })
+      ),
       LoadingKeys.LOG_COLLECTOR_LIST,
       `/log-collectors`,
       'GET'
@@ -2248,32 +2255,55 @@ export class ApiService {
 
   // Convert UI model to backend required Strategy model
   private mapToBackendLogStrategy(ui: any): any {
-    const name: string = ui?.name || '';
-    const clusterName: string = ui?.targetCluster || ui?.clusterName || '';
-    const outputType: string = (ui?.outputType || ui?.output?.type || 'stdout').toLowerCase();
-    // Handle ES configuration
+    // Support both:
+    // 1) UI model used by dashboard pages: {name,targetCluster,outputType,config.elasticsearch.hosts[]...}
+    // 2) Backend Strategy model: {name,clusterNamespace,clusterName,enableCN,enableDN,output:{type,hosts,...}}
+    const name: string = (ui?.name || '').toString();
+    const clusterName: string = (ui?.clusterName || ui?.targetCluster || '').toString();
+    const clusterNamespace: string = (ui?.clusterNamespace || ui?.clusterNS || ui?.namespace || '').toString();
+
+    const enableCN: boolean = ui?.enableCN ?? true;
+    const enableDN: boolean = ui?.enableDN ?? true;
+
+    const outputType: string = (ui?.outputType || ui?.output?.type || 'stdout').toString().toLowerCase();
+
+    // Backend-style output (string hosts)
+    const backendOut = ui?.output || {};
+    const backendHostsRaw = backendOut?.hosts;
+    const backendHosts =
+      typeof backendHostsRaw === 'string'
+        ? backendHostsRaw
+        : Array.isArray(backendHostsRaw)
+          ? backendHostsRaw.filter(Boolean).join(',')
+          : '';
+
+    // UI-style elasticsearch config (array hosts)
     const es = ui?.config?.elasticsearch || {};
     const hostsArr: string[] = Array.isArray(es.hosts) ? es.hosts : (es.hosts ? [es.hosts] : []);
     const hostsJoined = hostsArr.filter(Boolean).join(',');
-    const username: string = es.username || ui?.esUsername || '';
-    const password: string = es.password || ui?.esPassword || '';
-    const useTLS = hostsArr.some((h) => typeof h === 'string' && h.trim().toLowerCase().startsWith('https://'));
-    const authType = username ? 'basic' : 'none';
+
+    const username: string = (backendOut?.username || es.username || ui?.esUsername || '').toString();
+    const password: string = (backendOut?.password || es.password || ui?.esPassword || '').toString();
+    const authType: string = (backendOut?.authType || (username ? 'basic' : 'none')).toString().toLowerCase();
+
+    const inferredTLS = hostsArr.some((h) => typeof h === 'string' && h.trim().toLowerCase().startsWith('https://'));
+    const useTLS: boolean = backendOut?.useTLS ?? es.useTLS ?? ui?.useTLS ?? inferredTLS;
+    const caCrt: string = (backendOut?.caCrt || es.caCrt || ui?.caCrt || '').toString();
 
     return {
-      name: name,
-      clusterName: clusterName,
-      // clusterNamespace can be omitted, backend defaults to 'default'
-      enableCN: true,
-      enableDN: true,
+      name,
+      ...(clusterNamespace ? { clusterNamespace } : {}),
+      clusterName,
+      enableCN,
+      enableDN,
       output: {
         type: outputType,
-        hosts: hostsJoined,
-        authType: authType,
-        username: username,
-        password: password,
-        useTLS: useTLS,
-        caCrt: ''
+        hosts: outputType === 'elasticsearch' ? (backendHosts || hostsJoined) : '',
+        authType: outputType === 'elasticsearch' ? authType : 'none',
+        username: outputType === 'elasticsearch' ? username : '',
+        password: outputType === 'elasticsearch' ? password : '',
+        useTLS: outputType === 'elasticsearch' ? !!useTLS : false,
+        caCrt: outputType === 'elasticsearch' ? caCrt : ''
       }
     };
   }
@@ -2372,8 +2402,9 @@ export class ApiService {
 
 
   precheckLogStrategy(strategy: any): Observable<any> {
+    const payload = this.mapToBackendLogStrategy(strategy);
     return this.handleRequest(
-      this.http.post<any>(`${this.baseUrl}/log-strategies/precheck`, strategy, {
+      this.http.post<any>(`${this.baseUrl}/log-strategies/precheck`, payload, {
         headers: this.getHeaders()
       }),
       LoadingKeys.LOG_STRATEGY,
