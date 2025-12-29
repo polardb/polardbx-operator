@@ -17,13 +17,13 @@ import { NzEmptyModule } from 'ng-zorro-antd/empty';
 import { NzModalService, NzModalModule } from 'ng-zorro-antd/modal';
 import { NzToolTipModule } from 'ng-zorro-antd/tooltip';
 import { NzDividerModule } from 'ng-zorro-antd/divider';
-import { NzPopconfirmModule } from 'ng-zorro-antd/popconfirm';
 import { NzDrawerModule } from 'ng-zorro-antd/drawer';
 import { NzDescriptionsModule } from 'ng-zorro-antd/descriptions';
 import { NzCollapseModule } from 'ng-zorro-antd/collapse';
 import { ApiService } from '../../services/api.service';
 import { LoadingService, LoadingKeys } from '../../services/loading.service';
 import { XStore } from '../../models/xstore.model';
+import { firstValueFrom } from 'rxjs';
 
 @Component({
   selector: 'app-xstore-management',
@@ -45,7 +45,6 @@ import { XStore } from '../../models/xstore.model';
     NzModalModule,
     NzToolTipModule,
     NzDividerModule,
-    NzPopconfirmModule,
     NzDrawerModule,
     NzDescriptionsModule,
     NzCollapseModule,
@@ -133,9 +132,7 @@ import { XStore } from '../../models/xstore.model';
                                 查看
                               </button>
                               <nz-divider nzType="vertical"></nz-divider>
-                              <button nz-button nzType="link" nzSize="small" nz-popconfirm 
-                                      nzPopconfirmTitle="确定删除此存储节点？" 
-                                      (nzOnConfirm)="deleteXStore(x)">
+                              <button nz-button nzType="link" nzSize="small" nzDanger (click)="deleteXStore(x)">
                                 <i nz-icon nzType="delete"></i>
                                 删除
                               </button>
@@ -264,11 +261,11 @@ import { XStore } from '../../models/xstore.model';
                   </nz-row>
 
                   <nz-form-item class="form-actions">
-                    <button nz-button nzType="primary" nzSize="large" type="submit" [disabled]="createForm.invalid">
+                    <button nz-button nzType="primary" nzSize="large" type="submit" [nzLoading]="creating" [disabled]="createForm.invalid || creating">
                       <i nz-icon nzType="plus"></i>
                       创建存储节点
                     </button>
-                    <button nz-button nzType="default" nzSize="large" type="button" (click)="selectedTab = 0">
+                    <button nz-button nzType="default" nzSize="large" type="button" (click)="selectedTab = 0" [disabled]="creating">
                       <i nz-icon nzType="arrow-left"></i>
                       返回列表
                     </button>
@@ -614,6 +611,7 @@ export class XStoreManagementComponent implements OnInit {
   loadingKeys = LoadingKeys;
   xstores: XStore[] = [];
   createForm!: FormGroup;
+  creating = false;
   
   // Details drawer related
   detailsDrawerVisible = false;
@@ -642,21 +640,28 @@ export class XStoreManagementComponent implements OnInit {
     this.loadXStores();
   }
 
-  loadXStores(): void {
+  private extractErrorMessage(err: unknown): string {
+    const e = err as any;
+    return e?.error?.message || e?.message || '未知错误';
+  }
+
+  loadXStores(opts?: { toastOnSuccess?: boolean; successMessage?: string }): void {
     this.apiService.getXStores().subscribe({
       next: (xstores) => {
         this.xstores = xstores;
+        if (opts?.toastOnSuccess) {
+          this.message.success(opts?.successMessage || '存储节点列表已刷新');
+        }
       },
       error: (err) => {
-        this.message.error(`加载存储节点失败: ${err.error?.message || err.message}`);
+        this.message.error(`加载存储节点失败: ${this.extractErrorMessage(err)}`);
         this.xstores = [];
       }
     });
   }
 
   refreshXStores(): void {
-    this.loadXStores();
-    this.message.success('存储节点列表已刷新');
+    this.loadXStores({ toastOnSuccess: true });
   }
 
   createNew(): void {
@@ -668,29 +673,30 @@ export class XStoreManagementComponent implements OnInit {
   }
 
   deleteXStore(xstore: XStore): void {
+    const namespace = xstore.metadata.namespace || 'default';
+    const name = xstore.metadata.name;
+    const phase = xstore.status?.phase ? `（当前状态：${this.getStatusLabel(xstore.status.phase)}）` : '';
     this.modal.confirm({
-      nzTitle: '确认删除',
-      nzContent: `确定删除存储节点 "${xstore.metadata.name}" 吗？此操作不可恢复。`,
-      nzOkText: '确定删除',
-      nzOkType: 'primary',
+      nzTitle: '删除存储节点',
+      nzContent: `即将删除 XStore：${namespace}/${name}${phase}。\n此操作不可撤销，相关 Pod/Service 将被回收。`,
+      nzOkText: '删除',
       nzOkDanger: true,
       nzCancelText: '取消',
-      nzOnOk: () => {
-        this.apiService.deleteXStore(xstore.metadata.namespace || 'default', xstore.metadata.name).subscribe({
-          next: () => {
-            this.message.success('删除成功！');
-            this.loadXStores();
-          },
-          error: (err) => {
-            this.message.error(`删除失败: ${err.error?.message || err.message}`);
-          }
-        });
+      nzOnOk: async () => {
+        try {
+          await firstValueFrom(this.apiService.deleteXStore(namespace, name));
+          this.message.success(`已提交删除：${name}`);
+          this.loadXStores();
+        } catch (err) {
+          this.message.error(`删除失败: ${this.extractErrorMessage(err)}`);
+          throw err;
+        }
       }
     });
   }
 
   submit(): void {
-    if (this.createForm.invalid) return;
+    if (this.createForm.invalid || this.creating) return;
     const v = this.createForm.value;
     const req = {
       name: v.name,
@@ -702,14 +708,38 @@ export class XStoreManagementComponent implements OnInit {
       cnReplicas: Number(v.cnReplicas),
       serviceType: v.serviceType
     } as any;
+    this.creating = true;
     this.apiService.createXStore(v.namespace, req).subscribe({
       next: () => {
-        this.message.success('创建成功！');
+        this.message.success('创建成功，已返回列表');
+        this.creating = false;
         this.selectedTab = 0;
+        this.createForm.reset({
+          name: '',
+          namespace: v.namespace || 'default',
+          engine: v.engine || 'galaxy',
+          nodeCount: Number(v.nodeCount || 2),
+          cpu: v.cpu || '2',
+          memory: v.memory || '4Gi',
+          diskQuota: v.diskQuota || '100Gi',
+          storageClass: v.storageClass || '',
+          cnReplicas: Number(v.cnReplicas || 0),
+          serviceType: v.serviceType || 'NodePort'
+        });
         this.loadXStores();
       },
       error: (err) => {
-        this.message.error(`创建失败: ${err.error?.message || err.message}`);
+        this.creating = false;
+        const msg = this.extractErrorMessage(err);
+        this.modal.confirm({
+          nzTitle: '创建失败',
+          nzContent: `创建 XStore 失败：${msg}`,
+          nzOkText: '继续编辑',
+          nzCancelText: '返回列表',
+          nzOnCancel: () => {
+            this.selectedTab = 0;
+          }
+        });
       }
     });
   }
@@ -797,6 +827,7 @@ export class XStoreManagementComponent implements OnInit {
       },
       error: (err) => {
         console.warn('Failed to load XStore detail, using cached data:', err);
+        this.message.warning(`获取详情失败：${this.extractErrorMessage(err)}，已展示缓存信息`);
         this.detailsLoading = false;
       }
     });

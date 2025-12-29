@@ -1,6 +1,6 @@
 import { Component, inject, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
+import { FormBuilder, FormGroup, Validators, ReactiveFormsModule, FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { NzCardModule } from 'ng-zorro-antd/card';
 import { NzButtonModule } from 'ng-zorro-antd/button';
@@ -21,11 +21,11 @@ import { NzDropDownModule } from 'ng-zorro-antd/dropdown';
 import { NzDividerModule } from 'ng-zorro-antd/divider';
 import { NzEmptyModule } from 'ng-zorro-antd/empty';
 import { NzModalService, NzModalModule } from 'ng-zorro-antd/modal';
+import { NzDescriptionsModule } from 'ng-zorro-antd/descriptions';
 import { ApiService } from '../../services/api.service';
 import { LoadingService } from '../../services/loading.service';
 import { XStoreFollower, XStoreFollowerWithStatus, CreateXStoreFollowerRequest } from '../../models/xstore-follower.model';
 import { XStore } from '../../models/xstore.model';
-import { Observable } from 'rxjs';
 import { Pod } from '../../models/pod.model';
 
 export interface XStoreFollowerDialogData {
@@ -39,6 +39,7 @@ export interface XStoreFollowerDialogData {
   standalone: true,
   imports: [
     CommonModule,
+    FormsModule,
     ReactiveFormsModule,
     NzCardModule,
     NzButtonModule,
@@ -57,6 +58,7 @@ export interface XStoreFollowerDialogData {
     NzDropDownModule,
     NzDividerModule,
     NzEmptyModule,
+    NzDescriptionsModule,
     NzModalModule,
     NzMessageModule
   ],
@@ -76,6 +78,34 @@ export class XStoreFollowerManagementComponent implements OnInit {
   isProcessing = false;
   selectedTab = 0;
   data: XStoreFollowerDialogData = { mode: 'create' };
+
+  // ===== Detail modals (align with other pages) =====
+  detailsVisible = false;
+  selectedFollower: XStoreFollowerWithStatus | null = null;
+  selectedFollowerJson = '';
+
+  progressVisible = false;
+  progressLoading = false;
+  progressError = '';
+  progressData: any = null;
+  progressJson = '';
+  progressRow: any = null;
+
+  podVisible = false;
+  podLoading = false;
+  podError = '';
+  selectedPod: Pod | null = null;
+  selectedPodJson = '';
+
+  logsVisible = false;
+  logsLoading = false;
+  logsError = '';
+  logsText = '';
+  logsNamespace = '';
+  logsPodName = '';
+  logsContainers: string[] = [];
+  logsContainerName = '';
+  logsTailLines = 400;
 
   // Forms
   followerForm!: FormGroup;
@@ -192,10 +222,12 @@ export class XStoreFollowerManagementComponent implements OnInit {
   }
 
   private async loadInitialData(): Promise<void> {
+    this.isLoading = true;
     try {
       // Load available XStores using current namespace from form (fallback to dialog data -> default)
       const ns = this.followerForm?.get('namespace')?.value || this.data.namespace || 'default';
-      this.availableXStores = await this.apiService.getXStores(ns).toPromise() || [];
+      const xstoresRaw = await this.apiService.getXStores(ns).toPromise();
+      this.availableXStores = this.normalizeList<XStore>(xstoresRaw);
       
       // Filter valid source XStores
       await this.filterValidSourceXStores();
@@ -211,14 +243,16 @@ export class XStoreFollowerManagementComponent implements OnInit {
     } catch (error) {
       console.error('Failed to load initial data:', error);
       this.message.warning('初始化数据加载失败：无法获取 XStore 列表，可手动输入 XStore 名称继续');
+    } finally {
+      this.isLoading = false;
     }
   }
 
   private async loadTargetPods(xstoreName: string): Promise<void> {
     try {
       const ns = this.followerForm.get('namespace')?.value || this.data.namespace || 'default';
-      const pods = await this.apiService.getXStorePods(ns, xstoreName).toPromise();
-      this.targetPods = pods || [];
+      const podsRaw = await this.apiService.getXStorePods(ns, xstoreName).toPromise();
+      this.targetPods = this.normalizeList<Pod>(podsRaw);
       // Prefer running and non-leader
       this.filteredTargetPods = (this.targetPods || []).filter(p => {
         const phase = (p as any)?.status?.phase;
@@ -242,7 +276,8 @@ export class XStoreFollowerManagementComponent implements OnInit {
   private async loadFollowers(): Promise<void> {
     try {
       const ns = this.followerForm?.get('namespace')?.value || this.data.namespace || 'default';
-      const followers = await this.apiService.getXStoreFollowers(ns).toPromise() || [];
+      const followersRaw = await this.apiService.getXStoreFollowers(ns).toPromise();
+      const followers = this.normalizeList<XStoreFollower>(followersRaw);
       this.followers = followers.map((follower: XStoreFollower) => this.enrichFollowerWithStatus(follower));
     } catch (error) {
       console.error('Failed to load XStore followers:', error);
@@ -533,6 +568,9 @@ export class XStoreFollowerManagementComponent implements OnInit {
     this.modal.confirm({
       nzTitle: '确认删除',
       nzContent: `确定要删除 XStore Follower "${follower.metadata.name}" 吗？此操作不可撤销。`,
+      nzOkText: '确定删除',
+      nzOkDanger: true,
+      nzCancelText: '取消',
       nzOnOk: async () => {
         try {
           await this.apiService.deleteXStoreFollower(follower.metadata.namespace || 'default', follower.metadata.name).toPromise();
@@ -540,7 +578,7 @@ export class XStoreFollowerManagementComponent implements OnInit {
           await this.loadFollowers();
         } catch (error) {
           console.error('Failed to delete XStore follower:', error);
-          this.message.error('删除失败');
+          this.message.error(`删除失败：${this.getErrorMessage(error)}`);
         }
       }
     });
@@ -554,114 +592,57 @@ export class XStoreFollowerManagementComponent implements OnInit {
   }
 
   viewFollower(follower: any): void {
-    const getSourceXStoreName = (fromPodName: string): string => {
-      if (!fromPodName) return '未指定';
-      const match = fromPodName.match(/^(.+?)-(single|candidate|follower)-\d+$/);
-      return match ? match[1] : fromPodName;
-    };
-    const details = { 基本信息: [ { label: '名称', value: follower.metadata.name }, { label: '命名空间', value: follower.metadata.namespace }, { label: '目标 XStore', value: (follower.spec as any)?.xStoreName }, { label: '创建时间', value: follower.metadata.creationTimestamp } ] } as any;
-    let message = '';
-    Object.entries(details).forEach(([section, items]: any) => {
-      message += `【${section}】\n`;
-      items.forEach((item: any) => { message += `${item.label}: ${item.value}\n`; });
-      message += '\n';
-    });
-    alert(message);
+    this.openFollowerDetails(follower);
   }
 
   // ===== Quick actions =====
   async viewProgress(row: any): Promise<void> {
-    try {
-      const ns = row.metadata.namespace;
-      const xname = row.spec.xStoreName;
-      const res = await this.apiService.getRebuildProgress(ns as string, xname as string, row.metadata.name as string).toPromise();
-      const lines = [
-        `Follower: ${res?.name || row.metadata.name}`,
-        `Phase: ${res?.phase || (row.status?.phase || '初始化中')}`,
-        res?.message ? `Message: ${res.message}` : '',
-        res?.targetPod ? `TargetPod: ${res.targetPod}` : ''
-      ].filter(Boolean);
-      this.message.info(lines.join('\n'));
-    } catch (e) {
-      this.message.error('获取进度失败');
-    }
+    await this.openProgressModal(row);
   }
 
   async viewPodLogs(row: any): Promise<void> {
-    try {
-      const ns = row.metadata.namespace;
-      const pod = ((row as any).status?.targetPodName || (row as any).status?.targetPod || (row as any).spec?.targetPodName || '').trim();
-      const podName = pod || 'unknown';
-      if (!podName || podName === 'unknown') { this.message.warning('未能确定目标 Pod'); return; }
-      // First probe container list
-      const podObj = await this.apiService.getPod(ns as string, podName as string).toPromise();
-      const containers: string[] = (((podObj as any)?.spec?.containers) || []).map((c: any) => c?.name).filter(Boolean);
-      let container = '';
-      if (containers.length === 1) {
-        container = containers[0];
-      } else if (containers.length > 1) {
-        const choice = window.prompt(`该 Pod 有多个容器，请输入要查看的容器名：\n${containers.join(', ')}`, containers[0]);
-        if (!choice) { return; }
-        container = choice.trim();
-      }
-      const logs = await this.apiService.getPodLogs(ns as string, podName as string, container as string, 400).toPromise();
-      alert(`Pod ${podName}${container ? ' / ' + container : ''} 日志（最后400行）：\n\n${logs || '(空)'}`);
-    } catch (e) {
-      this.message.error('获取日志失败');
-    }
+    await this.openLogsModal(row);
   }
 
   async describePod(row: any): Promise<void> {
-    try {
-      const ns = row.metadata.namespace;
-      const pod = ((row as any).status?.targetPodName || (row as any).status?.targetPod || (row as any).spec?.targetPodName || '').trim();
-      const podName = pod || 'unknown';
-      if (!podName || podName === 'unknown') { this.message.warning('未能确定目标 Pod'); return; }
-      const p = await this.apiService.getPod(ns as string, podName as string).toPromise();
-      const cond = (p as any)?.status?.conditions || [];
-      const lines: string[] = [];
-      lines.push(`Name: ${p?.metadata?.name}`);
-      lines.push(`Phase: ${(p as any)?.status?.phase}`);
-      lines.push(`Node: ${(p as any)?.spec?.nodeName}`);
-      const containers = (((p as any)?.spec?.containers) || []).map((c: any) => c?.name).filter(Boolean);
-      if (containers.length) { lines.push(`Containers: ${containers.join(', ')}`); }
-      cond.forEach((c: any) => lines.push(`${c.type}: ${c.status} (${c.reason || ''})`));
-      alert(lines.join('\n'));
-    } catch (e) {
-      this.message.error('获取 Pod 详情失败');
-    }
+    await this.openPodModal(row);
   }
 
   showFailureAdvice(row: any): void {
-    const phase = row.status?.phase || '';
-    const msg = (row.status as any)?.message || '';
-    if (phase !== 'FollowerPhaseFailed') { this.message.warning('该任务未处于失败状态'); return; }
-    const advice: string[] = [];
-    advice.push(`失败原因：${msg || '未知'}`);
-    advice.push('建议动作：');
-    advice.push('- 检查备份：导航到 备份 → 全量/增量页');
-    advice.push('- 检查节点/Pod：导航到 运维 → 节点');
-    advice.push('- 查看事件：kubectl describe pod <targetPod>');
-    alert(advice.join('\n'));
+    this.openFailureAdviceModal(row);
   }
 
-  async refreshFollowers(): Promise<void> { await this.loadFollowers(); }
+  async refreshFollowers(): Promise<void> {
+    this.isLoading = true;
+    try {
+      await this.loadFollowers();
+      this.message.success('列表已刷新');
+    } finally {
+      this.isLoading = false;
+    }
+  }
 
   async refreshXStores(): Promise<void> {
     try {
+      this.isLoading = true;
       const ns = this.followerForm?.get('namespace')?.value || this.data.namespace || 'default';
-      this.availableXStores = await this.apiService.getXStores(ns).toPromise() || [];
+      const xstoresRaw = await this.apiService.getXStores(ns).toPromise();
+      this.availableXStores = this.normalizeList<XStore>(xstoresRaw);
       await this.filterValidSourceXStores();
       this.message.success('XStore 列表已刷新');
     } catch (error) {
       console.error('Failed to refresh XStores:', error);
-      this.message.error('刷新 XStore 列表失败');
+      this.message.error(`刷新 XStore 列表失败：${this.getErrorMessage(error)}`);
+    } finally {
+      this.isLoading = false;
     }
   }
 
   private async onNamespaceChange(ns: string): Promise<void> {
     try {
-      this.availableXStores = await this.apiService.getXStores(ns || 'default').toPromise() || [];
+      this.isLoading = true;
+      const xstoresRaw = await this.apiService.getXStores(ns || 'default').toPromise();
+      this.availableXStores = this.normalizeList<XStore>(xstoresRaw);
       await this.filterValidSourceXStores();
       this.followerForm.patchValue({ xStoreName: '', targetPodName: '' });
       this.targetPods = [];
@@ -671,6 +652,8 @@ export class XStoreFollowerManagementComponent implements OnInit {
       this.availableXStores = [];
       this.validSourceXStores = [];
       this.message.warning('加载 XStore 列表失败，可手动输入 XStore 名称');
+    } finally {
+      this.isLoading = false;
     }
   }
 
@@ -773,5 +756,351 @@ export class XStoreFollowerManagementComponent implements OnInit {
       default:
         return 'default';
     }
+  }
+
+  // ============================================================================
+  // Modal helpers (aligned UX)
+  // ============================================================================
+
+  private getNs(row: any): string {
+    return (row?.metadata?.namespace || this.followerForm?.get('namespace')?.value || this.data.namespace || 'default') as string;
+  }
+
+  private getFollowerKey(row: any): string {
+    return `${this.getNs(row)}/${row?.metadata?.name || ''}`;
+  }
+
+  private getErrorMessage(error: any): string {
+    return (
+      error?.error?.message ||
+      error?.error?.error ||
+      error?.message ||
+      (typeof error === 'string' ? error : '未知错误')
+    );
+  }
+
+  private stringify(obj: any): string {
+    try {
+      return JSON.stringify(obj, null, 2);
+    } catch {
+      return String(obj ?? '');
+    }
+  }
+
+  private getTargetPodFromRow(row: any): string {
+    return (
+      ((row as any)?.status?.targetPodName || (row as any)?.status?.targetPod || (row as any)?.spec?.targetPodName || '') as string
+    ).trim();
+  }
+
+  openFollowerDetails(follower: any): void {
+    this.selectedFollower = follower as XStoreFollowerWithStatus;
+    this.selectedFollowerJson = this.stringify(follower);
+    this.detailsVisible = true;
+  }
+
+  closeFollowerDetails(): void {
+    this.detailsVisible = false;
+    this.selectedFollower = null;
+    this.selectedFollowerJson = '';
+  }
+
+  goToTaskDetail(row: any): void {
+    const ns = this.getNs(row);
+    const name = row?.metadata?.name;
+    if (!name) return;
+    this.closeFollowerDetails();
+    this.router.navigate(['/storage/xstore-rebuild/rebuild/tasks', ns, name]);
+  }
+
+  async openProgressModal(row: any): Promise<void> {
+    this.progressRow = row;
+    this.progressVisible = true;
+    this.progressLoading = true;
+    this.progressError = '';
+    this.progressData = null;
+    this.progressJson = '';
+
+    try {
+      const ns = this.getNs(row);
+      const xname = row?.spec?.xStoreName || this.selectedFollower?.spec?.xStoreName;
+      const name = row?.metadata?.name || this.selectedFollower?.metadata?.name;
+      const res = await this.apiService.getRebuildProgress(ns, xname, name).toPromise();
+      this.progressData = res || {};
+      this.progressJson = this.stringify(res || {});
+    } catch (e) {
+      this.progressError = this.getErrorMessage(e);
+    } finally {
+      this.progressLoading = false;
+    }
+  }
+
+  closeProgressModal(): void {
+    this.progressVisible = false;
+    this.progressLoading = false;
+    this.progressError = '';
+    this.progressData = null;
+    this.progressJson = '';
+    this.progressRow = null;
+  }
+
+  async refreshProgress(): Promise<void> {
+    if (this.progressLoading) return;
+    const row = this.progressRow || this.selectedFollower;
+    if (!row) return;
+    await this.openProgressModal(row);
+  }
+
+  async openPodModal(row: any): Promise<void> {
+    const ns = this.getNs(row);
+    const podName = this.getTargetPodFromRow(row);
+    if (!podName) {
+      this.message.warning('未能确定目标 Pod');
+      return;
+    }
+
+    this.podVisible = true;
+    this.podLoading = true;
+    this.podError = '';
+    this.selectedPod = null;
+    this.selectedPodJson = '';
+
+    try {
+      const p = await this.apiService.getPod(ns, podName).toPromise();
+      this.selectedPod = p as any;
+      this.selectedPodJson = this.stringify(p);
+    } catch (e) {
+      this.podError = this.getErrorMessage(e);
+    } finally {
+      this.podLoading = false;
+    }
+  }
+
+  closePodModal(): void {
+    this.podVisible = false;
+    this.podLoading = false;
+    this.podError = '';
+    this.selectedPod = null;
+    this.selectedPodJson = '';
+  }
+
+  async openLogsModal(row: any): Promise<void> {
+    const ns = this.getNs(row);
+    const podName = this.getTargetPodFromRow(row);
+    if (!podName) {
+      this.message.warning('未能确定目标 Pod');
+      return;
+    }
+
+    this.logsVisible = true;
+    this.logsNamespace = ns;
+    this.logsPodName = podName;
+    this.logsError = '';
+    this.logsText = '';
+    this.logsContainers = [];
+    this.logsContainerName = '';
+
+    // Load pod -> containers
+    try {
+      const podObj = await this.apiService.getPod(ns, podName).toPromise();
+      const containers: string[] = (((podObj as any)?.spec?.containers) || []).map((c: any) => c?.name).filter(Boolean);
+      this.logsContainers = containers;
+      if (containers.length === 1) {
+        this.logsContainerName = containers[0];
+        await this.refreshLogs();
+      } else if (containers.length > 1) {
+        this.logsContainerName = containers[0];
+      }
+    } catch (e) {
+      this.logsError = `获取 Pod 容器列表失败：${this.getErrorMessage(e)}`;
+    }
+  }
+
+  closeLogsModal(): void {
+    this.logsVisible = false;
+    this.logsLoading = false;
+    this.logsError = '';
+    this.logsText = '';
+    this.logsNamespace = '';
+    this.logsPodName = '';
+    this.logsContainers = [];
+    this.logsContainerName = '';
+  }
+
+  async refreshLogs(): Promise<void> {
+    if (!this.logsNamespace || !this.logsPodName) return;
+    if (!this.logsContainerName && this.logsContainers.length > 1) {
+      this.message.warning('请选择容器');
+      return;
+    }
+    this.logsLoading = true;
+    this.logsError = '';
+    try {
+      const txt = await this.apiService.getPodLogs(this.logsNamespace, this.logsPodName, this.logsContainerName || '', this.logsTailLines).toPromise();
+      this.logsText = txt || '';
+      if (!this.logsText) {
+        this.message.info('日志为空');
+      }
+    } catch (e) {
+      this.logsError = this.getErrorMessage(e);
+    } finally {
+      this.logsLoading = false;
+    }
+  }
+
+  async copyText(text: string): Promise<void> {
+    const t = (text || '').toString();
+    if (!t) {
+      this.message.info('没有可复制的内容');
+      return;
+    }
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(t);
+        this.message.success('已复制到剪贴板');
+        return;
+      }
+    } catch {
+      // fall through to legacy
+    }
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = t;
+      ta.style.position = 'fixed';
+      ta.style.left = '-10000px';
+      ta.style.top = '-10000px';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      if (ok) this.message.success('已复制到剪贴板');
+      else this.message.error('复制失败');
+    } catch (e) {
+      this.message.error(`复制失败：${this.getErrorMessage(e)}`);
+    }
+  }
+
+  openFailureAdviceModal(row: any): void {
+    const phase = row?.status?.phase || '';
+    if (phase !== 'FollowerPhaseFailed') {
+      this.message.warning('该任务未处于失败状态');
+      return;
+    }
+    const ns = this.getNs(row);
+    const name = row?.metadata?.name;
+    const msg = (row?.status as any)?.message || '';
+
+    this.modal.info({
+      nzTitle: `失败分析：${name || ''}`,
+      nzWidth: 760,
+      nzContent: `
+失败原因：
+${msg || '未知'}
+
+建议动作：
+- 点击“查看进度”确认卡在哪个阶段
+- 点击“Pod 描述 / Pod 日志”查看容器状态与错误堆栈
+- 如需重试：先确认资源/存储/网络正常，再执行“重试任务”
+`,
+      nzOkText: '关闭',
+      nzOnOk: () => {}
+    });
+  }
+
+  canRetry(row: any): boolean {
+    return (row?.status?.phase || '') === 'FollowerPhaseFailed';
+  }
+
+  canCancel(row: any): boolean {
+    const phase = (row?.status?.phase || '') as string;
+    if (!phase) return true;
+    return !['FollowerPhaseSuccess', 'FollowerPhaseFailed', 'FollowerPhaseDeleting'].includes(phase);
+  }
+
+  retryFollower(row: any): void {
+    const ns = this.getNs(row);
+    const name = row?.metadata?.name;
+    if (!name) return;
+    this.modal.confirm({
+      nzTitle: '确认重试',
+      nzContent: `确定要重试任务 "${name}" 吗？`,
+      nzOkText: '重试',
+      nzCancelText: '取消',
+      nzOnOk: async () => {
+        try {
+          await this.apiService.retryXStoreFollower(ns, name).toPromise();
+          this.message.success('已触发重试');
+          await this.refreshFollowers();
+        } catch (e) {
+          this.message.error(`重试失败：${this.getErrorMessage(e)}`);
+          throw e;
+        }
+      }
+    });
+  }
+
+  cancelFollower(row: any): void {
+    const ns = this.getNs(row);
+    const name = row?.metadata?.name;
+    if (!name) return;
+    this.modal.confirm({
+      nzTitle: '确认停止',
+      nzContent: `确定要停止任务 "${name}" 吗？（将尝试取消当前重搭流程）`,
+      nzOkText: '停止任务',
+      nzOkDanger: true,
+      nzCancelText: '取消',
+      nzOnOk: async () => {
+        try {
+          await this.apiService.cancelXStoreFollower(ns, name).toPromise();
+          this.message.success('已触发停止');
+          await this.refreshFollowers();
+        } catch (e) {
+          this.message.error(`停止失败：${this.getErrorMessage(e)}`);
+          throw e;
+        }
+      }
+    });
+  }
+
+  // ============================================================================
+  // Template helpers (avoid TS syntax in templates)
+  // ============================================================================
+
+  getFollowerMessage(f: any): string {
+    const msg = f?.status?.message || (f?.status as any)?.message;
+    return (msg || '-').toString();
+  }
+
+  getFollowerCurrentJob(f: any): string {
+    const s = f?.status || {};
+    const task = (s as any)?.currentJobTask || (s as any)?.currentJobName;
+    return (task || '-').toString();
+  }
+
+  getPodPhase(pod: any): string {
+    return ((pod as any)?.status?.phase || '-').toString();
+  }
+
+  getPodNodeName(pod: any): string {
+    return ((pod as any)?.spec?.nodeName || '-').toString();
+  }
+
+  getPodIP(pod: any): string {
+    return ((pod as any)?.status?.podIP || '-').toString();
+  }
+
+  getPodHostIP(pod: any): string {
+    return ((pod as any)?.status?.hostIP || '-').toString();
+  }
+
+  private normalizeList<T>(raw: any): T[] {
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw as T[];
+    const items = (raw as any)?.items;
+    if (Array.isArray(items)) return items as T[];
+    const data = (raw as any)?.data;
+    if (Array.isArray(data)) return data as T[];
+    return [];
   }
 }

@@ -162,6 +162,10 @@
                         <i nz-icon nzType="clock-circle"></i>
                         <span>查看进度</span>
                       </li>
+                      <li nz-menu-item (click)="viewPodLogs(follower)">
+                        <i nz-icon nzType="file-search"></i>
+                        <span>Pod 日志</span>
+                      </li>
                       <li nz-menu-item (click)="describePod(follower)">
                         <i nz-icon nzType="file-text"></i>
                         <span>Pod 描述</span>
@@ -171,6 +175,18 @@
                           (click)="showFailureAdvice(follower)">
                         <i nz-icon nzType="question-circle"></i>
                         <span>失败分析</span>
+                      </li>
+                      <li nz-menu-item
+                          *ngIf="canRetry(follower)"
+                          (click)="retryFollower(follower)">
+                        <i nz-icon nzType="redo"></i>
+                        <span>重试任务</span>
+                      </li>
+                      <li nz-menu-item
+                          *ngIf="canCancel(follower)"
+                          (click)="cancelFollower(follower)">
+                        <i nz-icon nzType="pause-circle"></i>
+                        <span>停止任务</span>
                       </li>
                     </ul>
                   </nz-dropdown-menu>
@@ -357,3 +373,166 @@
     </nz-tabset>
   </div>
 </div>
+
+<!-- ===================== Details Modal (aligned with backup-schedule page) ===================== -->
+<nz-modal
+  [(nzVisible)]="detailsVisible"
+  nzTitle="XStore Follower 详情"
+  nzWidth="900"
+  [nzFooter]="null"
+  (nzOnCancel)="closeFollowerDetails()">
+  <ng-container *nzModalContent>
+    <ng-container *ngIf="selectedFollower as f">
+      <nz-descriptions nzBordered [nzColumn]="3" nzSize="middle">
+        <nz-descriptions-item nzTitle="名称">{{ f.metadata.name }}</nz-descriptions-item>
+        <nz-descriptions-item nzTitle="命名空间">{{ f.metadata.namespace }}</nz-descriptions-item>
+        <nz-descriptions-item nzTitle="角色">
+          <nz-tag [nzColor]="getFollowerRoleColor(f.spec.role)">{{ getFollowerRoleLabel(f.spec.role) }}</nz-tag>
+        </nz-descriptions-item>
+
+        <nz-descriptions-item nzTitle="目标 XStore">{{ f.spec.xStoreName }}</nz-descriptions-item>
+        <nz-descriptions-item nzTitle="源 XStore">{{ f.spec.fromXStore || '-' }}</nz-descriptions-item>
+        <nz-descriptions-item nzTitle="目标 Pod">{{ getTargetPodName(f) || '-' }}</nz-descriptions-item>
+
+        <nz-descriptions-item nzTitle="状态">
+          <nz-tag [nzColor]="getStatusTagColor(f.status?.phase)">{{ f.displayStatus }}</nz-tag>
+        </nz-descriptions-item>
+        <nz-descriptions-item nzTitle="阶段(原始)">{{ f.status?.phase || '-' }}</nz-descriptions-item>
+        <nz-descriptions-item nzTitle="创建时间">{{ f.metadata.creationTimestamp | date:'yyyy-MM-dd HH:mm:ss' }}</nz-descriptions-item>
+
+        <nz-descriptions-item nzTitle="状态消息" nzSpan="3">{{ getFollowerMessage(f) }}</nz-descriptions-item>
+        <nz-descriptions-item nzTitle="当前任务" nzSpan="3">{{ getFollowerCurrentJob(f) }}</nz-descriptions-item>
+      </nz-descriptions>
+
+      <div class="modal-actions">
+        <button nz-button nzType="default" (click)="viewProgress(f)">
+          <i nz-icon nzType="clock-circle"></i> 查看进度
+        </button>
+        <button nz-button nzType="default" (click)="describePod(f)">
+          <i nz-icon nzType="file-text"></i> Pod 描述
+        </button>
+        <button nz-button nzType="default" (click)="viewPodLogs(f)">
+          <i nz-icon nzType="file-search"></i> Pod 日志
+        </button>
+        <button nz-button nzType="primary" (click)="goToTaskDetail(f)">
+          <i nz-icon nzType="profile"></i> 打开任务详情页
+        </button>
+      </div>
+
+      <nz-divider nzText="原始对象(JSON)" nzOrientation="left"></nz-divider>
+      <div class="modal-actions" style="margin-top: 0;">
+        <button nz-button nzType="default" (click)="copyText(selectedFollowerJson)">
+          <i nz-icon nzType="copy"></i> 复制 JSON
+        </button>
+      </div>
+      <pre class="raw-json">{{ selectedFollowerJson }}</pre>
+    </ng-container>
+  </ng-container>
+</nz-modal>
+
+<!-- ===================== Progress Modal ===================== -->
+<nz-modal
+  [(nzVisible)]="progressVisible"
+  nzTitle="任务进度"
+  nzWidth="860"
+  [nzFooter]="null"
+  (nzOnCancel)="closeProgressModal()">
+  <ng-container *nzModalContent>
+    <nz-spin [nzSpinning]="progressLoading">
+      <div *ngIf="progressError" class="modal-error">
+        {{ progressError }}
+      </div>
+      <ng-container *ngIf="!progressError && progressData as p">
+        <nz-descriptions nzBordered [nzColumn]="2" nzSize="middle">
+          <nz-descriptions-item nzTitle="Follower">{{ p.name || '-' }}</nz-descriptions-item>
+          <nz-descriptions-item nzTitle="Phase">{{ p.phase || '-' }}</nz-descriptions-item>
+          <nz-descriptions-item nzTitle="TargetPod">{{ p.targetPod || '-' }}</nz-descriptions-item>
+          <nz-descriptions-item nzTitle="Message" nzSpan="2">{{ p.message || '-' }}</nz-descriptions-item>
+        </nz-descriptions>
+        <div class="modal-actions">
+          <button nz-button nzType="default" (click)="refreshProgress()" [disabled]="progressLoading">
+            <i nz-icon nzType="reload"></i> 刷新
+          </button>
+          <button nz-button nzType="default" (click)="copyText(progressJson)">
+            <i nz-icon nzType="copy"></i> 复制 JSON
+          </button>
+        </div>
+        <nz-divider nzText="原始对象(JSON)" nzOrientation="left"></nz-divider>
+        <pre class="raw-json">{{ progressJson }}</pre>
+      </ng-container>
+    </nz-spin>
+  </ng-container>
+</nz-modal>
+
+<!-- ===================== Pod Modal ===================== -->
+<nz-modal
+  [(nzVisible)]="podVisible"
+  nzTitle="Pod 详情"
+  nzWidth="920"
+  [nzFooter]="null"
+  (nzOnCancel)="closePodModal()">
+  <ng-container *nzModalContent>
+    <nz-spin [nzSpinning]="podLoading">
+      <div *ngIf="podError" class="modal-error">
+        {{ podError }}
+      </div>
+      <ng-container *ngIf="!podError && selectedPod as p">
+        <nz-descriptions nzBordered [nzColumn]="3" nzSize="middle">
+          <nz-descriptions-item nzTitle="Name">{{ p.metadata?.name }}</nz-descriptions-item>
+          <nz-descriptions-item nzTitle="Namespace">{{ p.metadata?.namespace }}</nz-descriptions-item>
+          <nz-descriptions-item nzTitle="Phase">{{ getPodPhase(p) }}</nz-descriptions-item>
+          <nz-descriptions-item nzTitle="Node">{{ getPodNodeName(p) }}</nz-descriptions-item>
+          <nz-descriptions-item nzTitle="IP">{{ getPodIP(p) }}</nz-descriptions-item>
+          <nz-descriptions-item nzTitle="HostIP">{{ getPodHostIP(p) }}</nz-descriptions-item>
+        </nz-descriptions>
+
+        <div class="modal-actions">
+          <button nz-button nzType="default" (click)="copyText(selectedPodJson)">
+            <i nz-icon nzType="copy"></i> 复制 JSON
+          </button>
+        </div>
+
+        <nz-divider nzText="原始对象(JSON)" nzOrientation="left"></nz-divider>
+        <pre class="raw-json">{{ selectedPodJson }}</pre>
+      </ng-container>
+    </nz-spin>
+  </ng-container>
+</nz-modal>
+
+<!-- ===================== Logs Modal ===================== -->
+<nz-modal
+  [(nzVisible)]="logsVisible"
+  nzTitle="Pod 日志"
+  nzWidth="980"
+  [nzFooter]="null"
+  (nzOnCancel)="closeLogsModal()">
+  <ng-container *nzModalContent>
+    <div class="logs-header">
+      <div class="logs-meta">
+        <div><strong>Namespace:</strong> {{ logsNamespace }}</div>
+        <div><strong>Pod:</strong> {{ logsPodName }}</div>
+      </div>
+      <div class="logs-controls">
+        <nz-select
+          *ngIf="logsContainers.length > 1"
+          [(ngModel)]="logsContainerName"
+          nzPlaceHolder="选择容器"
+          style="min-width: 220px;">
+          <nz-option *ngFor="let c of logsContainers" [nzValue]="c" [nzLabel]="c"></nz-option>
+        </nz-select>
+        <button nz-button nzType="default" (click)="refreshLogs()" [nzLoading]="logsLoading">
+          <i nz-icon nzType="reload"></i> 刷新
+        </button>
+        <button nz-button nzType="default" (click)="copyText(logsText)" [disabled]="!logsText">
+          <i nz-icon nzType="copy"></i> 复制
+        </button>
+      </div>
+    </div>
+
+    <div *ngIf="logsError" class="modal-error">{{ logsError }}</div>
+
+    <nz-spin [nzSpinning]="logsLoading">
+      <pre class="logs-view">{{ logsText || '(空)' }}</pre>
+    </nz-spin>
+  </ng-container>
+</nz-modal>
