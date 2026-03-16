@@ -197,8 +197,6 @@ Temporary Items
 # Test binary, built with `go test -c`
 *.test
 
-# Output of the go coverage tool, specifically when used with LiteIDE
-
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
@@ -244,7 +242,8 @@ Temporary Items
 *.pdb
 
 # Kernel Module Compile Results
-*.mod*
+*.mod.c
+*.mod.o
 *.cmd
 .tmp_versions/
 modules.order
@@ -320,7 +319,6 @@ flycheck_*.el
 # !.vscode/settings.json
 # !.vscode/tasks.json
 # !.vscode/launch.json
-!.vscode/extensions.json
 *.code-workspace
 
 # Local History for Visual Studio Code

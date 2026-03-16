@@ -1,0 +1,62 @@
+{{- if .Values.backend.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "polardbx.dashboard.backend.fullname" . }}
+  labels:
+    {{- include "polardbx.dashboard.backend.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "polardbx.dashboard.backend.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "polardbx.dashboard.backend.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "polardbx.dashboard.backend.serviceAccountName" . }}
+      containers:
+        - name: backend
+          image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
+          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: {{ include "polardbx.dashboard.backend.fullname" . }}-config
+            - secretRef:
+                name: {{ include "polardbx.dashboard.backend.fullname" . }}-secret
+          {{- if .Values.backend.secrets.kubeconfig }}
+          volumeMounts:
+            - name: kubeconfig
+              mountPath: /etc/kube
+              readOnly: true
+          {{- end }}
+          resources:
+            {{- toYaml .Values.backend.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+      {{- if .Values.backend.secrets.kubeconfig }}
+      volumes:
+        - name: kubeconfig
+          secret:
+            secretName: {{ include "polardbx.dashboard.backend.fullname" . }}-secret
+            items:
+              - key: kubeconfig
+                path: kubeconfig
+      {{- end }}
+{{- end }}
+

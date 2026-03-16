@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "polardbx.dashboard.backend.fullname" . }}-config
+  labels:
+    {{- include "polardbx.dashboard.backend.labels" . | nindent 4 }}
+data:
+  LOG_LEVEL: {{ .Values.backend.config.logLevel | quote }}
+  LISTEN_ADDRESS: {{ .Values.backend.config.listenAddress | quote }}
+  UI_STATIC_DIR: {{ .Values.backend.config.uiStaticDir | quote }}
+  KUBE_MODE: {{ .Values.backend.config.kubeMode | quote }}
+  KUBECONFIG_PATH: {{ .Values.backend.config.kubeconfigPath | quote }}
+

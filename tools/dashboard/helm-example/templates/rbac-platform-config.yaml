@@ -1,0 +1,33 @@
+{{- if .Values.backend.enabled }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "polardbx.dashboard.backend.fullname" . }}-platform-config
+  namespace: polardbx-operator-system
+  labels:
+    {{- include "polardbx.dashboard.backend.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "polardbx.dashboard.backend.fullname" . }}-platform-config
+  namespace: polardbx-operator-system
+  labels:
+    {{- include "polardbx.dashboard.backend.labels" . | nindent 4 }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "polardbx.dashboard.backend.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "polardbx.dashboard.backend.fullname" . }}-platform-config
+{{- end }}
+

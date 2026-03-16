@@ -1,0 +1,901 @@
+import { Component, OnInit, OnDestroy, inject } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
+import { ApiService } from '../../services/api.service';
+import { NzCardModule } from 'ng-zorro-antd/card';
+import { NzFormModule } from 'ng-zorro-antd/form';
+import { NzInputModule } from 'ng-zorro-antd/input';
+import { NzSelectModule } from 'ng-zorro-antd/select';
+import { NzButtonModule } from 'ng-zorro-antd/button';
+import { NzIconModule } from 'ng-zorro-antd/icon';
+import { NzTableModule } from 'ng-zorro-antd/table';
+import { NzTabsModule } from 'ng-zorro-antd/tabs';
+import { NzMessageService } from 'ng-zorro-antd/message';
+import { NzGridModule } from 'ng-zorro-antd/grid';
+import { NzDividerModule } from 'ng-zorro-antd/divider';
+import { NzTagModule } from 'ng-zorro-antd/tag';
+import { NzToolTipModule } from 'ng-zorro-antd/tooltip';
+import { NzSwitchModule } from 'ng-zorro-antd/switch';
+import { NzInputNumberModule } from 'ng-zorro-antd/input-number';
+import { NzEmptyModule } from 'ng-zorro-antd/empty';
+import { NzStepsModule } from 'ng-zorro-antd/steps';
+import { NzPopconfirmModule } from 'ng-zorro-antd/popconfirm';
+import { NzSpinModule } from 'ng-zorro-antd/spin';
+import { NzStatisticModule } from 'ng-zorro-antd/statistic';
+import { LoadingKeys, LoadingService } from '../../services/loading.service';
+import { PolarDBXBackupBinlog, CreateBackupBinlogRequest } from '../../models/backup-binlog.model';
+import { NamespaceService } from '../../services/namespace.service';
+import { Subject, of } from 'rxjs';
+import { catchError, takeUntil } from 'rxjs/operators';
+
+@Component({
+  selector: 'app-backup-binlog-management',
+  standalone: true,
+  imports: [
+    CommonModule,
+    ReactiveFormsModule,
+    NzCardModule,
+    NzFormModule,
+    NzInputModule,
+    NzSelectModule,
+    NzButtonModule,
+    NzIconModule,
+    NzTableModule,
+    NzTabsModule,
+    NzGridModule,
+    NzDividerModule,
+    NzTagModule,
+    NzToolTipModule,
+    NzSwitchModule,
+    NzInputNumberModule,
+    NzEmptyModule,
+    NzStepsModule,
+    NzPopconfirmModule,
+    NzSpinModule,
+    NzStatisticModule
+  ],
+  template: `
+    <div class="page-wrapper backup-binlog-container">
+      <div class="page-header">
+        <div class="header-content">
+          <h1 class="page-title">
+            <i nz-icon nzType="file-done" class="page-icon"></i>
+            增量日志备份管理
+          </h1>
+          <p class="page-description">管理数据库增量日志备份配置，支持二进制日志备份和时间点恢复</p>
+        </div>
+      </div>
+
+      <div class="page-content">
+        <!-- 统计概览 -->
+        <div class="stats-section">
+          <nz-card class="overview-card" [nzBodyStyle]="{ padding: '16px' }" nzBordered="false">
+            <div nz-row [nzGutter]="16">
+            <div nz-col [nzSpan]="6">
+              <nz-card class="stat-card">
+                <nz-statistic
+                  nzTitle="总配置数"
+                  [nzValue]="backupBinlogs.length"
+                  [nzValueStyle]="{ color: 'var(--primary-color)' }">
+                  <ng-template #nzPrefix>
+                    <i nz-icon nzType="file-done"></i>
+                  </ng-template>
+                </nz-statistic>
+              </nz-card>
+            </div>
+            <div nz-col [nzSpan]="6">
+              <nz-card class="stat-card">
+                <nz-statistic
+                  nzTitle="运行中"
+                  [nzValue]="getRunningCount()"
+                  [nzValueStyle]="{ color: '#52c41a' }">
+                  <ng-template #nzPrefix>
+                    <i nz-icon nzType="sync" nzSpin></i>
+                  </ng-template>
+                </nz-statistic>
+              </nz-card>
+            </div>
+            <div nz-col [nzSpan]="6">
+              <nz-card class="stat-card">
+                <nz-statistic
+                  nzTitle="已启用PITR"
+                  [nzValue]="getPitrEnabledCount()"
+                  [nzValueStyle]="{ color: '#722ed1' }">
+                  <ng-template #nzPrefix>
+                    <i nz-icon nzType="clock-circle"></i>
+                  </ng-template>
+                </nz-statistic>
+              </nz-card>
+            </div>
+            <div nz-col [nzSpan]="6">
+              <nz-card class="stat-card">
+                <nz-statistic
+                  nzTitle="失败"
+                  [nzValue]="getFailedCount()"
+                  [nzValueStyle]="{ color: '#ff4d4f' }">
+                  <ng-template #nzPrefix>
+                    <i nz-icon nzType="close-circle"></i>
+                  </ng-template>
+                </nz-statistic>
+              </nz-card>
+            </div>
+            </div>
+          </nz-card>
+        </div>
+
+        <nz-tabset class="main-tabs" [nzTabPosition]="'top'">
+          <!-- 日志备份列表 -->
+          <nz-tab nzTitle="日志备份列表">
+            <ng-template nz-tab>
+              <div class="tab-content">
+                <nz-card 
+                  class="list-card" 
+                  nzTitle="增量日志备份配置" 
+                  [nzExtra]="listExtra"
+                  [nzLoading]="loadingService.isLoading(LoadingKeys.BACKUP_BINLOG_LIST)">
+                  <ng-template #listExtra>
+                    <button nz-button nzType="default" nzSize="small" (click)="refreshList()">
+                      <i nz-icon nzType="reload"></i>
+                    刷新
+                  </button>
+                  </ng-template>
+                  
+                  <div class="list-content">
+                    <nz-table 
+                      #basicTable 
+                      [nzData]="backupBinlogs" 
+                      [nzLoading]="loadingService.isLoading(LoadingKeys.BACKUP_BINLOG_LIST)"
+                      [nzPageSize]="10"
+                      [nzShowPagination]="backupBinlogs.length > 10">
+                      <thead>
+                        <tr>
+                          <th>名称</th>
+                          <th>命名空间</th>
+                          <th>集群</th>
+                          <th>状态</th>
+                          <th>存储配置</th>
+                          <th>时间点恢复</th>
+                          <th>创建时间</th>
+                          <th nzWidth="150px">操作</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr *ngFor="let item of basicTable.data">
+                          <td>
+                            <span class="resource-name">{{ item.metadata.name }}</span>
+                    </td>
+                          <td>
+                            <nz-tag nzColor="blue">{{ item.metadata.namespace }}</nz-tag>
+                    </td>
+                          <td>{{ item.spec.pxcName }}</td>
+                          <td>
+                            <nz-tag 
+                              [nzColor]="getStatusColor(item.status?.phase)"
+                              [nz-tooltip]="item.status ? (item.status | json) : ''">
+                              {{ getStatusText(item.status?.phase) }}
+                            </nz-tag>
+                    </td>
+                          <td>
+                            <ng-container *ngIf="item.spec.storageProvider as sp; else noStorage">
+                              {{ sp.storageName }}
+                              <i nz-icon nzType="arrow-right" class="storage-arrow"></i>
+                              {{ sp.sink }}
+                            </ng-container>
+                            <ng-template #noStorage>
+                              <span class="text-muted">未配置</span>
+                            </ng-template>
+                    </td>
+                          <td>
+                            <nz-tag 
+                              [nzColor]="item.spec.pointInTimeRecover ? 'green' : 'default'">
+                              {{ item.spec.pointInTimeRecover ? '已启用' : '未启用' }}
+                            </nz-tag>
+                    </td>
+                          <td>{{ formatDate(item.metadata.creationTimestamp) }}</td>
+                          <td>
+                            <div class="action-buttons">
+                              <button 
+                                nz-button 
+                                nzType="text" 
+                                nzSize="small"
+                                nz-tooltip="查看详情"
+                                (click)="viewDetails(item)">
+                                <i nz-icon nzType="eye"></i>
+                              </button>
+                              <button 
+                                nz-button 
+                                nzType="text" 
+                                nzSize="small" 
+                                nzDanger
+                                nz-tooltip="删除配置"
+                                nz-popconfirm
+                                nzPopconfirmTitle="确定要删除这个增量日志备份配置吗？"
+                                (nzOnConfirm)="deleteBackupBinlog(item.metadata.namespace || 'default', item.metadata.name)">
+                                <i nz-icon nzType="delete"></i>
+                              </button>
+                            </div>
+                    </td>
+                        </tr>
+                      </tbody>
+                    </nz-table>
+                    
+                    <div *ngIf="!loadingService.isLoading(LoadingKeys.BACKUP_BINLOG_LIST) && backupBinlogs.length === 0" class="empty-state">
+                      <nz-empty 
+                        nzNotFoundImage="simple" 
+                        nzNotFoundContent="暂无增量日志备份配置">
+                        <div nz-empty-footer>
+                          <button nz-button nzType="primary" (click)="switchToCreateTab()">
+                            <i nz-icon nzType="plus"></i>
+                            创建配置
+                          </button>
+                        </div>
+                      </nz-empty>
+                    </div>
+                  </div>
+                </nz-card>
+              </div>
+            </ng-template>
+          </nz-tab>
+
+          <!-- 创建配置 -->
+          <nz-tab nzTitle="创建配置">
+            <ng-template nz-tab>
+              <div class="tab-content">
+                <div class="configuration-wrapper">
+                  <!-- 配置步骤指引 -->
+                  <nz-card class="steps-card" nzTitle="创建步骤">
+                    <nz-steps [nzCurrent]="0" nzSize="small">
+                      <nz-step nzTitle="基本配置" nzDescription="名称和集群"></nz-step>
+                      <nz-step nzTitle="备份设置" nzDescription="保留期和策略"></nz-step>
+                      <nz-step nzTitle="存储配置" nzDescription="存储提供商"></nz-step>
+                      <nz-step nzTitle="创建确认" nzDescription="提交配置"></nz-step>
+                    </nz-steps>
+                  </nz-card>
+
+                  <!-- 配置表单 -->
+                  <div class="config-sections">
+                    <!-- 基本配置 -->
+                    <nz-card class="config-card" nzTitle="基本配置" [nzExtra]="basicExtra">
+                      <ng-template #basicExtra>
+                        <i nz-icon nzType="setting" class="section-icon"></i>
+                      </ng-template>
+                      <form [formGroup]="createForm" nz-form nzLayout="vertical">
+                        <div nz-row nzGutter="16">
+                          <div nz-col [nzSpan]="8">
+                            <nz-form-item>
+                              <nz-form-label nzRequired>配置名称</nz-form-label>
+                              <nz-form-control nzHasFeedback nzErrorTip="请输入有效的配置名称">
+                                <input 
+                                  nz-input 
+                                  formControlName="name" 
+                                  placeholder="my-binlog-backup" />
+                              </nz-form-control>
+                            </nz-form-item>
+                          </div>
+                          <div nz-col [nzSpan]="8">
+                            <nz-form-item>
+                              <nz-form-label nzRequired>命名空间</nz-form-label>
+                              <nz-form-control nzErrorTip="请输入命名空间">
+                                <input 
+                                  nz-input 
+                                  formControlName="namespace" 
+                                  placeholder="default" />
+                              </nz-form-control>
+                            </nz-form-item>
+                          </div>
+                          <div nz-col [nzSpan]="8">
+                            <nz-form-item>
+                              <nz-form-label nzRequired>目标集群</nz-form-label>
+                              <nz-form-control nzErrorTip="请输入 PolarDB-X 集群名称">
+                                <input 
+                                  nz-input 
+                                  formControlName="pxcName" 
+                                  placeholder="my-polardbx-cluster" />
+                              </nz-form-control>
+                            </nz-form-item>
+                          </div>
+                        </div>
+                        <div nz-row>
+                          <div nz-col [nzSpan]="24">
+                            <nz-form-item>
+                              <nz-form-label 
+                                nz-tooltip 
+                                nzTooltipTitle="启用时间点恢复功能，支持恢复到任意时间点">
+                                时间点恢复
+                              </nz-form-label>
+                              <nz-form-control>
+                                <nz-switch 
+                                  formControlName="pointInTimeRecover"
+                                  nzCheckedChildren="开" 
+                                  nzUnCheckedChildren="关">
+                                </nz-switch>
+                                <span class="switch-description">启用后可恢复到任意时间点</span>
+                              </nz-form-control>
+                            </nz-form-item>
+                          </div>
+                        </div>
+                      </form>
+                    </nz-card>
+
+                    <!-- 备份设置 -->
+                    <nz-card class="config-card" nzTitle="备份设置" [nzExtra]="backupExtra">
+                      <ng-template #backupExtra>
+                        <i nz-icon nzType="clock-circle" class="section-icon"></i>
+                      </ng-template>
+                      <form [formGroup]="createForm" nz-form nzLayout="vertical">
+                        <div nz-row nzGutter="16">
+                          <div nz-col [nzSpan]="8">
+                            <nz-form-item>
+                              <nz-form-label 
+                                nzRequired
+                                nz-tooltip 
+                                nzTooltipTitle="远程存储中日志保留时间，单位：小时">
+                                远程保留时间
+                              </nz-form-label>
+                              <nz-form-control nzErrorTip="请输入有效的保留时间">
+                                <nz-input-number
+                                  formControlName="remoteExpireLogHours"
+                                  [nzMin]="1"
+                                  [nzMax]="8760"
+                                  nzPlaceHolder="168"
+                                  nzAddonAfter="小时"
+                                  style="width: 100%">
+                                </nz-input-number>
+                              </nz-form-control>
+                            </nz-form-item>
+                          </div>
+                          <div nz-col [nzSpan]="8">
+                            <nz-form-item>
+                              <nz-form-label 
+                                nzRequired
+                                nz-tooltip 
+                                nzTooltipTitle="本地存储中日志保留时间，单位：小时">
+                                本地保留时间
+                              </nz-form-label>
+                              <nz-form-control nzErrorTip="请输入有效的保留时间">
+                                <nz-input-number
+                                  formControlName="localExpireLogHours"
+                                  [nzMin]="1"
+                                  [nzMax]="168"
+                                  nzPlaceHolder="24"
+                                  nzAddonAfter="小时"
+                                  style="width: 100%">
+                                </nz-input-number>
+                              </nz-form-control>
+                            </nz-form-item>
+                          </div>
+                          <div nz-col [nzSpan]="8">
+                            <nz-form-item>
+                              <nz-form-label 
+                                nzRequired
+                                nz-tooltip 
+                                nzTooltipTitle="本地最大二进制日志文件数量">
+                                最大本地文件数
+                              </nz-form-label>
+                              <nz-form-control nzErrorTip="请输入有效的文件数量">
+                                <nz-input-number
+                                  formControlName="maxLocalBinlogCount"
+                                  [nzMin]="10"
+                                  [nzMax]="1000"
+                                  nzPlaceHolder="60"
+                                  nzAddonAfter="个"
+                                  style="width: 100%">
+                                </nz-input-number>
+                              </nz-form-control>
+                            </nz-form-item>
+                          </div>
+                        </div>
+                      </form>
+                    </nz-card>
+
+                    <!-- 存储配置 -->
+                    <nz-card class="config-card" nzTitle="存储配置" [nzExtra]="storageExtra">
+                      <ng-template #storageExtra>
+                        <i nz-icon nzType="cloud-server" class="section-icon"></i>
+                      </ng-template>
+                      <form [formGroup]="createForm" nz-form nzLayout="vertical">
+                        <div nz-row nzGutter="16">
+                          <div nz-col [nzSpan]="12">
+                            <nz-form-item>
+                              <nz-form-label 
+                                nzRequired
+                                nz-tooltip 
+                                nzTooltipTitle="存储提供商名称，需在 HPFS 配置中定义">
+                                存储提供商
+                              </nz-form-label>
+                              <nz-form-control nzErrorTip="请输入存储提供商名称">
+                                <input 
+                                  nz-input 
+                                  formControlName="storageName" 
+                                  placeholder="my-storage-provider" />
+                              </nz-form-control>
+                            </nz-form-item>
+                          </div>
+                          <div nz-col [nzSpan]="12">
+                            <nz-form-item>
+                              <nz-form-label 
+                                nzRequired
+                                nz-tooltip 
+                                nzTooltipTitle="存储 Sink 名称，对应 HPFS 配置中的 sink">
+                                存储 Sink
+                              </nz-form-label>
+                              <nz-form-control nzErrorTip="请输入存储 Sink 名称">
+                                <input 
+                                  nz-input 
+                                  formControlName="sink" 
+                                  placeholder="backup-sink" />
+                              </nz-form-control>
+                            </nz-form-item>
+                          </div>
+                        </div>
+                        <div nz-row>
+                          <div nz-col [nzSpan]="24">
+                            <nz-divider nzText="配置提示" nzOrientation="left"></nz-divider>
+                            <div class="storage-tips">
+                              <p><i nz-icon nzType="info-circle" style="color: var(--primary-color);"></i> 
+                                 存储配置需要预先在 <code>polardbx-hpfs-config</code> ConfigMap 中定义</p>
+                              <p><i nz-icon nzType="info-circle" style="color: var(--primary-color);"></i> 
+                                 支持 S3、OSS、SFTP 等多种存储类型</p>
+                            </div>
+                          </div>
+                        </div>
+                      </form>
+                    </nz-card>
+                  </div>
+
+                  <!-- 操作按钮 -->
+                  <div class="action-bar">
+                    <button nz-button nzSize="large" (click)="resetForm()">
+                      <i nz-icon nzType="reload"></i>
+                      重置表单
+                    </button>
+                    <button 
+                      nz-button 
+                      nzType="primary" 
+                      nzSize="large" 
+                      [nzLoading]="loadingService.isLoading(LoadingKeys.BACKUP_BINLOG_CREATE)"
+                      [disabled]="!createForm.valid"
+                      (click)="submitCreate()">
+                      <i nz-icon nzType="plus"></i>
+                      创建配置
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </ng-template>
+          </nz-tab>
+        </nz-tabset>
+      </div>
+    </div>
+  `,
+  styles: [`
+    .page-wrapper {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      padding: 24px;
+      min-height: 100%;
+      background: transparent;
+    }
+    
+    .page-header {
+      margin-bottom: 0;
+      background: #fff;
+      padding: 16px;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
+    }
+    
+    .header-content {
+      width: 100%;
+      max-width: none;
+      margin: 0;
+    }
+    
+    .page-title {
+      font-size: 24px;
+      font-weight: 600;
+      margin: 0 0 8px 0;
+      color: #262626;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    
+    .page-icon {
+      font-size: 28px;
+      color: var(--primary-color, #ff6a00);
+    }
+    
+    .page-description {
+      color: rgba(0, 0, 0, 0.6);
+      font-size: 14px;
+      margin: 0;
+      line-height: 1.5;
+    }
+    
+    .page-content {
+      width: 100%;
+      max-width: none;
+      margin: 0;
+    }
+
+    .stats-section {
+      margin-bottom: 16px;
+    }
+
+    .overview-card {
+      background: #ffffff;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+      border: 1px solid #e0e0e0;
+    }
+
+    .stat-card {
+      text-align: center;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+    
+    .main-tabs {
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+      border: 1px solid #e0e0e0;
+    }
+    
+    .tab-content {
+      padding: 16px;
+    }
+    
+    .list-card {
+      border: none;
+      box-shadow: none;
+    }
+    
+    .list-content {
+      margin-top: 16px;
+    }
+    
+    .resource-name {
+      font-weight: 500;
+      color: var(--primary-color, #ff6a00);
+    }
+    
+    .storage-arrow {
+      margin: 0 4px;
+      color: #ccc;
+      font-size: 12px;
+    }
+    
+    .text-muted {
+      color: #999;
+    }
+    
+    .action-buttons {
+      display: flex;
+      gap: 4px;
+    }
+    
+    .empty-state {
+      text-align: center;
+      padding: 40px 0;
+    }
+    
+    .configuration-wrapper {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    
+    .steps-card {
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+      border: 1px solid #e0e0e0;
+    }
+    
+    .config-sections {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    
+    .config-card {
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+      border: 1px solid #e0e0e0;
+      overflow: hidden;
+    }
+    
+    .section-icon {
+      font-size: 16px;
+      color: var(--primary-color, #ff6a00);
+    }
+    
+    .switch-description {
+      margin-left: 8px;
+      color: #666;
+      font-size: 12px;
+    }
+    
+    .storage-tips {
+      background: #f6f8fa;
+      padding: 12px;
+      border-radius: 6px;
+      border: 1px solid #e1e8ed;
+    }
+    
+    .storage-tips p {
+      margin: 4px 0;
+      font-size: 13px;
+      color: #666;
+    }
+    
+    .storage-tips code {
+      background: #fff;
+      padding: 2px 4px;
+      border-radius: 3px;
+      font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+      font-size: 12px;
+    }
+    
+    .action-bar {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      padding: 16px;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+      border: 1px solid #e0e0e0;
+    }
+    
+    /* Responsive design */
+    @media (max-width: 768px) {
+      .page-wrapper { padding: 16px; }
+      
+      .action-bar {
+        flex-direction: column;
+        align-items: center;
+      }
+      
+      .action-bar button {
+        width: 100%;
+        max-width: 200px;
+      }
+    }
+  `]
+})
+export class BackupBinlogManagementComponent implements OnInit, OnDestroy {
+  private destroy$ = new Subject<void>();
+  private apiService = inject(ApiService);
+  private namespaceService = inject(NamespaceService);
+  private fb = inject(FormBuilder);
+  private msg = inject(NzMessageService);
+  
+  loadingService = inject(LoadingService);
+  LoadingKeys = LoadingKeys;
+
+  backupBinlogs: PolarDBXBackupBinlog[] = [];
+  currentNamespace = 'default';
+  hpfsSinks: Array<{ name: string; type: string }> = [];
+
+  createForm: FormGroup = this.fb.group({
+    name: ['', [Validators.required, Validators.pattern(/^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/)]],
+    namespace: ['default', [Validators.required]],
+    pxcName: ['', [Validators.required]],
+    pointInTimeRecover: [true],
+    remoteExpireLogHours: [168, [Validators.required, Validators.min(1), Validators.max(8760)]],
+    localExpireLogHours: [24, [Validators.required, Validators.min(1), Validators.max(168)]],
+    maxLocalBinlogCount: [60, [Validators.required, Validators.min(10), Validators.max(1000)]],
+    storageName: ['', [Validators.required]],
+    sink: ['', [Validators.required]]
+  });
+
+  ngOnInit(): void {
+    this.namespaceService.activeNamespace$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((namespace: string | null) => {
+        this.currentNamespace = namespace || 'default';
+        this.createForm.patchValue({ namespace: this.currentNamespace });
+        this.loadBackupBinlogs();
+        this.loadHpfsSinks();
+      });
+  }
+
+  ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
+  }
+
+  async loadBackupBinlogs(): Promise<void> {
+    try {
+      this.loadingService.setLoading(LoadingKeys.BACKUP_BINLOG_LIST, true);
+      const response = await this.apiService.getBackupBinlogs(this.currentNamespace).toPromise();
+      this.backupBinlogs = response || [];
+    } catch (error) {
+      console.error('加载增量日志备份列表失败:', error);
+      this.msg.error('加载增量日志备份列表失败');
+      this.backupBinlogs = [];
+    } finally {
+      this.loadingService.setLoading(LoadingKeys.BACKUP_BINLOG_LIST, false);
+    }
+  }
+
+  async submitCreate(): Promise<void> {
+    if (!this.createForm.valid) {
+      this.markFormGroupTouched(this.createForm);
+      return;
+    }
+
+    try {
+      this.loadingService.setLoading(LoadingKeys.BACKUP_BINLOG_CREATE, true);
+      const trimmed = {
+        ...this.createForm.value,
+        name: (this.createForm.value.name || '').trim(),
+        namespace: (this.createForm.value.namespace || '').trim(),
+        pxcName: (this.createForm.value.pxcName || '').trim(),
+        storageName: (this.createForm.value.storageName || '').trim(),
+        sink: (this.createForm.value.sink || '').trim()
+      };
+      this.createForm.patchValue({
+        name: trimmed.name,
+        namespace: trimmed.namespace,
+        pxcName: trimmed.pxcName,
+        storageName: trimmed.storageName,
+        sink: trimmed.sink
+      }, { emitEvent: false });
+      if (!trimmed.name || !trimmed.namespace || !trimmed.pxcName || !trimmed.storageName || !trimmed.sink) {
+        this.markFormGroupTouched(this.createForm);
+        this.msg.error('请填写必填项：名称、命名空间、集群、存储类型、存储 Sink');
+        return;
+      }
+
+      const formValue = trimmed;
+      
+      const request: CreateBackupBinlogRequest = {
+        name: formValue.name,
+        namespace: formValue.namespace,
+        pxcName: formValue.pxcName,
+        pointInTimeRecover: formValue.pointInTimeRecover,
+        remoteExpireLogHours: formValue.remoteExpireLogHours,
+        localExpireLogHours: formValue.localExpireLogHours,
+        maxLocalBinlogCount: formValue.maxLocalBinlogCount,
+        storageProvider: {
+          storageName: formValue.storageName,
+          sink: formValue.sink
+        }
+      };
+
+      await this.apiService.createBackupBinlog(formValue.namespace, request).toPromise();
+      this.msg.success('增量日志备份配置创建成功');
+      this.resetForm();
+      this.loadBackupBinlogs();
+      // Switch to list tab
+      setTimeout(() => {
+        // Can add logic to switch to first tab here
+      }, 100);
+    } catch (error) {
+      console.error('创建增量日志备份配置失败:', error);
+      const e: any = error as any;
+      const msg =
+        e?.error?.error?.message ||
+        e?.error?.message ||
+        e?.message ||
+        '';
+      this.msg.error(msg ? `创建增量日志备份配置失败: ${msg}` : '创建增量日志备份配置失败');
+    } finally {
+      this.loadingService.setLoading(LoadingKeys.BACKUP_BINLOG_CREATE, false);
+    }
+  }
+
+  private loadHpfsSinks(): void {
+    this.apiService.getHpfsSinks().pipe(
+      catchError(() => of(null as any))
+    ).subscribe((res: any) => {
+      const sinks = (res?.sinks || []) as Array<{ name: string; type: string }>;
+      this.hpfsSinks = sinks;
+
+      const preferred = sinks.find(s => s?.name === 'default') || sinks[0];
+      if (!preferred) return;
+
+      const curStorageName = (this.createForm.value?.storageName || '').toString().trim();
+      const curSink = (this.createForm.value?.sink || '').toString().trim();
+      const patch: any = {};
+      if (!curStorageName) patch.storageName = preferred.type;
+      if (!curSink) patch.sink = preferred.name;
+      if (Object.keys(patch).length) {
+        this.createForm.patchValue(patch, { emitEvent: false });
+      }
+    });
+  }
+
+  async deleteBackupBinlog(namespace: string, name: string): Promise<void> {
+    try {
+      await this.apiService.deleteBackupBinlog(namespace, name).toPromise();
+      this.msg.success('删除成功');
+      this.loadBackupBinlogs();
+    } catch (error) {
+      console.error('删除增量日志备份配置失败:', error);
+      this.msg.error('删除失败');
+    }
+  }
+
+  refreshList(): void {
+    this.loadBackupBinlogs();
+  }
+
+  resetForm(): void {
+    this.createForm.reset({
+      name: '',
+      namespace: this.currentNamespace,
+      pxcName: '',
+      pointInTimeRecover: true,
+      remoteExpireLogHours: 168,
+      localExpireLogHours: 24,
+      maxLocalBinlogCount: 60,
+      storageName: '',
+      sink: ''
+    });
+  }
+
+  switchToCreateTab(): void {
+    // Can add logic to switch to create configuration tab here
+    // Since nz-tabset is used, can be implemented by setting selectedIndex
+  }
+
+  viewDetails(item: PolarDBXBackupBinlog): void {
+    // Can add logic to view details here
+    console.log('查看详情:', item);
+  }
+
+  getStatusColor(phase?: string): string {
+    switch (phase) {
+      case 'Running': return 'success';
+      case 'Ready': return 'success';
+      case 'Failed': return 'error';
+      case 'Pending': return 'processing';
+      default: return 'default';
+    }
+  }
+
+  getStatusText(phase?: string): string {
+    switch (phase) {
+      case 'Running': return '运行中';
+      case 'Ready': return '就绪';
+      case 'Failed': return '失败';
+      case 'Pending': return '等待中';
+      default: return '未知';
+    }
+  }
+
+  formatDate(dateString?: string): string {
+    if (!dateString) return '-';
+    return new Date(dateString).toLocaleString('zh-CN');
+  }
+
+  // Statistics methods
+  getRunningCount(): number {
+    return this.backupBinlogs.filter(b => 
+      b.status?.phase === 'running' || b.status?.phase === 'checkExpiredFile'
+    ).length;
+  }
+
+  getPitrEnabledCount(): number {
+    return this.backupBinlogs.filter(b => b.spec.pointInTimeRecover === true).length;
+  }
+
+  getFailedCount(): number {
+    return this.backupBinlogs.filter(b => b.status?.phase === 'deleting').length;
+  }
+
+  private markFormGroupTouched(formGroup: FormGroup): void {
+    Object.keys(formGroup.controls).forEach(key => {
+      const control = formGroup.get(key);
+      control?.markAsTouched();
+      control?.updateValueAndValidity();
+    });
+  }
+}

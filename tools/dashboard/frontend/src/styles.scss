@@ -1,0 +1,272 @@
+/* You can add global styles to this file, and also import other style files */
+
+// xterm styles are loaded on-demand within components to avoid build failures when dependencies are missing.
+
+// Import notification styles and shared styles
+@use './styles/notifications.scss' as *;
+@use './app/styles/shared' as *;
+@use './app/styles/neutral-theme.scss' as *;
+@use './app/styles/page-header.scss' as *;
+
+// Custom theming uses CSS variables + existing _shared.scss palette; do not import prebuilt themes.
+
+// Unified primary palette - PolarDB-X brand orange
+:root {
+  // Primary palette - PolarDB-X orange
+  --primary-color: #ff6a00;
+  --primary-color-hover: #e85d00;
+  --primary-color-active: #cc5200;
+  --primary-color-light: #fff1e6;
+  
+  // Functional colors - low saturation
+  --accent-color: #ff8b3d;         // Soft accent (orange tint)
+  --warn-color: #c75d5d;           // Soft warning red
+  --success-color: #5a9e5a;        // Soft success green
+  --warning-color: #c4944f;        // Soft warning orange (keep)
+  --info-color: #5a8ab4;           // Soft info blue
+  
+  // Background colors
+  --background-color: #f5f6f8;
+  --container-bg-color: #ffffff;
+  
+  // Text colors
+  --text-color: #333333;
+  --text-secondary: #666666;
+  --text-placeholder: #999999;
+  
+  // Border colors
+  --border-color: #e0e3e8;
+  --border-color-light: #ebeef2;
+  
+  // Shadow
+  --box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --border-radius: 6px;
+}
+
+html, body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: 'Roboto', "Helvetica Neue", sans-serif;
+  background-color: var(--background-color);
+  color: var(--text-color);
+  line-height: 1.6;
+}
+
+/* Unified page header styles */
+.page-icon {
+  font-size: 24px !important;
+  color: var(--primary-color, #4a7c9b) !important;
+}
+
+.page-title {
+  font-size: 20px !important;
+  font-weight: 600 !important;
+  color: var(--text-color, #333333) !important;
+  margin: 0 !important;
+}
+
+/* Fix: dropdown panels (MatSelect/Menu) covered by terminals/tables. Use fixed positioning. */
+.cdk-overlay-container { 
+  z-index: 99999 !important; 
+  position: fixed !important;
+  pointer-events: auto !important;
+}
+.cdk-overlay-pane { 
+  z-index: 99999 !important; 
+  position: fixed !important;
+  pointer-events: auto !important;
+}
+.cdk-overlay-pane.mat-mdc-select-panel { 
+  z-index: 99999 !important; 
+  position: fixed !important;
+}
+.cdk-overlay-pane.mat-mdc-select-panel-above { 
+  z-index: 99999 !important; 
+  position: fixed !important;
+}
+.cdk-overlay-pane.mat-mdc-select-panel-below { 
+  z-index: 99999 !important; 
+  position: fixed !important;
+}
+
+/* Force all mat-select panels to stay on top */
+.mat-mdc-select-panel { 
+  z-index: 99999 !important; 
+  position: fixed !important;
+}
+.mat-mdc-option { 
+  z-index: 99999 !important; 
+}
+
+/* Ensure mat-tooltip stays on top */
+.mat-mdc-tooltip {
+  z-index: 100001 !important;
+}
+
+.mat-mdc-tooltip-surface {
+  z-index: 100001 !important;
+}
+
+/* Special class: force panel to open upwards */
+.force-above-panel {
+  z-index: 100000 !important;
+  position: static !important;
+  pointer-events: auto !important;
+  background: white !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3) !important;
+}
+
+// Global style enhancements
+* {
+  box-sizing: border-box;
+}
+
+/* Overlay restore: prevent invisible layer from blocking clicks */
+.cdk-overlay-container {
+  pointer-events: none !important; /* container does not receive events */
+  position: fixed !important;      /* keep default positioning */
+  z-index: 100000 !important;      /* raise z-index */
+}
+.cdk-overlay-pane {
+  pointer-events: auto !important; /* pane receives events */
+  position: absolute !important;   /* restore default positioning; avoid fullscreen overlay */
+  z-index: 100000 !important;      /* raise z-index */
+}
+.mat-mdc-select-panel {
+  position: static !important;     /* positioning controlled by pane */
+  z-index: 100000 !important;      /* raise z-index */
+  background: white !important;    /* ensure background is visible */
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3) !important; /* stronger shadow */
+}
+
+// Scrollbar styles
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #bdbdbd;
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+// Focus styles
+.mat-mdc-button:focus,
+.mat-mdc-raised-button:focus,
+.mat-mdc-icon-button:focus {
+  outline: 3px solid rgba(106, 27, 154, 0.5);
+  outline-offset: 2px;
+}
+
+// Disabled state styles
+.mat-mdc-button:disabled,
+.mat-mdc-raised-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+// Modern table/card/input styles are defined via mixins in _shared.scss.
+// The legacy global overrides below are kept commented out.
+/*
+.mat-mdc-table {
+  .mat-mdc-header-cell {
+    font-weight: 700;
+    color: var(--primary-color);
+    background-color: #e8eaf6;
+  }
+  
+  .mat-mdc-cell {
+    border-bottom: 1px solid var(--border-color);
+  }
+  
+  .mat-mdc-row:hover {
+    background-color: #f0f2f5;
+  }
+}
+
+.mat-mdc-card {
+  box-shadow: var(--box-shadow);
+  border-radius: var(--border-radius);
+  
+  .mat-mdc-card-header {
+    padding-bottom: 12px;
+  }
+}
+
+.mat-mdc-form-field {
+  .mat-mdc-text-field-wrapper {
+    border-radius: var(--border-radius);
+  }
+}
+*/
+
+// Toolbar styles
+.mat-toolbar {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+// Responsive utility classes
+.d-flex {
+  display: flex;
+}
+
+.justify-content-between {
+  justify-content: space-between;
+}
+
+.align-items-center {
+  align-items: center;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.mt-1 { margin-top: 8px; }
+.mt-2 { margin-top: 16px; }
+.mt-3 { margin-top: 24px; }
+
+.mb-1 { margin-bottom: 8px; }
+.mb-2 { margin-bottom: 16px; }
+.mb-3 { margin-bottom: 24px; }
+
+.ml-1 { margin-left: 8px; }
+.ml-2 { margin-left: 16px; }
+.ml-3 { margin-left: 24px; }
+
+.mr-1 { margin-right: 8px; }
+.mr-2 { margin-right: 16px; }
+.mr-3 { margin-right: 24px; }
+
+.p-1 { padding: 8px; }
+.p-2 { padding: 16px; }
+.p-3 { padding: 24px; }
+
+// 响应式断点
+@media (max-width: 768px) {
+  .mat-mdc-card {
+    margin: 12px;
+  }
+  
+  .mat-toolbar {
+    .mat-toolbar-row {
+      padding: 0 12px;
+    }
+  }
+  
+  .mat-mdc-table {
+    font-size: 14px;
+  }
+}

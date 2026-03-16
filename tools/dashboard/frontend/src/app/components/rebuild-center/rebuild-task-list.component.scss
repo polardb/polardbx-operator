@@ -1,0 +1,313 @@
+.rebuild-task-list-container {
+  padding: 24px;
+  background: #f5f5f5;
+  min-height: calc(100vh - 64px);
+
+  .toolbar-card {
+    margin-bottom: 16px;
+    
+    .toolbar-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      
+      .toolbar-left {
+        .page-title {
+          margin: 0;
+          display: flex;
+          align-items: center;
+          font-size: 18px;
+          font-weight: 500;
+          color: rgba(0, 0, 0, 0.85);
+          
+          i {
+            margin-right: 8px;
+            color: var(--primary-color, #ff6a00);
+          }
+        }
+      }
+      
+      .toolbar-right {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        
+        .filters {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+
+          .filter-control {
+            min-width: 120px;
+          }
+
+          .search-box {
+            flex: 1 1 220px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 0 12px;
+            border: 1px solid #d9d9d9;
+            border-radius: 6px;
+            background: #fafafa;
+            height: 32px;
+
+            i {
+              color: rgba(0, 0, 0, 0.45);
+            }
+
+            input {
+              flex: 1;
+              border: none;
+              background: transparent;
+              box-shadow: none;
+            }
+
+            input:focus {
+              border: none;
+              box-shadow: none;
+            }
+
+            .search-clear {
+              border-radius: 6px;
+              padding: 0 8px;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            }
+          }
+        }
+        
+        .actions {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+      }
+    }
+  }
+
+  .table-card {
+    .table-container {
+      overflow-x: auto;
+      
+      .tasks-table {
+        .task-name {
+          display: flex;
+          align-items: center;
+          
+          .task-icon {
+            margin-right: 8px;
+            color: var(--primary-color, #ff6a00);
+          }
+        }
+        
+        .progress-cell {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          
+          .progress-text {
+            font-size: 12px;
+            color: rgba(0, 0, 0, 0.65);
+            min-width: 35px;
+          }
+        }
+        
+        .message-text {
+          cursor: help;
+          max-width: 200px;
+          display: inline-block;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        
+        .no-data {
+          color: rgba(0, 0, 0, 0.25);
+          font-style: italic;
+        }
+        
+        .action-buttons {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          
+          button {
+            padding: 0 4px;
+          }
+        }
+        
+        .status-tag {
+          font-size: 12px;
+        }
+      }
+    }
+    
+    .loading-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 200px;
+    }
+  }
+}
+
+// 响应式设计
+@media (max-width: 1200px) {
+  .rebuild-task-list-container {
+    .toolbar-card {
+      .toolbar-content {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 16px;
+        
+        .toolbar-left {
+          .page-title {
+            font-size: 16px;
+          }
+        }
+        
+        .toolbar-right {
+          justify-content: space-between;
+          
+          .filters {
+            flex-wrap: wrap;
+            gap: 8px;
+            width: 100%;
+            
+            .filter-control {
+              min-width: 0;
+              flex: 1 1 180px;
+            }
+            
+            .search-box {
+              flex: 1 1 100%;
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+@media (max-width: 1200px) {
+  .rebuild-task-list-container {
+    .table-card {
+      .table-container {
+        // 在中等屏幕上隐藏部分列
+        .tasks-table {
+          th:nth-child(7), th:nth-child(8),  // 隐藏目标节点、本机/跨机列
+          td:nth-child(7), td:nth-child(8) {
+            display: none;
+          }
+        }
+      }
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .rebuild-task-list-container {
+    padding: 16px;
+    
+    .toolbar-card {
+      .toolbar-content {
+        .toolbar-right {
+          flex-direction: column;
+          align-items: stretch;
+          gap: 12px;
+          
+          .filters {
+            width: 100%;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            
+            nz-select {
+              width: 100% !important;
+              margin-right: 0 !important;
+              margin-bottom: 0;
+            }
+
+            .search-box {
+              grid-column: 1 / -1;
+              width: 100%;
+            }
+          }
+          
+          .actions {
+            width: 100%;
+            justify-content: center;
+          }
+        }
+      }
+    }
+    
+    .table-card {
+      .table-container {
+        .tasks-table {
+          // 在小屏幕上隐藏更多列
+          th:nth-child(n+5):nth-child(-n+8),  // 隐藏源Pod、目标Pod、目标节点、本机/跨机
+          td:nth-child(n+5):nth-child(-n+8) {
+            display: none;
+          }
+          
+          .message-text {
+            max-width: 80px;
+          }
+          
+          .action-buttons {
+            flex-direction: column;
+            gap: 2px;
+            
+            button {
+              font-size: 12px;
+              padding: 2px 4px;
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+// 表格样式增强
+.ant-table {
+  .ant-table-thead > tr > th {
+    background: #fafafa;
+    font-weight: 500;
+  }
+  
+  .ant-table-tbody > tr:hover > td {
+    background: #f5f5f5;
+  }
+}
+
+// 进度条样式
+.ant-progress-small .ant-progress-outer {
+  margin-right: 0;
+}
+
+// 标签样式
+.ant-tag {
+  margin: 0;
+  border-radius: 4px;
+}
+
+// 按钮组样式
+.action-buttons .ant-btn-link {
+  color: var(--primary-color, #ff6a00);
+  
+  &:hover {
+    color: var(--primary-color-hover, #e85d00);
+  }
+  
+  &.ant-btn-dangerous {
+    color: #ff4d4f;
+    
+    &:hover {
+      color: #ff7875;
+    }
+  }
+}

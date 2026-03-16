@@ -1,0 +1,21 @@
+# Default PrometheusRule Template
+# This is a placeholder template for embedded resources
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: polardbx-default-alerts
+  labels:
+    app.kubernetes.io/component: alert-rules
+    app.kubernetes.io/name: polardbx
+spec:
+  groups:
+    - name: polardbx-default
+      rules:
+        - alert: PolarDBXClusterDown
+          expr: up{job="polardbx"} == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "PolarDB-X cluster is down"
+            description: "PolarDB-X cluster {{ $labels.cluster }} has been down for more than 5 minutes."

@@ -1,0 +1,720 @@
+openapi: 3.0.3
+info:
+  title: PolarDB-X Monitoring Installation API v2
+  version: 0.1.0
+  description: |
+    Next-generation monitoring installation workflow used by the PolarDB-X dashboard.
+    Provides environment detection, planning, execution tracking, diagnostics, and repair operations.
+servers:
+  - url: /api/v1
+paths:
+  /monitoring/detect:
+    get:
+      operationId: detectEnvironment
+      summary: Detect monitoring components and prerequisites in the cluster.
+      responses:
+        '200':
+          description: Detection successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnvironmentSnapshot'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /monitoring/plan:
+    post:
+      operationId: createPlan
+      summary: Build an installation or upgrade plan from detection snapshot and user intent.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePlanRequest'
+      responses:
+        '200':
+          description: Plan created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatePlanResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /monitoring/install:
+    post:
+      operationId: startInstallation
+      summary: Start or resume monitoring installation with an installation plan.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartInstallRequest'
+      responses:
+        '202':
+          description: Installation accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StartInstallResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /monitoring/install/{sessionId}/status:
+    get:
+      operationId: getInstallStatus
+      summary: Retrieve installation progress for a session.
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Installation session identifier
+      responses:
+        '200':
+          description: Current status for the installation session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstallStatusResponse'
+        '404':
+          description: Session not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /monitoring/install/{sessionId}/retry:
+    post:
+      operationId: triggerRetry
+      summary: Request an immediate retry or acknowledge a scheduled retry for a session.
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Installation session identifier
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RetryRequest'
+      responses:
+        '202':
+          description: Retry accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstallStatusResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /monitoring/diagnose:
+    post:
+      operationId: diagnoseFailure
+      summary: Diagnose a failed installation step and return remediation suggestions.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DiagnoseRequest'
+      responses:
+        '200':
+          description: Diagnosis completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiagnoseResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /monitoring/auto-fix:
+    post:
+      operationId: applyAutoFix
+      summary: Execute an automated remediation for a diagnosed failure.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AutoFixRequest'
+      responses:
+        '200':
+          description: Auto-fix attempt result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AutoFixResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+components:
+  schemas:
+    EnvironmentSnapshot:
+      type: object
+      required:
+        - detectedAt
+        - namespace
+        - components
+      properties:
+        namespace:
+          type: string
+          description: Target namespace where monitoring stack resides.
+        detectedAt:
+          type: string
+          format: date-time
+        healthScore:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 100
+          description: Aggregate health score averaged from component status.
+        recommendations:
+          type: array
+          items:
+            type: string
+          description: Suggested follow-up actions before installation.
+        components:
+          type: array
+          items:
+            $ref: '#/components/schemas/DetectedComponent'
+      description: "Snapshot of existing monitoring components and prerequisites."
+    DetectedComponent:
+      type: object
+      required:
+        - name
+        - actionRecommendation
+      properties:
+        name:
+          $ref: '#/components/schemas/ComponentName'
+        exists:
+          type: boolean
+        healthy:
+          type: boolean
+        version:
+          type: string
+        details:
+          type: object
+          additionalProperties:
+            type: string
+        actionRecommendation:
+          $ref: '#/components/schemas/ComponentAction'
+    ComponentAction:
+      type: object
+      required:
+        - action
+        - reason
+      properties:
+        action:
+          type: string
+          enum: [install, upgrade, repair, reinstall, skip]
+        reason:
+          type: string
+    ComponentName:
+      type: string
+      enum: [prometheus, grafana, alertmanager, node-exporter, kube-state-metrics, thanos, blackbox-exporter]
+    CreatePlanRequest:
+      type: object
+      required:
+        - detected
+        - config
+      properties:
+        intent:
+          type: string
+          enum: [install, upgrade, repair]
+          default: install
+        detected:
+          $ref: '#/components/schemas/EnvironmentSnapshot'
+        config:
+          $ref: '#/components/schemas/InstallConfig'
+    InstallConfig:
+      type: object
+      description: User provided options from the wizard.
+      properties:
+        targetNamespace:
+          type: string
+        installMode:
+          type: string
+          enum: [managed, assisted, byo]
+        valuesYaml:
+          type: string
+          description: Raw Helm values override provided by the user.
+        autoRepair:
+          type: boolean
+          default: true
+    CreatePlanResponse:
+      type: object
+      required:
+        - plan
+        - estimatedDurationSeconds
+      properties:
+        plan:
+          $ref: '#/components/schemas/InstallationPlan'
+        estimatedDurationSeconds:
+          type: integer
+          format: int64
+        warnings:
+          type: array
+          items:
+            type: string
+    InstallationPlan:
+      type: object
+      required:
+        - sessionTemplate
+        - steps
+      properties:
+        sessionTemplate:
+          $ref: '#/components/schemas/SessionTemplate'
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlanStep'
+        riskLevel:
+          type: string
+          enum: [low, medium, high]
+        estimatedDurationSeconds:
+          type: integer
+          format: int64
+    SessionTemplate:
+      type: object
+      required:
+        - namespace
+      properties:
+        namespace:
+          type: string
+        releaseName:
+          type: string
+        intent:
+          type: string
+          enum: [install, upgrade, repair]
+        targetNamespace:
+          type: string
+    PlanStep:
+      type: object
+      required:
+        - order
+        - component
+        - action
+      properties:
+        order:
+          type: integer
+          format: int32
+        component:
+          $ref: '#/components/schemas/ComponentName'
+        action:
+          type: string
+          enum: [install, upgrade, repair, uninstall, verify]
+        reason:
+          type: string
+        estimatedDurationSeconds:
+          type: integer
+          format: int64
+        dependsOn:
+          type: array
+          items:
+            type: integer
+          description: Orders that must be completed first.
+    StartInstallRequest:
+      type: object
+      required:
+        - plan
+      properties:
+        plan:
+          $ref: '#/components/schemas/InstallationPlan'
+        checkpoint:
+          $ref: '#/components/schemas/Checkpoint'
+    StartInstallResponse:
+      type: object
+      required:
+        - sessionId
+        - namespace
+        - createdAt
+      properties:
+        sessionId:
+          type: string
+        namespace:
+          type: string
+        jobName:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        resumed:
+          type: boolean
+          description: Indicates whether existing execution was resumed from checkpoint.
+    InstallStatusResponse:
+      type: object
+      required:
+        - sessionId
+        - phase
+        - components
+        - updatedAt
+      properties:
+        sessionId:
+          type: string
+        phase:
+          $ref: '#/components/schemas/InstallPhase'
+        progress:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+        components:
+          type: array
+          items:
+            $ref: '#/components/schemas/ComponentState'
+        currentStep:
+          $ref: '#/components/schemas/ExecutionStep'
+        completedSteps:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExecutionStep'
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/InstallError'
+        startedAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        checkpoint:
+          $ref: '#/components/schemas/Checkpoint'
+        retry:
+          $ref: '#/components/schemas/RetryStatus'
+    InstallPhase:
+      type: string
+      enum:
+        - NotStarted
+        - Detecting
+        - Planning
+        - Installing
+        - Verifying
+        - Active
+        - Degraded
+        - Failed
+        - Upgrading
+        - Uninstalling
+    ComponentState:
+      type: object
+      required:
+        - name
+        - phase
+      properties:
+        name:
+          $ref: '#/components/schemas/ComponentName'
+        phase:
+          $ref: '#/components/schemas/ComponentPhase'
+        version:
+          type: string
+        healthy:
+          type: boolean
+        installedAt:
+          type: string
+          format: date-time
+        lastCheckAt:
+          type: string
+          format: date-time
+        errorMessage:
+          type: string
+        retryCount:
+          type: integer
+          format: int32
+        maxRetries:
+          type: integer
+          format: int32
+    RetryStatus:
+      type: object
+      properties:
+        retries:
+          type: integer
+          format: int32
+          description: Number of retry attempts already executed.
+        maxRetries:
+          type: integer
+          format: int32
+          description: Maximum number of retry attempts permitted.
+        nextRetryAt:
+          type: string
+          format: date-time
+          description: Timestamp when the next automatic retry will be triggered.
+        lastAttemptAt:
+          type: string
+          format: date-time
+          description: Timestamp when the most recent retry attempt started.
+        active:
+          type: boolean
+          description: Indicates whether an automatic retry is currently scheduled.
+        mode:
+          $ref: '#/components/schemas/RetryStatusMode'
+        lastError:
+          type: string
+          description: Last failure message that triggered a retry.
+        backoffSeconds:
+          type: integer
+          format: int64
+          description: Current backoff delay in seconds before the next retry.
+    RetryStatusMode:
+      type: string
+      enum: [idle, scheduled, running, exhausted]
+    RetryRequest:
+      type: object
+      properties:
+        mode:
+          type: string
+          enum: [manual, automatic]
+          description: Desired retry mode; omit to use default behaviour.
+        force:
+          type: boolean
+          description: Force retry even if automatic retries are exhausted.
+        reason:
+          type: string
+          description: Optional reason recorded for audit purposes.
+    ComponentPhase:
+      type: string
+      enum:
+        - NotInstalled
+        - Planned
+        - Installing
+        - VerifyingHealth
+        - Healthy
+        - Unhealthy
+        - Failed
+        - UpgradeAvailable
+    ExecutionStep:
+      type: object
+      required:
+        - order
+        - component
+        - action
+        - status
+      properties:
+        order:
+          type: integer
+          format: int32
+        component:
+          $ref: '#/components/schemas/ComponentName'
+        action:
+          type: string
+          enum: [install, upgrade, repair, verify, cleanup]
+        status:
+          type: string
+          enum: [pending, running, succeeded, failed, skipped]
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+        message:
+          type: string
+    InstallError:
+      type: object
+      required:
+        - category
+        - message
+      properties:
+        category:
+          $ref: '#/components/schemas/FailureCategory'
+        message:
+          type: string
+        component:
+          $ref: '#/components/schemas/ComponentName'
+        stepOrder:
+          type: integer
+          format: int32
+        occurredAt:
+          type: string
+          format: date-time
+        context:
+          type: object
+          additionalProperties:
+            type: string
+    FailureCategory:
+      type: string
+      enum:
+        - ImagePull
+        - ResourceQuota
+        - NetworkPolicy
+        - RBAC
+        - StorageClass
+        - HelmChart
+        - Dependency
+        - Configuration
+        - Timeout
+        - Unknown
+    Checkpoint:
+      type: object
+      properties:
+        sessionId:
+          type: string
+        phase:
+          $ref: '#/components/schemas/InstallPhase'
+        progress:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+        startedAt:
+          type: string
+          format: date-time
+        lastUpdatedAt:
+          type: string
+          format: date-time
+        components:
+          type: array
+          items:
+            $ref: '#/components/schemas/ComponentState'
+        completedSteps:
+          type: array
+          items:
+            type: integer
+        currentStep:
+          type: integer
+        config:
+          $ref: '#/components/schemas/InstallConfig'
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/InstallError'
+        context:
+          type: object
+          additionalProperties:
+            type: string
+    DiagnoseRequest:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          $ref: '#/components/schemas/InstallError'
+        context:
+          type: object
+          additionalProperties:
+            type: string
+    DiagnoseResponse:
+      type: object
+      required:
+        - diagnosis
+      properties:
+        diagnosis:
+          $ref: '#/components/schemas/Diagnosis'
+        autoFixes:
+          type: array
+          items:
+            $ref: '#/components/schemas/AutoFix'
+    Diagnosis:
+      type: object
+      required:
+        - category
+        - severity
+        - summary
+      properties:
+        category:
+          $ref: '#/components/schemas/FailureCategory'
+        severity:
+          type: string
+          enum: [critical, major, minor]
+        summary:
+          type: string
+        possibleCauses:
+          type: array
+          items:
+            type: string
+        suggestedFixes:
+          type: array
+          items:
+            type: string
+    AutoFix:
+      type: object
+      required:
+        - id
+        - title
+        - automated
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        automated:
+          type: boolean
+        verification:
+          type: string
+    AutoFixRequest:
+      type: object
+      required:
+        - fixId
+        - sessionId
+      properties:
+        fixId:
+          type: string
+        sessionId:
+          type: string
+        context:
+          type: object
+          additionalProperties:
+            type: string
+    AutoFixResponse:
+      type: object
+      required:
+        - success
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        followupStep:
+          $ref: '#/components/schemas/ExecutionStep'
+    ErrorBody:
+      type: object
+      required:
+        - message
+      properties:
+        code:
+          $ref: '#/components/schemas/ErrorCode'
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties:
+            type: string
+    ErrorCode:
+      type: string
+      description: Stable error code identifiers shared with the UI for localization.
+      enum:
+        - monitoring/detect-unavailable
+        - monitoring/detect-failed
+        - monitoring/plan-invalid
+        - monitoring/install-plan-empty
+        - monitoring/install-invalid-request
+        - monitoring/k8s-client-missing
+        - monitoring/session-create-failed
+        - monitoring/session-required
+        - monitoring/session-persist-failed
+        - monitoring/session-restore-failed
+        - monitoring/session-not-found
+        - monitoring/retry-invalid-request
+        - monitoring/retry-invalid-mode
+        - monitoring/retry-activate-failed
+        - monitoring/retry-persist-failed
+        - monitoring/retry-unavailable
+        - monitoring/retry-limit-reached
+        - monitoring/retry-start-failed
+        - monitoring/diagnose-invalid
+        - monitoring/diagnose-context-failed
+        - monitoring/diagnose-failed
+        - monitoring/autofix-invalid
+        - monitoring/autofix-context-failed
+        - monitoring/autofix-failed
+        - monitoring/unknown-error
+  responses:
+    ErrorResponse:
+      description: Error response envelope
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorBody'
