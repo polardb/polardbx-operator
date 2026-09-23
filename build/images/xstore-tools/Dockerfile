@@ -36,7 +36,7 @@ RUN python3 -m venv --copies ./venv
 #Upgrade pip in the virtualenv
 RUN ./venv/bin/pip install --upgrade pip
 
-RUN ./venv/bin/pip install -r requirements.txt -f deps && ./venv/bin/pip uninstall -y pip setuptools
+RUN ./venv/bin/pip install -r requirements.txt -f deps -i https://pypi.tuna.tsinghua.edu.cn/simple/ && ./venv/bin/pip uninstall -y pip setuptools
 COPY tools/xstore .
 
 # Precompile scripts and imported libs.
@@ -71,7 +71,7 @@ RUN CGO_ENABLED=0 GOOS=linux GO111MODULE=on go build -tags polardbx -o polardbx-
 
 
 # Build the image with scripts
-FROM ${IMAGE_SOURCE}${IMAGE_SOURCE:+"/"}xstore-tools-base:ts20240913161759
+FROM ${IMAGE_SOURCE}${IMAGE_SOURCE:+"/"}xstore-tools-base:ts20260916113006
 
 ARG VERSION=test
 

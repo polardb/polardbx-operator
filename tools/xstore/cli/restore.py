@@ -30,10 +30,10 @@ from core.convention import *
 from core.context.mycnf_renderer import MycnfRenderer
 from core.backup_restore.storage.filestream_client import FileStreamClient, BackupStorage
 from core.backup_restore.utils import check_run_process
+from core.consensus.manager_impl import fetchall_with_lowercase_fieldnames
 import wget
 import requests
 from .common import check_parameters_exist, get_parameter_value
-
 
 RESTORE_TEMP_DIR = "/data/mysql/restore"
 CONN_TIMEOUT = 30
@@ -65,7 +65,7 @@ def start(restore_context):
 
     logger.info('start restore: commit_index=%s, backup_file_path=%s, isPXCXStore:%s, pitr_endpoint=%s,'
                 'pitr_xstore=%s,keyring_path=%s'
-                % (commit_index, backup_file_path, is_pxc_xstore, pitr_endpoint, pitr_xstore,keyring_path))
+                % (commit_index, backup_file_path, is_pxc_xstore, pitr_endpoint, pitr_xstore, keyring_path))
 
     context = Context()
     node_role = context.node_role()
@@ -75,7 +75,7 @@ def start(restore_context):
 
     filestream_client = FileStreamClient(context, BackupStorage[str.upper(storage_name)], sink)
 
-    keyring_path_local = download_keyring_file(keyringfile_path,keyring_path, filestream_client, logger)
+    keyring_path_local = download_keyring_file(keyringfile_path, keyring_path, filestream_client, logger)
 
     mkdir_needed(context)
 
@@ -145,16 +145,16 @@ def mkdir_needed(context):
     shutil.chown(context.volume_path(VOLUME_DATA, "log"), "mysql", "mysql")
     shutil.chown(context.volume_path(VOLUME_DATA, "tmp"), "mysql", "mysql")
     shutil.chown(context.volume_path(VOLUME_DATA, "run"), "mysql", "mysql")
-    shutil.chown(context.volume_path(VOLUME_DATA), "mysql","mysql")
+    shutil.chown(context.volume_path(VOLUME_DATA), "mysql", "mysql")
 
 
-def download_keyring_file(keyringfile_path,keyring_path, filestream_client, logger):
+def download_keyring_file(keyringfile_path, keyring_path, filestream_client, logger):
     if len(keyring_path) != 0:
         keyring_file_path = os.path.dirname(keyringfile_path)
-        logger.info("keyring_file_path:%s",keyring_file_path)
+        logger.info("keyring_file_path:%s", keyring_file_path)
         if not os.path.exists(keyring_file_path):
             os.makedirs(keyring_file_path)
-        shutil.chown(keyring_file_path,"mysql","mysql")
+        shutil.chown(keyring_file_path, "mysql", "mysql")
         keyring_path_local = os.path.join(keyring_file_path, "keyring")
         filestream_client.download_to_file(remote=keyring_path, local=keyring_path_local, logger=logger)
         logger.info("backup keyring downloaded!")
@@ -233,8 +233,9 @@ def copy_binlog_to_new_path(mysql_bin_list, context, logger):
 
 
 def decompress_backup_file(backup_file_name, context, logger):
-    decompress_cmd = "%s/xbstream --decompress -x < %s -C %s" % (
-        context.xtrabackup_home, os.path.join(RESTORE_TEMP_DIR, backup_file_name),
+    decompress_cmd = "%s/xbstream %s -x < %s -C %s" % (
+        context.xtrabackup_home, "--decompress" if context.is_galaxy80() else "",
+        os.path.join(RESTORE_TEMP_DIR, backup_file_name),
         context.volume_path(VOLUME_DATA, "data"))
     logger.info("decompress_cmd:%s" % decompress_cmd)
     with subprocess.Popen(decompress_cmd, shell=True, stdout=sys.stdout):
@@ -255,8 +256,10 @@ def create_init_file(context: Context, logger):
     with open(init_filepath, 'w') as init_file:
         init_file.write("set sql_log_bin=OFF;\n")
         init_file.write("set force_revise=ON;\n")
-        init_file.write("update mysql.user set user='root' , host = 'localhost' , authentication_string = '' where user = 'aliyun_root' or user = 'root' ;\n")
+        init_file.write(
+            "update mysql.user set user='root' , host = 'localhost' , authentication_string = '' where user = 'aliyun_root' or user = 'root' ;\n")
         init_file.write("flush privileges;\n")
+
 
 def initialize_local_mycnf(context: Context, logger):
     indicate = context.current_indicate()
@@ -299,7 +302,7 @@ def apply_backup_file(keyring_path_local, context, logger):
     if context.is_galaxy80():
         apply_backup_cmd = "%s --defaults-file=%s --prepare --target-dir=%s --xtrabackup-plugin-dir=%s --keyring-file-data=%s 2> %s/applybackup.log" \
                            % (context.xtrabackup, context.mycnf_path, context.volume_path(VOLUME_DATA, 'data'),
-                            context.xtrabackup_plugin, keyring_path_local,context.volume_path(VOLUME_DATA, "log"))
+                              context.xtrabackup_plugin, keyring_path_local, context.volume_path(VOLUME_DATA, "log"))
     elif context.is_xcluster57():
         apply_backup_cmd = "%s --defaults-file=%s --apply-log  %s 2> %s/applybackup.log" \
                            % (context.xtrabackup, context.mycnf_path, context.volume_path(VOLUME_DATA, 'data'),
@@ -397,17 +400,13 @@ def check_binlog_apply_index_status(mysql_port, end_log_index, logger, isEmptyBi
     if not output:
         raise Exception("can not get xdb full health info")
 
-    rows = output.split("\n")
-
-    for row in rows:
-        columns = row.split("\t")
-        logger.info("columns: %s" % columns)
-        logger.info("last apply index: %s" % columns[-3])
-        logger.info("end_log_index: %s" % end_log_index)
-        if isEmptyBinlog and int(columns[-3]) < int(end_log_index) - 1:
-            return False
-        if not isEmptyBinlog and int(columns[-3]) < int(end_log_index):
-            return False
+    last_apply_index = output[0]['last_apply_index']
+    logger.info("last apply index: %s" % last_apply_index)
+    logger.info("end_log_index: %s" % end_log_index)
+    if isEmptyBinlog and int(last_apply_index) < int(end_log_index) - 1:
+        return False
+    if not isEmptyBinlog and int(last_apply_index) < int(end_log_index):
+        return False
     return True
 
 
@@ -419,7 +418,6 @@ def execute_mysqlcmd(port, cmd, db=None, host='127.0.0.1', user='root', autocomm
     }
     kwargs_base.update(kwargs)
     new_kwargs = dict([(k, v) for k, v in kwargs_base.items() if v])
-    result = []
     conn = None
     try:
         conn = mysql.connect(host=host, port=int(port), user=user, passwd='', **new_kwargs)
@@ -433,19 +431,14 @@ def execute_mysqlcmd(port, cmd, db=None, host='127.0.0.1', user='root', autocomm
         for c in cmd:
             sql = INTERNAL_MARK + c
             row_count += cursor.execute(sql)
-        rows = cursor.fetchall()
-
-        for row in rows:
-            row_str = '\t'.join([item.strip("'") for item in map(conn.literal, row)])
-            result.append(row_str)
+        result = fetchall_with_lowercase_fieldnames(cursor)
         conn.commit()
-        result_str = '\n'.join(result)
     except Exception as e:
         return 1, str(e)
     finally:
         if conn:
             conn.close()
-    return 0, result_str
+    return 0, result
 
 
 def show_last_and_first_binlog(context, logger):

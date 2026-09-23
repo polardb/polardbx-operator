@@ -1,7 +1,7 @@
 //go:build (arm64be || armbe || mips || mips64 || ppc || ppc64 || s390 || s390x || sparc || sparc64) && !generate
 
 /*
-Copyright 2022 Alibaba Group Holding Limited.
+Copyright 2021 Alibaba Group Holding Limited.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.

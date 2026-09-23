@@ -498,9 +498,13 @@ func (meta *manager) InitializeMetaDBSchema() error {
 	}
 
 	// Insert the version record
-	const schemaChangeInitDml = "insert ignore into `schema_change`(`table_name`, `version`) values('user_priv', 10)"
+	const schemaChangeInitDml = "insert ignore into `schema_change`(`table_name`, `version`) values('user_priv', 10);"
 	if _, err := conn.ExecContext(ctx, schemaChangeInitDml); err != nil {
 		return fmt.Errorf("unable to insert schema change init record: %w", err)
+	}
+	const serverInfoSchemaChangeInitDml = "insert ignore into `schema_change` (`table_name`, `version`) values('server_info', 1);"
+	if _, err := conn.ExecContext(ctx, serverInfoSchemaChangeInitDml); err != nil {
+		return fmt.Errorf("unable to insert server_info schema change init record: %w", err)
 	}
 
 	// Insert the metadb record
@@ -615,6 +619,14 @@ func (meta *manager) RestoreSchemas(fromPxcCluster, fromPxcHash, PxcHash string,
 		return errors.New("unable to clear non-master configs: " + err.Error())
 	}
 
+	// FIXME not robust, some name's like 'gms-gms' will be replaced to 'a-a'. Just avoid names like 'gms', 'dn-%d'.
+	// Clean non-master topologies
+	//goland:noinspection SqlNoDataSourceInspection,SqlResolve
+	_, err = conn.ExecContext(ctx, "DELETE FROM group_detail_info WHERE inst_id IN (SELECT inst_id FROM server_info WHERE inst_type != 0 )")
+	if err != nil {
+		return errors.New("unable to clear non-master topologies: " + err.Error())
+	}
+
 	for k, v := range originalDnMap {
 		// Reset the single group's storage id
 		_, err = conn.ExecContext(ctx, "UPDATE inst_config SET param_val=REPLACE(param_val, ?, ?) where param_key='SINGLE_GROUP_STORAGE_INST_LIST'", k, v)
@@ -626,14 +638,6 @@ func (meta *manager) RestoreSchemas(fromPxcCluster, fromPxcHash, PxcHash string,
 		if err != nil {
 			return errors.New("unable to update group topologies: " + err.Error())
 		}
-	}
-
-	// FIXME not robust, some name's like 'gms-gms' will be replaced to 'a-a'. Just avoid names like 'gms', 'dn-%d'.
-	// Clean non-master topologies
-	//goland:noinspection SqlNoDataSourceInspection,SqlResolve
-	_, err = conn.ExecContext(ctx, "DELETE FROM group_detail_info WHERE inst_id IN (SELECT inst_id FROM server_info WHERE inst_type != 0 )")
-	if err != nil {
-		return errors.New("unable to clear non-master topologies: " + err.Error())
 	}
 
 	// update configs

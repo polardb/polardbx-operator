@@ -267,9 +267,10 @@ func (f *DefaultExtraPodFactory) NewVolumeMounts(ctx *PodFactoryContext) (map[st
 
 	mounts := make([]corev1.VolumeMount, 0, len(ctx.volumes)+1)
 	mounts = append(mounts, corev1.VolumeMount{
-		Name:      "xstore-tools",
-		ReadOnly:  true,
-		MountPath: "/tools/xstore",
+		Name:             "xstore-tools",
+		ReadOnly:         true,
+		MountPath:        "/tools/xstore",
+		MountPropagation: k8shelper.MountPropagationModePtr(corev1.MountPropagationHostToContainer),
 	})
 
 	for i := range ctx.volumes {

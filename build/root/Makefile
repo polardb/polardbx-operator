@@ -202,9 +202,9 @@ generate-notice:
 
 .PHONY: verify-boilerplates
 verify-boilerplates:
-	@hack/make-rules/verify-boilerplates.py --language go --include-dirs api,cmd,pkg,test --exclude-dirs vendor --start-year 2021
-	@hack/make-rules/verify-boilerplates.py --language bash --exclude-dirs vendor --start-year 2021
-	@hack/make-rules/verify-boilerplates.py --language python --exclude-dirs vendor,tools/xstore/venv --start-year 2021
+	@hack/make-rules/verify-boilerplates.py --language go --include-dirs api,cmd,pkg,test --exclude-dirs vendor,hack/make-rules/venv --start-year 2021
+	@hack/make-rules/verify-boilerplates.py --language bash --exclude-dirs vendor,hack/make-rules/venv --start-year 2021
+	@hack/make-rules/verify-boilerplates.py --language python --exclude-dirs vendor,tools/xstore/venv,hack/make-rules/venv --start-year 2021
 
 .PHONY: helm-package
 helm-package:
