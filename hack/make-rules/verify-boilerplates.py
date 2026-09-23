@@ -45,7 +45,12 @@ language_associate_file_filter = {
 
 def preprocess_common_file_content(s: str) -> str:
     # Strip white characters from header
-    return s.lstrip()
+    s = s.lstrip()
+    if s.startswith("//go:build"):
+        index = s.find("/*")
+        if index != -1:
+            s = s[index:]
+    return s
 
 
 SHEBANG_REGEX = re.compile('^#![^\\r\\n]+[\\r\\n]+(.*)', re.MULTILINE | re.DOTALL)
@@ -67,6 +72,7 @@ language_associate_preprocessors = {
 }
 
 LICENSE_YEAR_REGEX_STR = '((?:\\d+|\\d+\\s*-\\s*\\d+)(?:,\\d+|\\d+\\s*-\\s*\\d+)*)'
+
 
 def load_boilerplate_regex(language) -> re.Pattern:
     extension = language_associate_file_extensions[language]

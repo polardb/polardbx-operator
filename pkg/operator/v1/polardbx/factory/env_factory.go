@@ -167,7 +167,7 @@ func (e *envFactory) newBasicEnvVarsForCNEngine(gmsConn *StorageConnection, port
 		{Name: "polarx_dummy_ssh_port", Value: "-1"},
 		// -- end ssh port
 		{Name: "cpuCore", Value: strconv.FormatInt(cpuLimit, 10)},
-		{Name: "memSize", Value: strconv.FormatInt(containerAwareMemoryLimit, 10)},
+		{Name: "memSize", Value: strconv.FormatInt(containerAwareMemoryLimit>>20, 10)},
 		// Env $memory for start up script
 		{Name: "cpu_cores", Value: strconv.FormatInt(cpuLimit, 10)},
 		// {Name: "cpu_cores", Value: strconv.FormatInt(16, 10)},

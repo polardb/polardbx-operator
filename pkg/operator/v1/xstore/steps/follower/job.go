@@ -31,6 +31,7 @@ import (
 	. "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/convention"
 	xstoremeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/meta"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/plugin/galaxy/galaxy"
+	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/plugin/xcluster/xcluster"
 	xstorev1reconcile "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/reconcile"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -80,19 +81,24 @@ var (
 		JobTaskRestoreKeyring:      JobArgRestoreKeyringFunc,
 	}
 	BackupToolBinFilePaths = map[string]string{
-		galaxy.Engine: GalaxyEngineBackupBinFilepath,
+		xcluster.Engine: XClusterBackupBinFilepath,
+		galaxy.Engine:   GalaxyEngineBackupBinFilepath,
 	}
 	BackupSetPrepareArgs = map[string]string{
-		galaxy.Engine: GalaxyEngineBackupSetPrepareArg,
+		xcluster.Engine: XClusterBackupSetPrepareArg,
+		galaxy.Engine:   GalaxyEngineBackupSetPrepareArg,
 	}
 	BackupExtraArgs = map[string]string{
-		galaxy.Engine: GalaxyEngineBackupExtraArgs,
+		xcluster.Engine: XClusterBackupExtraArgs,
+		galaxy.Engine:   GalaxyEngineBackupExtraArgs,
 	}
 	BackupStreamTypeArgs = map[string]string{
-		galaxy.Engine: GalaxyEngineBackupStreamArgs,
+		xcluster.Engine: XClusterBackupStreamArgs,
+		galaxy.Engine:   GalaxyEngineBackupStreamArgs,
 	}
 	TargetDirArgs = map[string]string{
-		galaxy.Engine: GalaxyEngineTargetDirArgs,
+		xcluster.Engine: XClusterTargetDirArgs,
+		galaxy.Engine:   GalaxyEngineTargetDirArgs,
 	}
 )
 

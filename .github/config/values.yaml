@@ -1,9 +1,9 @@
 clusterDefaults:
   version: latest
   images:
-    galaxysql: pxc-registry.cn-shanghai.cr.aliyuncs.com/polardbx/polardbx-sql
-    galaxyengine: pxc-registry.cn-shanghai.cr.aliyuncs.com/polardbx/polardbx-engine-2.0
-    galaxycdc: pxc-registry.cn-shanghai.cr.aliyuncs.com/polardbx/polardbx-cdc
+    galaxysql: polardbx-opensource-registry.cn-beijing.cr.aliyuncs.com/polardbx/polardbx-sql
+    galaxyengine: polardbx-opensource-registry.cn-beijing.cr.aliyuncs.com/polardbx/polardbx-engine-2.0
+    galaxycdc: polardbx-opensource-registry.cn-beijing.cr.aliyuncs.com/polardbx/polardbx-cdc
     
 imagePullSecrets:
-  - name: github-ci
+  - name: myregcred2

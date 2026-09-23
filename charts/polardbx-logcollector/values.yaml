@@ -6,7 +6,7 @@ logstash:
     #image name of logstash
     name: polardbx-logstash
     #image tag of logstash
-    version: v1.3.0
+    version: v1.7.1
   #the name of the logstash deployment
   name: logstash
   #the exported port the logstash. filebeat will access this port.

@@ -71,7 +71,6 @@ def start_backup(backup_context, job_name):
             backup_cmd = [context.xtrabackup,
                           "--stream=xbstream",
                           "--socket=" + sock_file,
-                          "--compress",
                           backup_dir]
 
         logger.info("backup_cmd: %s " % backup_cmd)

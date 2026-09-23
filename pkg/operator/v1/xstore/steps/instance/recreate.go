@@ -1,3 +1,19 @@
+/*
+Copyright 2021 Alibaba Group Holding Limited.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package instance
 
 import (
@@ -7,7 +23,9 @@ import (
 	hpfs "github.com/alibaba/polardbx-operator/pkg/hpfs/proto"
 	"github.com/alibaba/polardbx-operator/pkg/k8s/control"
 	k8shelper "github.com/alibaba/polardbx-operator/pkg/k8s/helper"
+	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/convention"
 	xstoremeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/meta"
+	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/plugin/common/steps"
 	xstorev1reconcile "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/reconcile"
 	"github.com/go-logr/logr"
 	"path/filepath"
@@ -20,6 +38,23 @@ var DeleteIpInvalidPod = xstorev1reconcile.NewStepBinder("DeleteIpInvalidPod",
 		if err != nil {
 			return flow.RetryErr(err, "failed to get xstore pods")
 		}
+		sharedCm, err := rc.GetXStoreConfigMap(convention.ConfigMapTypeShared)
+		if err != nil {
+			flow.Logger().Error(err, "Unable to get shared config map.")
+			return flow.Pass()
+		}
+
+		sharedChannel, err := steps.ParseChannelFromConfigMap(sharedCm)
+		if err != nil {
+			flow.Logger().Error(err, "Unable to parse shared channel from config map.")
+			return flow.Pass()
+		}
+
+		// Branch currently block, just skip.
+		if sharedChannel.IsBlocked() {
+			return flow.Pass()
+		}
+
 		invalidCount := 0
 		for _, pod := range pods {
 			if k8shelper.IsPodScheduled(&pod) && pod.Status.PodIP != "" && len(pod.Annotations) > 0 {

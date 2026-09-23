@@ -351,7 +351,7 @@ func GetActualSizeFromTags(bucket *oss.Bucket, objKey string) int64 {
 	if err != nil {
 		return size
 	}
-	if tagResult.Tags != nil && len(tagResult.Tags) > 2 {
+	if tagResult.Tags != nil && len(tagResult.Tags) >= 2 {
 		sizeStr := ""
 		for _, tag := range tagResult.Tags {
 			if tag.Key == "uploader" && tag.Value == "hpfs" {
