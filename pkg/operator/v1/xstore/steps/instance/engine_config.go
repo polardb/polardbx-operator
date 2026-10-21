@@ -22,7 +22,6 @@ import (
 	xstoreconvention "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/convention"
 	xstorecommonfactory "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/factory"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/plugin"
-	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/plugin/xcluster/xcluster"
 	"github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/reconcile"
 	xstorev1reconcile "github.com/alibaba/polardbx-operator/pkg/operator/v1/xstore/reconcile"
 	"github.com/go-logr/logr"
@@ -65,11 +64,11 @@ func WhenEngineConfigChanged(binders ...control.BindFunc) control.BindFunc {
 	)
 }
 
-var SyncEngineConfigMap = plugin.NewStepBinder(xcluster.Engine, "SyncEngineConfigMap",
+var SyncEngineConfigMap = plugin.NewStepBinder("xcluster", "SyncEngineConfigMap",
 	func(rc *xstorev1reconcile.Context, flow control.Flow) (k8sreconcile.Result, error) {
 		newConfigMap, err := xstorecommonfactory.NewConfigConfigMap(rc, rc.MustGetXStore())
 		if err != nil {
-			return flow.Error(err, "SyncEngineConfigMap Failed to newConfigMap", "engine", xcluster.Engine)
+			return flow.Error(err, "SyncEngineConfigMap Failed to newConfigMap", "engine", "xcluster")
 		}
 		err = rc.SetControllerRef(newConfigMap)
 		if err != nil {
