@@ -17,11 +17,11 @@ limitations under the License.
 package finalizer
 
 import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	reconcile "sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/alibaba/polardbx-operator/pkg/k8s/control"
-	k8shelper "github.com/alibaba/polardbx-operator/pkg/k8s/helper"
 	polardbxmeta "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/meta"
 	polardbxv1reconcile "github.com/alibaba/polardbx-operator/pkg/operator/v1/polardbx/reconcile"
 )
@@ -50,10 +50,21 @@ var RemoveGuardFinalizer = polardbxv1reconcile.NewStepBinder("RemoveGuardFinaliz
 	},
 )
 
+// Foreground garbage collection waits for dependent XStores to be deleted.
+// It must not block the cleanup that releases the finalizers on those stores.
+func hasOtherSystemFinalizers(finalizers []string) bool {
+	for _, finalizer := range finalizers {
+		if finalizer != polardbxmeta.Finalizer && finalizer != metav1.FinalizerDeleteDependents {
+			return true
+		}
+	}
+	return false
+}
+
 var BlockBeforeOtherSystemsFinalized = polardbxv1reconcile.NewStepBinder("BlockBeforeOtherSystemsFinalized",
 	func(rc *polardbxv1reconcile.Context, flow control.Flow) (reconcile.Result, error) {
 		polardbx := rc.MustGetPolarDBX()
-		if k8shelper.ContainsOnlyFinalizer(polardbx, polardbxmeta.Finalizer) {
+		if !hasOtherSystemFinalizers(polardbx.Finalizers) {
 			return flow.Pass()
 		}
 		return flow.Wait("Block, other finalizers detected.")
